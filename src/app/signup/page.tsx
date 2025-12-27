@@ -1,3 +1,4 @@
+
 import Link from 'next/link';
 
 import { Button } from '@/components/ui/button';
@@ -11,9 +12,9 @@ export default function SignupPage() {
     <div className="flex items-center justify-center min-h-screen bg-background">
       <Card className="mx-auto max-w-sm">
         <CardHeader>
-          <div className="flex items-center justify-center gap-2 mb-4">
+          <Link href="/" className="flex items-center justify-center gap-2 mb-4">
               <Logo />
-          </div>
+          </Link>
           <CardTitle className="text-2xl font-headline">Sign Up</CardTitle>
           <CardDescription>Enter your information to create an account</CardDescription>
         </CardHeader>
@@ -50,7 +51,7 @@ export default function SignupPage() {
           </div>
           <div className="mt-4 text-center text-sm">
             Already have an account?{' '}
-            <Link href="/" className="underline">
+            <Link href="/login" className="underline">
               Log in
             </Link>
           </div>
@@ -59,3 +60,5 @@ export default function SignupPage() {
     </div>
   );
 }
+
+    

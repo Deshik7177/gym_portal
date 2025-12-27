@@ -1,3 +1,4 @@
+
 'use client';
 import { Avatar, AvatarFallback, AvatarImage } from '@/components/ui/avatar';
 import { Button } from '@/components/ui/button';
@@ -47,7 +48,7 @@ export default function UserNav() {
           <DropdownMenuItem>Settings</DropdownMenuItem>
         </DropdownMenuGroup>
         <DropdownMenuSeparator />
-        <Link href="/">
+        <Link href="/login">
             <DropdownMenuItem>
                 Log out
             </DropdownMenuItem>
@@ -56,3 +57,5 @@ export default function UserNav() {
     </DropdownMenu>
   );
 }
+
+    
