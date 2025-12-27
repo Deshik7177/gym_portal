@@ -33,7 +33,7 @@ export default function MemberDashboard() {
             <CardDescription>Your current standing</CardDescription>
           </CardHeader>
           <CardContent>
-            <Badge className="text-lg bg-green-500 text-white hover:bg-green-600">Active</Badge>
+            <Badge className="text-lg bg-[#2E7D32] text-white hover:bg-[#2E7D32]/80">Active</Badge>
           </CardContent>
         </Card>
         <Card>
@@ -85,7 +85,7 @@ export default function MemberDashboard() {
                   <TableCell>{entry.date}</TableCell>
                   <TableCell>{entry.time}</TableCell>
                   <TableCell>
-                    <Badge variant={entry.status === 'Granted' ? 'default' : 'destructive'} className={entry.status === 'Granted' ? 'bg-green-500 text-white' : ''}>
+                    <Badge variant={entry.status === 'Granted' ? 'default' : 'destructive'} className={entry.status === 'Granted' ? 'bg-[#2E7D32] hover:bg-[#2E7D32]/80 text-white' : ''}>
                       {entry.status}
                     </Badge>
                   </TableCell>

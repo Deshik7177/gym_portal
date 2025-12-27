@@ -26,10 +26,10 @@ export default function LandingPage() {
             About
           </Link>
           <Link href="/login">
-            <Button>Login</Button>
+            <Button variant="outline">Login</Button>
           </Link>
           <Link href="/signup">
-            <Button variant="secondary">Sign Up</Button>
+            <Button>Sign Up</Button>
           </Link>
         </nav>
       </header>

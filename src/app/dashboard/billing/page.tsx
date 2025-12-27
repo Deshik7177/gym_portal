@@ -52,7 +52,7 @@ export default function BillingPage() {
                 <TableCell>{invoice.description}</TableCell>
                 <TableCell>{invoice.amount}</TableCell>
                 <TableCell>
-                  <Badge className="bg-green-500 text-white">{invoice.status}</Badge>
+                  <Badge className="bg-[#2E7D32] hover:bg-[#2E7D32]/80 text-white">{invoice.status}</Badge>
                 </TableCell>
                 <TableCell>
                   <Button variant="outline" size="icon">

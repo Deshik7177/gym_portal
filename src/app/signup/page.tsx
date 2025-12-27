@@ -42,7 +42,7 @@ export default function SignupPage() {
               <Label htmlFor="password">Password</Label>
               <Input id="password" type="password" />
             </div>
-            <Button type="submit" className="w-full bg-primary hover:bg-primary/90">
+            <Button type="submit" className="w-full">
               Create an account
             </Button>
             <Button variant="outline" className="w-full">
@@ -60,5 +60,3 @@ export default function SignupPage() {
     </div>
   );
 }
-
-    

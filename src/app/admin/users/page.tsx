@@ -91,7 +91,7 @@ export default function AdminUsersPage() {
                 <TableCell>
                   <Badge 
                     variant={user.status === 'Active' ? 'default' : user.status === 'Expired' ? 'destructive' : 'secondary'}
-                    className={user.status === 'Active' ? 'bg-green-500 text-white' : ''}
+                    className={user.status === 'Active' ? 'bg-[#2E7D32] hover:bg-[#2E7D32]/80 text-white' : ''}
                   >
                     {user.status}
                   </Badge>

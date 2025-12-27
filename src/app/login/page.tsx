@@ -46,17 +46,17 @@ export default function LoginPage() {
                   <Input id="password" type="password" required />
                 </div>
                 <Link href="/dashboard" className="w-full">
-                  <Button className="w-full bg-primary hover:bg-primary/90">
+                  <Button className="w-full">
                     Login as Member
                   </Button>
                 </Link>
                  <Link href="/admin" className="w-full">
-                  <Button variant="outline" className="w-full">
+                  <Button variant="secondary" className="w-full">
                     Login as Admin
                   </Button>
                 </Link>
                  <Link href="/counter" className="w-full">
-                  <Button variant="secondary" className="w-full">
+                  <Button variant="outline" className="w-full">
                     Login as Counter Staff
                   </Button>
                 </Link>
@@ -78,7 +78,7 @@ export default function LoginPage() {
             alt="Zenith Gym"
             width="1920"
             height="1080"
-            className="h-full w-full object-cover dark:brightness-[0.2] dark:grayscale"
+            className="h-full w-full object-cover brightness-[0.5]"
             data-ai-hint={loginImage.imageHint}
           />
         )}

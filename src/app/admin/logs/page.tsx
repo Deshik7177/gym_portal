@@ -53,7 +53,7 @@ export default function AdminLogsPage() {
                 <TableCell>{log.name}</TableCell>
                 <TableCell>{log.rfid}</TableCell>
                 <TableCell>
-                  <Badge variant={log.status === 'Granted' ? 'default' : 'destructive'} className={log.status === 'Granted' ? 'bg-green-500 text-white' : ''}>
+                  <Badge variant={log.status === 'Granted' ? 'default' : 'destructive'} className={log.status === 'Granted' ? 'bg-[#2E7D32] hover:bg-[#2E7D32]/80 text-white' : ''}>
                     {log.status}
                   </Badge>
                 </TableCell>
