@@ -12,25 +12,27 @@ export default function LandingPage() {
 
   return (
     <div className="flex flex-col min-h-screen">
-      <header className="px-4 lg:px-6 h-16 flex items-center bg-background shadow-sm">
+      <header className="px-4 lg:px-6 h-16 flex items-center justify-between bg-background shadow-sm">
         <Logo />
-        <nav className="ml-auto flex items-center gap-4 sm:gap-6">
-          <Link href="#features" className="text-sm font-medium hover:underline underline-offset-4">
+        <nav className="hidden md:flex items-center gap-6">
+          <Link href="#features" className="text-sm font-medium text-muted-foreground hover:text-foreground transition-colors">
             Features
           </Link>
-          <Link href="#pricing" className="text-sm font-medium hover:underline underline-offset-4">
+          <Link href="#pricing" className="text-sm font-medium text-muted-foreground hover:text-foreground transition-colors">
             Pricing
           </Link>
-          <Link href="#about" className="text-sm font-medium hover:underline underline-offset-4">
+          <Link href="#about" className="text-sm font-medium text-muted-foreground hover:text-foreground transition-colors">
             About
           </Link>
+        </nav>
+        <div className="flex items-center gap-4">
           <Link href="/login">
             <Button variant="outline">Login</Button>
           </Link>
           <Link href="/signup">
             <Button>Sign Up</Button>
           </Link>
-        </nav>
+        </div>
       </header>
       <main className="flex-1">
         <section className="w-full py-12">
