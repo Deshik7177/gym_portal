@@ -1,3 +1,4 @@
+
 import Image from 'next/image';
 import Link from 'next/link';
 import { Dumbbell, DollarSign, Calendar, Users } from 'lucide-react';
@@ -12,20 +13,20 @@ export default function LandingPage() {
 
   return (
     <div className="flex flex-col min-h-screen">
-      <header className="px-4 lg:px-6 h-16 flex items-center justify-between bg-background shadow-sm">
+      <header className="px-4 lg:px-6 h-16 flex items-center bg-background shadow-sm">
         <Logo />
-        <nav className="hidden md:flex items-center gap-6">
-          <Link href="#features" className="text-sm font-medium text-muted-foreground hover:text-foreground transition-colors">
+        <nav className="hidden md:flex items-center gap-6 mx-auto">
+          <Link href="#features" className="text-sm font-medium text-foreground hover:text-foreground/80 transition-colors">
             Features
           </Link>
-          <Link href="#pricing" className="text-sm font-medium text-muted-foreground hover:text-foreground transition-colors">
+          <Link href="#pricing" className="text-sm font-medium text-foreground hover:text-foreground/80 transition-colors">
             Pricing
           </Link>
-          <Link href="#about" className="text-sm font-medium text-muted-foreground hover:text-foreground transition-colors">
+          <Link href="#about" className="text-sm font-medium text-foreground hover:text-foreground/80 transition-colors">
             About
           </Link>
         </nav>
-        <div className="flex items-center gap-4">
+        <div className="flex items-center gap-4 ml-auto">
           <Link href="/login">
             <Button variant="outline">Login</Button>
           </Link>
