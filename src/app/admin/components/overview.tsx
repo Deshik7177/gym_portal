@@ -1,5 +1,6 @@
 "use client"
 
+import { useEffect, useState } from "react"
 import { Bar, BarChart, ResponsiveContainer, XAxis, YAxis, Tooltip } from "recharts"
 
 import {
@@ -9,22 +10,39 @@ import {
   CardHeader,
   CardTitle,
 } from "@/components/ui/card"
-import { ChartTooltipContent } from "@/components/ui/chart"
+import { ChartContainer, ChartTooltipContent } from "@/components/ui/chart"
 
-const data = [
-  { name: "6am", total: Math.floor(Math.random() * 20) + 5 },
-  { name: "7am", total: Math.floor(Math.random() * 30) + 10 },
-  { name: "8am", total: Math.floor(Math.random() * 40) + 15 },
-  { name: "9am", total: Math.floor(Math.random() * 35) + 10 },
-  { name: "4pm", total: Math.floor(Math.random() * 45) + 20 },
-  { name: "5pm", total: Math.floor(Math.random() * 60) + 25 },
-  { name: "6pm", total: Math.floor(Math.random() * 70) + 30 },
-  { name: "7pm", total: Math.floor(Math.random() * 65) + 25 },
-  { name: "8pm", total: Math.floor(Math.random() * 50) + 20 },
-  { name: "9pm", total: Math.floor(Math.random() * 30) + 10 },
-]
+const chartData = [
+  { name: "6am", total: 0 },
+  { name: "7am", total: 0 },
+  { name: "8am", total: 0 },
+  { name: "9am", total: 0 },
+  { name: "4pm", total: 0 },
+  { name: "5pm", total: 0 },
+  { name: "6pm", total: 0 },
+  { name: "7pm", total: 0 },
+  { name: "8pm", total: 0 },
+  { name: "9pm", total: 0 },
+];
+
+const chartConfig = {
+  total: {
+    label: "Check-ins",
+    color: "hsl(var(--primary))",
+  },
+};
+
 
 export function Overview() {
+  const [data, setData] = useState(chartData);
+
+  useEffect(() => {
+    setData(chartData.map(item => ({
+      ...item,
+      total: Math.floor(Math.random() * 75) + 5
+    })));
+  }, []);
+
   return (
     <Card className="col-span-4">
       <CardHeader>
@@ -34,8 +52,8 @@ export function Overview() {
         </CardDescription>
       </CardHeader>
       <CardContent className="pl-2">
-        <ResponsiveContainer width="100%" height={350}>
-            <BarChart data={data}>
+        <ChartContainer config={chartConfig} className="min-h-[350px] w-full">
+            <BarChart accessibilityLayer data={data}>
             <XAxis
                 dataKey="name"
                 stroke="#888888"
@@ -56,7 +74,7 @@ export function Overview() {
              />
             <Bar dataKey="total" fill="hsl(var(--primary))" radius={[4, 4, 0, 0]} />
             </BarChart>
-        </ResponsiveContainer>
+        </ChartContainer>
       </CardContent>
     </Card>
   )
