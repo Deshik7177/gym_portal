@@ -9,7 +9,7 @@ const inter = Inter({ subsets: ['latin'], variable: '--font-inter' });
 const playfairDisplay = Playfair_Display({ subsets: ['latin'], variable: '--font-playfair-display' });
 
 export const metadata: Metadata = {
-  title: 'Zenith Gym OS',
+  title: 'Thrive Fit',
   description: 'The operating system for modern gyms.',
 };
 
