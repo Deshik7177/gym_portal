@@ -1,3 +1,4 @@
+
 import { Badge } from '@/components/ui/badge';
 import {
   Card,
@@ -34,34 +35,36 @@ export default function AdminLogsPage() {
         </CardDescription>
       </CardHeader>
       <CardContent>
-        <Table>
-          <TableHeader>
-            <TableRow>
-              <TableHead>Timestamp</TableHead>
-              <TableHead>Member ID</TableHead>
-              <TableHead>Name</TableHead>
-              <TableHead>RFID UID</TableHead>
-              <TableHead>Status</TableHead>
-              <TableHead>Reason</TableHead>
-            </TableRow>
-          </TableHeader>
-          <TableBody>
-            {accessLogs.map((log, index) => (
-              <TableRow key={index}>
-                <TableCell>{log.time}</TableCell>
-                <TableCell className="font-medium">{log.memberId}</TableCell>
-                <TableCell>{log.name}</TableCell>
-                <TableCell>{log.rfid}</TableCell>
-                <TableCell>
-                  <Badge variant={log.status === 'Granted' ? 'default' : 'destructive'} className={log.status === 'Granted' ? 'bg-[#2E7D32] hover:bg-[#2E7D32]/80 text-white' : ''}>
-                    {log.status}
-                  </Badge>
-                </TableCell>
-                <TableCell>{log.reason}</TableCell>
+        <div className="overflow-x-auto">
+          <Table>
+            <TableHeader>
+              <TableRow>
+                <TableHead>Timestamp</TableHead>
+                <TableHead>Member ID</TableHead>
+                <TableHead className="hidden sm:table-cell">Name</TableHead>
+                <TableHead>RFID UID</TableHead>
+                <TableHead>Status</TableHead>
+                <TableHead className="hidden md:table-cell">Reason</TableHead>
               </TableRow>
-            ))}
-          </TableBody>
-        </Table>
+            </TableHeader>
+            <TableBody>
+              {accessLogs.map((log, index) => (
+                <TableRow key={index}>
+                  <TableCell>{log.time}</TableCell>
+                  <TableCell className="font-medium">{log.memberId}</TableCell>
+                  <TableCell className="hidden sm:table-cell">{log.name}</TableCell>
+                  <TableCell>{log.rfid}</TableCell>
+                  <TableCell>
+                    <Badge variant={log.status === 'Granted' ? 'default' : 'destructive'} className={log.status === 'Granted' ? 'bg-[#2E7D32] hover:bg-[#2E7D32]/80 text-white' : ''}>
+                      {log.status}
+                    </Badge>
+                  </TableCell>
+                  <TableCell className="hidden md:table-cell">{log.reason}</TableCell>
+                </TableRow>
+              ))}
+            </TableBody>
+          </Table>
+        </div>
       </CardContent>
     </Card>
   );

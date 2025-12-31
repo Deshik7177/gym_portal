@@ -1,12 +1,13 @@
 
 import Image from 'next/image';
 import Link from 'next/link';
-import { Dumbbell, DollarSign, Calendar, Users } from 'lucide-react';
+import { Dumbbell, DollarSign, Calendar, Users, Menu } from 'lucide-react';
 
 import { Button } from '@/components/ui/button';
 import { Card, CardContent, CardHeader, CardTitle, CardDescription } from '@/components/ui/card';
 import { PlaceHolderImages } from '@/lib/placeholder-images';
 import Logo from '@/components/logo';
+import { Sheet, SheetContent, SheetTrigger } from '@/components/ui/sheet';
 
 export default function LandingPage() {
   const heroImage = PlaceHolderImages.find((image) => image.id === 'login-hero');
@@ -15,7 +16,7 @@ export default function LandingPage() {
     <div className="flex flex-col min-h-screen">
       <header className="px-4 lg:px-6 h-16 flex items-center bg-background shadow-sm">
         <Logo />
-        <nav className="ml-auto flex gap-4 sm:gap-6 items-center">
+        <nav className="ml-auto hidden md:flex gap-4 sm:gap-6 items-center">
           <Link href="#features" className="text-sm font-medium hover:underline underline-offset-4 text-white">
             Features
           </Link>
@@ -32,6 +33,34 @@ export default function LandingPage() {
             <Button>Sign Up</Button>
           </Link>
         </nav>
+        <Sheet>
+            <SheetTrigger asChild>
+              <Button variant="outline" size="icon" className="ml-auto md:hidden">
+                <Menu className="h-5 w-5" />
+                <span className="sr-only">Toggle navigation menu</span>
+              </Button>
+            </SheetTrigger>
+            <SheetContent side="right">
+              <nav className="grid gap-6 text-lg font-medium mt-10">
+                <Logo />
+                <Link href="#features" className="text-muted-foreground hover:text-foreground">
+                  Features
+                </Link>
+                <Link href="#pricing" className="text-muted-foreground hover:text-foreground">
+                  Pricing
+                </Link>
+                <Link href="#about" className="text-muted-foreground hover:text-foreground">
+                  About
+                </Link>
+                 <Link href="/login" className="text-muted-foreground hover:text-foreground">
+                  Login
+                </Link>
+                 <Link href="/signup" className="text-muted-foreground hover:text-foreground">
+                  Sign Up
+                </Link>
+              </nav>
+            </SheetContent>
+          </Sheet>
       </header>
       <main className="flex-1">
         <section className="w-full py-12">

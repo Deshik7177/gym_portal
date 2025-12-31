@@ -1,3 +1,4 @@
+
 import { Badge } from '@/components/ui/badge';
 import { Button } from '@/components/ui/button';
 import {
@@ -56,30 +57,32 @@ export default function CounterPage() {
           </CardDescription>
         </CardHeader>
         <CardContent>
-          <Table>
-            <TableHeader>
-              <TableRow>
-                <TableHead>Time</TableHead>
-                <TableHead>Member ID</TableHead>
-                <TableHead>Name</TableHead>
-                <TableHead>Status</TableHead>
-              </TableRow>
-            </TableHeader>
-            <TableBody>
-              {accessLogs.map((log, index) => (
-                <TableRow key={index}>
-                  <TableCell>{log.time}</TableCell>
-                  <TableCell className="font-medium">{log.memberId}</TableCell>
-                  <TableCell>{log.name}</TableCell>
-                  <TableCell>
-                    <Badge variant={log.status === 'Granted' ? 'default' : 'destructive'} className={log.status === 'Granted' ? 'bg-[#2E7D32] hover:bg-[#2E7D32]/80 text-white' : ''}>
-                      {log.status}
-                    </Badge>
-                  </TableCell>
+          <div className="overflow-x-auto">
+            <Table>
+              <TableHeader>
+                <TableRow>
+                  <TableHead>Time</TableHead>
+                  <TableHead>Member ID</TableHead>
+                  <TableHead>Name</TableHead>
+                  <TableHead>Status</TableHead>
                 </TableRow>
-              ))}
-            </TableBody>
-          </Table>
+              </TableHeader>
+              <TableBody>
+                {accessLogs.map((log, index) => (
+                  <TableRow key={index}>
+                    <TableCell>{log.time}</TableCell>
+                    <TableCell className="font-medium">{log.memberId}</TableCell>
+                    <TableCell>{log.name}</TableCell>
+                    <TableCell>
+                      <Badge variant={log.status === 'Granted' ? 'default' : 'destructive'} className={log.status === 'Granted' ? 'bg-[#2E7D32] hover:bg-[#2E7D32]/80 text-white' : ''}>
+                        {log.status}
+                      </Badge>
+                    </TableCell>
+                  </TableRow>
+                ))}
+              </TableBody>
+            </Table>
+          </div>
         </CardContent>
       </Card>
     </div>
