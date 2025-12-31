@@ -7,7 +7,7 @@ import { Button } from '@/components/ui/button';
 import { Card, CardContent, CardHeader, CardTitle, CardDescription } from '@/components/ui/card';
 import { PlaceHolderImages } from '@/lib/placeholder-images';
 import Logo from '@/components/logo';
-import { Sheet, SheetContent, SheetTrigger, SheetClose } from '@/components/ui/sheet';
+import { Sheet, SheetContent, SheetTrigger, SheetClose, SheetHeader, SheetTitle, SheetDescription } from '@/components/ui/sheet';
 
 export default function LandingPage() {
   const heroImage = PlaceHolderImages.find((image) => image.id === 'login-hero');
@@ -16,7 +16,7 @@ export default function LandingPage() {
     <div className="flex flex-col min-h-screen">
       <header className="px-4 lg:px-6 h-16 flex items-center bg-background shadow-sm">
         <Logo />
-        <nav className="ml-auto hidden md:flex gap-4 sm:gap-6 items-center">
+        <nav className="mx-auto hidden md:flex gap-4 sm:gap-6 items-center">
           <Link href="#features" className="text-sm font-medium hover:underline underline-offset-4 text-white">
             Features
           </Link>
@@ -26,13 +26,15 @@ export default function LandingPage() {
           <Link href="#about" className="text-sm font-medium hover:underline underline-offset-4 text-white">
             About
           </Link>
-           <Link href="/login">
+        </nav>
+        <div className="ml-auto flex items-center gap-4">
+           <Link href="/login" className='hidden md:block'>
             <Button variant="outline">Login</Button>
           </Link>
-          <Link href="/signup">
+          <Link href="/signup" className='hidden md:block'>
             <Button>Sign Up</Button>
           </Link>
-        </nav>
+        </div>
         <Sheet>
             <SheetTrigger asChild>
               <Button variant="outline" size="icon" className="ml-auto md:hidden">
@@ -41,8 +43,16 @@ export default function LandingPage() {
               </Button>
             </SheetTrigger>
             <SheetContent side="right">
+              <SheetHeader>
+                  <SheetTitle>Navigation Menu</SheetTitle>
+                  <SheetDescription>Select a page to navigate to.</SheetDescription>
+              </SheetHeader>
               <nav className="grid gap-6 text-lg font-medium mt-10">
-                <Logo />
+                <SheetClose asChild>
+                  <Link href="/" className="flex items-center gap-2">
+                    <Logo />
+                  </Link>
+                </SheetClose>
                 <SheetClose asChild>
                   <Link href="#features" className="text-muted-foreground hover:text-foreground">
                     Features
@@ -73,7 +83,7 @@ export default function LandingPage() {
           </Sheet>
       </header>
       <main className="flex-1">
-        <section className="w-full py-12">
+        <section className="w-full pt-12 pb-6 md:pt-24 md:pb-12 lg:pt-32 lg:pb-16">
           <div className="container px-4 md:px-6">
             <div className="grid gap-6 lg:grid-cols-[1fr_400px] lg:gap-12 xl:grid-cols-[1fr_600px]">
               {heroImage && (
