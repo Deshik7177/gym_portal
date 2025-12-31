@@ -7,7 +7,7 @@ import { Button } from '@/components/ui/button';
 import { Card, CardContent, CardHeader, CardTitle, CardDescription } from '@/components/ui/card';
 import { PlaceHolderImages } from '@/lib/placeholder-images';
 import Logo from '@/components/logo';
-import { Sheet, SheetContent, SheetTrigger } from '@/components/ui/sheet';
+import { Sheet, SheetContent, SheetTrigger, SheetClose } from '@/components/ui/sheet';
 
 export default function LandingPage() {
   const heroImage = PlaceHolderImages.find((image) => image.id === 'login-hero');
@@ -43,21 +43,31 @@ export default function LandingPage() {
             <SheetContent side="right">
               <nav className="grid gap-6 text-lg font-medium mt-10">
                 <Logo />
-                <Link href="#features" className="text-muted-foreground hover:text-foreground">
-                  Features
-                </Link>
+                <SheetClose asChild>
+                  <Link href="#features" className="text-muted-foreground hover:text-foreground">
+                    Features
+                  </Link>
+                </SheetClose>
+                <SheetClose asChild>
                 <Link href="#pricing" className="text-muted-foreground hover:text-foreground">
                   Pricing
                 </Link>
+                </SheetClose>
+                <SheetClose asChild>
                 <Link href="#about" className="text-muted-foreground hover:text-foreground">
                   About
                 </Link>
+                </SheetClose>
+                <SheetClose asChild>
                  <Link href="/login" className="text-muted-foreground hover:text-foreground">
                   Login
                 </Link>
+                </SheetClose>
+                <SheetClose asChild>
                  <Link href="/signup" className="text-muted-foreground hover:text-foreground">
                   Sign Up
                 </Link>
+                </SheetClose>
               </nav>
             </SheetContent>
           </Sheet>
