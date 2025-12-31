@@ -9,7 +9,7 @@ import {
 } from 'lucide-react';
 
 import { Button } from '@/components/ui/button';
-import { Sheet, SheetContent, SheetTrigger, SheetHeader, SheetTitle, SheetDescription } from '@/components/ui/sheet';
+import { Sheet, SheetContent, SheetTrigger, SheetHeader, SheetTitle, SheetDescription, SheetClose } from '@/components/ui/sheet';
 import UserNav from '@/components/user-nav';
 import Logo from '@/components/logo';
 
@@ -35,18 +35,24 @@ export default function DashboardLayout({ children }: { children: React.ReactNod
                     </SheetDescription>
                 </SheetHeader>
               <nav className="grid gap-6 text-lg font-medium mt-6">
-                <Link href="/dashboard" className="flex items-center gap-4 px-2.5 text-foreground">
-                  <Home className="h-5 w-5" />
-                  Dashboard
-                </Link>
-                <Link href="/dashboard/profile" className="flex items-center gap-4 px-2.5 text-muted-foreground hover:text-foreground">
-                  <User className="h-5 w-5" />
-                  Profile
-                </Link>
-                <Link href="/dashboard/billing" className="flex items-center gap-4 px-2.5 text-muted-foreground hover:text-foreground">
-                  <CreditCard className="h-5 w-5" />
-                  Billing & Invoices
-                </Link>
+                <SheetClose asChild>
+                  <Link href="/dashboard" className="flex items-center gap-4 px-2.5 text-foreground">
+                    <Home className="h-5 w-5" />
+                    Dashboard
+                  </Link>
+                </SheetClose>
+                <SheetClose asChild>
+                  <Link href="/dashboard/profile" className="flex items-center gap-4 px-2.5 text-muted-foreground hover:text-foreground">
+                    <User className="h-5 w-5" />
+                    Profile
+                  </Link>
+                </SheetClose>
+                <SheetClose asChild>
+                  <Link href="/dashboard/billing" className="flex items-center gap-4 px-2.5 text-muted-foreground hover:text-foreground">
+                    <CreditCard className="h-5 w-5" />
+                    Billing & Invoices
+                  </Link>
+                </SheetClose>
               </nav>
             </SheetContent>
           </Sheet>
