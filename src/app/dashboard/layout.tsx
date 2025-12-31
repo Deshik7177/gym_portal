@@ -9,7 +9,7 @@ import {
 } from 'lucide-react';
 
 import { Button } from '@/components/ui/button';
-import { Sheet, SheetContent, SheetTrigger } from '@/components/ui/sheet';
+import { Sheet, SheetContent, SheetTrigger, SheetHeader, SheetTitle, SheetDescription } from '@/components/ui/sheet';
 import UserNav from '@/components/user-nav';
 import Logo from '@/components/logo';
 
@@ -26,10 +26,15 @@ export default function DashboardLayout({ children }: { children: React.ReactNod
               </Button>
             </SheetTrigger>
             <SheetContent side="left" className="sm:max-w-xs">
-              <nav className="grid gap-6 text-lg font-medium">
-                <div className="flex justify-center my-4">
-                    <Logo />
-                </div>
+                <SheetHeader>
+                    <SheetTitle>
+                        <Logo />
+                    </SheetTitle>
+                    <SheetDescription>
+                        Navigate through your member dashboard.
+                    </SheetDescription>
+                </SheetHeader>
+              <nav className="grid gap-6 text-lg font-medium mt-6">
                 <Link href="/dashboard" className="flex items-center gap-4 px-2.5 text-foreground">
                   <Home className="h-5 w-5" />
                   Dashboard
