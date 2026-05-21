@@ -1,4 +1,3 @@
-
 'use client';
 
 import {
@@ -64,7 +63,7 @@ export default function ReceptionDashboard() {
             </CardHeader>
             <CardContent>
               <div className="text-2xl font-bold">34</div>
-              <p className="text-xs text-muted-foreground">Absent > 2 Days</p>
+              <p className="text-xs text-muted-foreground">Absent &gt; 2 Days</p>
             </CardContent>
           </Link>
         </Card>

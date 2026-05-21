@@ -1,4 +1,3 @@
-
 'use client';
 
 import { Clock, AlertTriangle, UserMinus, Phone, Calendar } from 'lucide-react';
@@ -49,7 +48,7 @@ export default function FrequentAbsentPage() {
           </CardHeader>
           <CardContent>
             <div className="text-3xl font-bold">{severeAbsents}</div>
-            <p className="text-xs opacity-70">Absent for > 5 days</p>
+            <p className="text-xs opacity-70">Absent for &gt; 5 days</p>
           </CardContent>
         </Card>
         <Card className="shadow-none">
