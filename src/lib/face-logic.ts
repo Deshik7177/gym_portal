@@ -1,4 +1,3 @@
-
 'use client';
 
 import * as faceapi from 'face-api.js';
@@ -7,11 +6,11 @@ let modelsLoadedPromise: Promise<void> | null = null;
 
 /**
  * Loads face-api.js models for local on-device recognition.
- * Memoized to prevent multiple redundant loads.
  */
 export function loadFaceModels() {
   if (modelsLoadedPromise) return modelsLoadedPromise;
   
+  // Using a more reliable mirror for models if possible, or sticking to the primary one
   const MODEL_URL = 'https://justadudewhohacks.github.io/face-api.js/models';
   
   modelsLoadedPromise = (async () => {
@@ -21,9 +20,10 @@ export function loadFaceModels() {
         faceapi.nets.faceLandmark68Net.loadFromUri(MODEL_URL),
         faceapi.nets.faceRecognitionNet.loadFromUri(MODEL_URL),
       ]);
+      console.log('Local AI models loaded successfully');
     } catch (error) {
       console.error('Failed to load local AI models:', error);
-      modelsLoadedPromise = null; // Allow retry on failure
+      modelsLoadedPromise = null; 
       throw error;
     }
   })();
@@ -32,13 +32,20 @@ export function loadFaceModels() {
 }
 
 /**
- * Lightweight check to see if a face is in the frame.
- * Increased threshold and size for better accuracy.
+ * Checks if a face is clearly present in the frame.
+ * Optimized for mobile browsers.
  */
 export async function isFaceInFrame(input: HTMLVideoElement | HTMLCanvasElement | HTMLImageElement) {
+  if (input instanceof HTMLVideoElement && input.readyState < 2) return false;
+  
   await loadFaceModels();
-  // Using higher score threshold to prevent background objects from triggering "Identifying"
-  const options = new faceapi.TinyFaceDetectorOptions({ inputSize: 160, scoreThreshold: 0.7 });
+  
+  // Higher score threshold (0.8) to prevent background noise triggers
+  const options = new faceapi.TinyFaceDetectorOptions({ 
+    inputSize: 160, 
+    scoreThreshold: 0.8 
+  });
+  
   const detection = await faceapi.detectSingleFace(input, options);
   return !!detection;
 }
@@ -58,16 +65,25 @@ export function cosineSimilarity(vecA: number[], vecB: number[]) {
  * Detects a face and generates a mathematical embedding.
  */
 export async function generateEmbedding(input: HTMLVideoElement | HTMLCanvasElement | HTMLImageElement) {
+  if (input instanceof HTMLVideoElement && input.readyState < 2) return null;
+  
   await loadFaceModels();
   
-  // Use slightly larger input size for better descriptors
-  const options = new faceapi.TinyFaceDetectorOptions({ inputSize: 224, scoreThreshold: 0.6 });
+  const options = new faceapi.TinyFaceDetectorOptions({ 
+    inputSize: 224, 
+    scoreThreshold: 0.7 
+  });
   
-  const detection = await faceapi.detectSingleFace(input, options)
-    .withFaceLandmarks()
-    .withFaceDescriptor();
-    
-  return detection ? Array.from(detection.descriptor) : null;
+  try {
+    const detection = await faceapi.detectSingleFace(input, options)
+      .withFaceLandmarks()
+      .withFaceDescriptor();
+      
+    return detection ? Array.from(detection.descriptor) : null;
+  } catch (err) {
+    console.error('Embedding generation error:', err);
+    return null;
+  }
 }
 
 /**
@@ -77,7 +93,6 @@ export function findBestMatch(liveDescriptor: number[], members: any[]) {
   let bestMatch = null;
   let maxSimilarity = 0;
 
-  // Ensure liveDescriptor is valid
   if (!liveDescriptor || liveDescriptor.length === 0) return { bestMatch: null, confidence: 0 };
 
   for (const member of members) {
