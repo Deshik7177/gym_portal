@@ -1,3 +1,4 @@
+
 'use client';
 
 import { useState, useRef, useEffect, useCallback } from 'react';
@@ -59,7 +60,7 @@ export default function SmartEntrancePage() {
 
   useEffect(() => {
     setIsOnline(navigator.onLine);
-    loadFaceModels().then(() => setModelsReady(true)).catch(e => console.error("Model load failed", e));
+    loadFaceModels().then(() => setModelsReady(true));
     startCamera();
     
     return () => {
@@ -71,7 +72,7 @@ export default function SmartEntrancePage() {
   const startCamera = async () => {
     try {
       const stream = await navigator.mediaDevices.getUserMedia({ 
-        video: { facingMode: facingMode, width: { ideal: 640 }, height: { ideal: 480 } } 
+        video: { facingMode: facingMode } 
       });
       if (videoRef.current) {
         videoRef.current.srcObject = stream;
@@ -88,17 +89,21 @@ export default function SmartEntrancePage() {
   };
 
   // --- KIOSK LOGIC ---
-  const triggerVerification = async () => {
+  const triggerVerification = useCallback(async () => {
     if (!modelsReady || isProcessing || scanResult || !videoRef.current || !db || activeMode !== 'kiosk') return;
 
-    // Fast check for face presence
+    // Fast check for face presence before triggering "Identifying" UI
     const facePresent = await isFaceInFrame(videoRef.current);
-    if (!facePresent) return;
+    if (!facePresent) {
+      return;
+    }
 
     setIsProcessing(true);
     
     try {
-      // Capture embedding
+      // Small delay to allow the subject to stabilize
+      await new Promise(r => setTimeout(r, 400));
+      
       const liveEmbedding = await generateEmbedding(videoRef.current);
       if (!liveEmbedding) {
         setIsProcessing(false);
@@ -111,6 +116,7 @@ export default function SmartEntrancePage() {
 
       const { bestMatch, confidence } = findBestMatch(liveEmbedding, members);
 
+      // Increased threshold to 0.88 for higher security and fewer false positives
       if (bestMatch && confidence > 0.88) {
         const memberRef = doc(db, 'members', bestMatch.id);
         const updateData = { lastCheckIn: serverTimestamp(), updatedAt: serverTimestamp() };
@@ -132,7 +138,7 @@ export default function SmartEntrancePage() {
             confidence: (confidence * 100).toFixed(0) + '%'
         }, ...prev].slice(0, 10));
 
-        // Auto-reset
+        // Display welcome for 4 seconds
         setTimeout(() => { 
             setScanResult(null); 
             setIdentifiedMember(null); 
@@ -149,32 +155,26 @@ export default function SmartEntrancePage() {
       console.error('Kiosk matching error:', error);
       setIsProcessing(false);
     }
-  };
+  }, [modelsReady, isProcessing, scanResult, db, activeMode]);
 
-  // Stable polling loop
   useEffect(() => {
-    if (!isKioskActive || activeMode !== 'kiosk') {
-      if (loopRef.current) clearTimeout(loopRef.current);
-      return;
-    }
-
-    const poll = async () => {
-      // Only trigger if we aren't currently showing a result or processing
-      if (!isProcessing && !scanResult) {
+    const runLoop = async () => {
+      if (isKioskActive && activeMode === 'kiosk' && !isProcessing && !scanResult) {
         await triggerVerification();
       }
-      
-      // Schedule next check
-      const delay = scanResult ? 5000 : 2500;
-      loopRef.current = setTimeout(poll, delay);
+      // Poll every 2 seconds for presence, but only if not currently processing or showing success
+      const nextInterval = scanResult ? 6000 : 2500;
+      loopRef.current = setTimeout(runLoop, nextInterval);
     };
 
-    poll();
-
-    return () => {
+    if (isKioskActive) {
+      runLoop();
+    } else {
       if (loopRef.current) clearTimeout(loopRef.current);
-    };
-  }, [isKioskActive, activeMode, isProcessing, scanResult]);
+    }
+    
+    return () => { if (loopRef.current) clearTimeout(loopRef.current); };
+  }, [isKioskActive, isProcessing, scanResult, triggerVerification, activeMode]);
 
   // --- ENROLLMENT LOGIC ---
   const handleFindMember = async () => {
@@ -425,4 +425,5 @@ export default function SmartEntrancePage() {
         </div>
       </Tabs>
     </div>
-  
+  );
+}
