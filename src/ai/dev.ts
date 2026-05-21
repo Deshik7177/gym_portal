@@ -1,2 +1,2 @@
-// Flows will be imported for their side effects in this file.
-import './flows/verify-face-flow';
+// AI flows are currently disabled to support offline-first member authentication.
+// import './flows/verify-face-flow';
