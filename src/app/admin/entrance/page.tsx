@@ -1,6 +1,6 @@
 'use client';
 
-import { useState, useRef, useEffect, useCallback } from 'react';
+import { useState, useRef, useEffect, useCallback, useMemo } from 'react';
 import { 
   Camera, 
   Scan, 
@@ -14,9 +14,10 @@ import {
   Cpu,
   UserPlus,
   Search,
-  UserCheck
+  UserCheck,
+  UserRound
 } from 'lucide-react';
-import { collection, query, where, getDocs, updateDoc, doc, serverTimestamp, limit, getDoc } from 'firebase/firestore';
+import { collection, query, where, getDocs, updateDoc, doc, serverTimestamp, limit, getDoc, onSnapshot } from 'firebase/firestore';
 import { useFirestore } from '@/firebase';
 import { loadFaceModels, generateEmbedding, findBestMatch, isFaceInFrame } from '@/lib/face-logic';
 import { cn } from '@/lib/utils';
@@ -41,13 +42,16 @@ export default function SmartEntrancePage() {
   // Kiosk States
   const [isKioskActive, setIsKioskActive] = useState(false);
   const [isProcessing, setIsProcessing] = useState(false);
-  const [isSearching, setIsSearching] = useState(false);
+  const [facePresent, setFacePresent] = useState(false);
   const [modelsReady, setModelsReady] = useState(false);
   const [facingMode, setFacingMode] = useState<'user' | 'environment'>('user');
   const [identifiedMember, setIdentifiedMember] = useState<any>(null);
   const [scanResult, setScanResult] = useState<'success' | 'failure' | null>(null);
   const [recentLogs, setRecentLogs] = useState<any[]>([]);
   const [isOnline, setIsOnline] = useState(true);
+
+  // Cached Members for faster local matching
+  const [cachedMembers, setCachedMembers] = useState<any[]>([]);
 
   // Enrollment States
   const [searchPhone, setSearchPhone] = useState('');
@@ -57,6 +61,19 @@ export default function SmartEntrancePage() {
   const videoRef = useRef<HTMLVideoElement>(null);
   const loopRef = useRef<NodeJS.Timeout | null>(null);
   const isProcessingRef = useRef(false);
+
+  // Listen to members collection for real-time local caching
+  useEffect(() => {
+    if (!db) return;
+    const q = query(collection(db, 'members'), where('status', '==', 'active'));
+    const unsubscribe = onSnapshot(q, (snapshot) => {
+      const members = snapshot.docs.map(d => ({ id: d.id, ...d.data() }));
+      setCachedMembers(members);
+    }, (err) => {
+      console.error("Cache sync error", err);
+    });
+    return () => unsubscribe();
+  }, [db]);
 
   useEffect(() => {
     setIsOnline(navigator.onLine);
@@ -95,12 +112,13 @@ export default function SmartEntrancePage() {
   const triggerVerification = async () => {
     if (!modelsReady || isProcessingRef.current || scanResult || !videoRef.current || !db || activeMode !== 'kiosk') return;
 
-    setIsSearching(true);
-    const facePresent = await isFaceInFrame(videoRef.current);
-    setIsSearching(false);
+    // Fast check for face presence before heavy identification
+    const isPresent = await isFaceInFrame(videoRef.current);
+    setFacePresent(isPresent);
     
-    if (!facePresent) return;
+    if (!isPresent) return;
 
+    // Lock and identify
     isProcessingRef.current = true;
     setIsProcessing(true);
     
@@ -112,13 +130,10 @@ export default function SmartEntrancePage() {
         return;
       }
 
-      const q = query(collection(db, 'members'), where('status', '==', 'active'), limit(200));
-      const snapshot = await getDocs(q);
-      const members = snapshot.docs.map(d => ({ id: d.id, ...d.data() }));
+      // Match against local cache (lightning fast)
+      const { bestMatch, confidence } = findBestMatch(liveEmbedding, cachedMembers);
 
-      const { bestMatch, confidence } = findBestMatch(liveEmbedding, members);
-
-      if (bestMatch && confidence > 0.85) {
+      if (bestMatch && confidence > 0.82) {
         const memberRef = doc(db, 'members', bestMatch.id);
         const updateData = { lastCheckIn: serverTimestamp(), updatedAt: serverTimestamp() };
 
@@ -165,7 +180,7 @@ export default function SmartEntrancePage() {
       if (isKioskActive && activeMode === 'kiosk' && !isProcessingRef.current && !scanResult) {
         await triggerVerification();
       }
-      const nextInterval = scanResult ? 5000 : 1500;
+      const nextInterval = scanResult ? 5000 : 1200;
       loopRef.current = setTimeout(runLoop, nextInterval);
     };
 
@@ -174,7 +189,7 @@ export default function SmartEntrancePage() {
     }
     
     return () => { if (loopRef.current) clearTimeout(loopRef.current); };
-  }, [isKioskActive, scanResult, activeMode]);
+  }, [isKioskActive, scanResult, activeMode, cachedMembers, modelsReady]);
 
   // --- ENROLLMENT LOGIC ---
   const handleFindMember = async () => {
@@ -258,8 +273,10 @@ export default function SmartEntrancePage() {
               {isKioskActive && activeMode === 'kiosk' && (
                 <Badge className="bg-green-500 animate-pulse">KIOSK ACTIVE</Badge>
               )}
-              {isSearching && !isProcessing && (
-                <Badge variant="secondary" className="bg-primary/20 text-primary animate-pulse border-primary/20">SEARCHING...</Badge>
+              {facePresent && !isProcessing && !scanResult && (
+                <Badge variant="secondary" className="bg-primary/20 text-primary animate-pulse border-primary/20">
+                  <UserRound className="h-3 w-3 mr-1" /> FACE DETECTED
+                </Badge>
               )}
             </div>
 
@@ -311,8 +328,8 @@ export default function SmartEntrancePage() {
               {activeMode === 'kiosk' && scanResult === 'failure' && (
                 <div className="absolute inset-0 flex flex-col items-center justify-center z-10 bg-destructive/20 backdrop-blur-[4px]">
                   <XCircle className="h-32 w-32 text-destructive mb-4 drop-shadow-xl" />
-                  <p className="text-white font-headline text-2xl uppercase tracking-[0.2em] font-bold">RECOGNITION FAILED</p>
-                  <p className="text-destructive-foreground/70 text-sm mt-2">Try standing closer to the camera</p>
+                  <p className="text-white font-headline text-2xl uppercase tracking-[0.2em] font-bold">NOT RECOGNIZED</p>
+                  <p className="text-destructive-foreground/70 text-sm mt-2">Try standing closer or enrolling face</p>
                 </div>
               )}
             </div>
@@ -422,23 +439,21 @@ export default function SmartEntrancePage() {
             <Card className="bg-primary/5 border-primary/10">
               <CardHeader className="py-4 px-6 border-b border-primary/5">
                   <CardTitle className="text-[10px] uppercase font-bold text-muted-foreground flex items-center gap-2">
-                    <AlertCircle className="h-3 w-3" /> SMART KIOSK GUIDELINES
+                    <AlertCircle className="h-3 w-3" /> SMART KIOSK STATUS
                   </CardTitle>
               </CardHeader>
               <CardContent className="p-6 space-y-4 text-xs">
-                  <p className="leading-relaxed opacity-70">
-                    • <b>Optimal Distance:</b> Members should stand 2-3 feet from the screen.
-                  </p>
-                  <p className="leading-relaxed opacity-70">
-                    • <b>Lighting:</b> Face recognition is most accurate in bright, even lighting.
-                  </p>
-                  <p className="leading-relaxed opacity-70">
-                    • <b>Passive Mode:</b> The camera only "Identifies" when a clear face is detected.
-                  </p>
-                  <div className="pt-4 border-t border-primary/5 flex justify-between">
-                    <span className="opacity-60">Recognition Threshold</span>
-                    <span className="font-bold text-primary">0.85 Cosine</span>
+                  <div className="flex justify-between">
+                    <span className="opacity-60">Recognition Engine</span>
+                    <span className="font-bold text-primary">face-api.js (Local)</span>
                   </div>
+                  <div className="flex justify-between">
+                    <span className="opacity-60">Cached Members</span>
+                    <span className="font-bold text-primary">{cachedMembers.length}</span>
+                  </div>
+                  <p className="leading-relaxed opacity-70 border-t pt-4">
+                    The scanner automatically detects faces and performs local biometric matching. Ensure the subject is facing the camera directly for best results.
+                  </p>
               </CardContent>
             </Card>
           </div>
