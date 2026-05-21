@@ -79,22 +79,20 @@ export default function RegisterMemberPage() {
     const dataUrl = canvasRef.current.toDataURL('image/jpeg');
     
     try {
-      // Generate embedding directly from video feed for higher precision
       const descriptor = await generateEmbedding(videoRef.current);
       
       if (descriptor) {
         setEmbedding(descriptor);
         setPhoto(dataUrl);
-        toast({ title: "Face Enrolled", description: "Mathematical identity generated successfully." });
+        toast({ title: "Face Enrolled", description: "Biometric identity generated." });
         
-        // Stop camera
         const stream = videoRef.current.srcObject as MediaStream;
         stream?.getTracks().forEach(track => track.stop());
       } else {
-        toast({ variant: "destructive", title: "No Face Detected", description: "Please ensure your face is clearly visible." });
+        toast({ variant: "destructive", title: "No Face Detected", description: "Ensure face is visible." });
       }
     } catch (err) {
-      toast({ variant: "destructive", title: "Inference Error", description: "Failed to generate face embedding." });
+      toast({ variant: "destructive", title: "Inference Error", description: "Failed to generate embedding." });
     } finally {
       setIsCapturing(false);
     }
@@ -132,10 +130,18 @@ export default function RegisterMemberPage() {
 
   const handleSubmit = (e: React.FormEvent) => {
     e.preventDefault();
-    if (!db || !embedding) {
-      toast({ variant: "destructive", title: "Missing Identity", description: "Please enroll a face before saving." });
+    if (!db) return;
+    
+    if (!embedding) {
+      toast({ variant: "destructive", title: "Missing Identity", description: "Enroll a face before saving." });
       return;
     }
+
+    if (durationStatus === 'non-active' && (!startDate || !endDate)) {
+      toast({ variant: "destructive", title: "Date Required", description: "Non-active members require validity dates." });
+      return;
+    }
+
     setLoading(true);
 
     const docRef = doc(db, 'members', phone);
@@ -158,7 +164,7 @@ export default function RegisterMemberPage() {
     setDoc(docRef, data, { merge: true })
       .then(() => {
         setLoading(false);
-        toast({ title: "Registration Saved", description: "Member profile and identity secure." });
+        toast({ title: "Member Saved", description: "Registration successful." });
         if (!isEditMode) resetForm();
       })
       .catch(async () => {
@@ -181,6 +187,9 @@ export default function RegisterMemberPage() {
     setPrice('');
     setDescription('');
     setSearchQuery('');
+    setStartDate('');
+    setEndDate('');
+    setDaysCount('');
   };
 
   return (
@@ -188,7 +197,7 @@ export default function RegisterMemberPage() {
       <div className="flex flex-col md:flex-row justify-between items-start md:items-center gap-4">
         <div>
           <h1 className="text-3xl font-bold font-headline">{isEditMode ? 'Edit Profile' : 'Member Enrollment'}</h1>
-          <p className="text-muted-foreground italic">Biometric-ready registration for seamless gym access.</p>
+          <p className="text-muted-foreground italic">Biometric-ready registration.</p>
         </div>
         <div className="flex gap-2">
            <Input 
@@ -234,19 +243,19 @@ export default function RegisterMemberPage() {
           </Card>
 
           <Card>
-            <CardHeader><CardTitle>Plan & Duration</CardTitle></CardHeader>
+            <CardHeader><CardTitle>Membership Status</CardTitle></CardHeader>
             <CardContent className="space-y-6">
                 <RadioGroup value={durationStatus} onValueChange={(v: any) => setDurationStatus(v)} className="grid grid-cols-2 gap-4">
                     <Label htmlFor="am" className={durationStatus === 'active' ? 'border-primary bg-primary/5 p-4 border-2 rounded-lg' : 'border p-4 rounded-lg'}>
                         <div className="flex justify-between items-center">
-                            <span className="font-bold">Unlimited</span>
+                            <span className="font-bold">Active</span>
                             <RadioGroupItem value="active" id="am" className="sr-only" />
                             {durationStatus === 'active' && <CheckCircle2 className="h-4 w-4" />}
                         </div>
                     </Label>
                     <Label htmlFor="nm" className={durationStatus === 'non-active' ? 'border-primary bg-primary/5 p-4 border-2 rounded-lg' : 'border p-4 rounded-lg'}>
                         <div className="flex justify-between items-center">
-                            <span className="font-bold">Fixed Term</span>
+                            <span className="font-bold">Non-Active</span>
                             <RadioGroupItem value="non-active" id="nm" className="sr-only" />
                             {durationStatus === 'non-active' && <CheckCircle2 className="h-4 w-4" />}
                         </div>
@@ -255,15 +264,27 @@ export default function RegisterMemberPage() {
 
                 {durationStatus === 'non-active' && (
                   <div className="grid grid-cols-3 gap-2 p-4 bg-muted/20 rounded-lg">
-                    <Input type="date" value={startDate} onChange={(e) => setStartDate(e.target.value)} />
-                    <Input type="date" value={endDate} onChange={(e) => setEndDate(e.target.value)} />
-                    <Input type="number" placeholder="Days" value={daysCount} onChange={(e) => setDaysCount(e.target.value)} />
+                    <div className="space-y-1">
+                      <Label className="text-[10px]">Start Date</Label>
+                      <Input type="date" value={startDate} onChange={(e) => setStartDate(e.target.value)} required />
+                    </div>
+                    <div className="space-y-1">
+                      <Label className="text-[10px]">End Date</Label>
+                      <Input type="date" value={endDate} onChange={(e) => setEndDate(e.target.value)} required />
+                    </div>
+                    <div className="space-y-1">
+                      <Label className="text-[10px]">Days Count</Label>
+                      <Input type="number" placeholder="Days" value={daysCount} onChange={(e) => setDaysCount(e.target.value)} required />
+                    </div>
                   </div>
                 )}
 
                 <div className="space-y-2">
-                    <Label>Price (USD)</Label>
-                    <Input type="number" value={price} onChange={(e) => setPrice(e.target.value)} required />
+                    <Label>Price (INR)</Label>
+                    <div className="relative">
+                      <span className="absolute left-3 top-2.5 text-muted-foreground">₹</span>
+                      <Input type="number" className="pl-7" value={price} onChange={(e) => setPrice(e.target.value)} required />
+                    </div>
                 </div>
             </CardContent>
           </Card>
@@ -291,7 +312,7 @@ export default function RegisterMemberPage() {
                 
                 {embedding && (
                   <div className="absolute top-2 right-2">
-                    <Badge className="bg-green-500">ID GENERATED</Badge>
+                    <Badge className="bg-green-500">ID ENROLLED</Badge>
                   </div>
                 )}
               </div>
@@ -300,27 +321,26 @@ export default function RegisterMemberPage() {
                 {!photo ? (
                   <>
                     <Button type="button" variant="outline" onClick={startCamera}>
-                      <Camera className="mr-2 h-4 w-4" /> Start Feed
+                      <Camera className="mr-2 h-4 w-4" /> Start Camera
                     </Button>
                     <Button 
                       type="button" 
                       onClick={captureAndEnroll} 
                       disabled={isCapturing || !modelsReady}
-                      className="bg-primary hover:bg-primary/90"
                     >
                       Capture Identity
                     </Button>
                   </>
                 ) : (
                   <Button type="button" variant="outline" onClick={() => { setPhoto(null); setEmbedding(null); startCamera(); }}>
-                    <RefreshCw className="mr-2 h-4 w-4" /> Reset Identity
+                    <RefreshCw className="mr-2 h-4 w-4" /> Reset Photo
                   </Button>
                 )}
               </div>
             </CardContent>
             <CardFooter className="pt-4 border-t bg-muted/10">
               <Button type="submit" className="w-full h-12 font-bold" disabled={loading || !embedding}>
-                {loading ? <Loader2 className="h-5 w-5 animate-spin" /> : 'Confirm Registration'}
+                {loading ? <Loader2 className="h-5 w-5 animate-spin" /> : 'Confirm Enrollment'}
               </Button>
             </CardFooter>
           </Card>

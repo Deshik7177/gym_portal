@@ -1,3 +1,4 @@
+
 'use client';
 
 import { useState, useEffect } from 'react';
@@ -77,14 +78,14 @@ export default function CounterPage() {
         toast({
           variant: "destructive",
           title: "Not Found",
-          description: "No member found with this ID."
+          description: "No member found."
         });
       }
     } catch (e) {
       toast({
         variant: "destructive",
         title: "Error",
-        description: "Could not fetch member details."
+        description: "Could not fetch member."
       });
     } finally {
       setLoading(false);
@@ -95,7 +96,6 @@ export default function CounterPage() {
     if (!verifiedMember || !db) return;
     const docRef = doc(db, 'members', verifiedMember.id);
     
-    // updateDoc updates local cache immediately and syncs when online
     updateDoc(docRef, { 
       lastCheckIn: serverTimestamp(),
       updatedAt: serverTimestamp()
@@ -121,7 +121,7 @@ export default function CounterPage() {
                 <WifiOff className="h-5 w-5 text-destructive shrink-0 mt-0.5" />
                 <div className="space-y-1">
                    <p className="font-bold text-sm text-destructive uppercase">Offline Mode</p>
-                   <p className="text-xs opacity-80 leading-relaxed">Data will sync automatically when you reconnect.</p>
+                   <p className="text-xs opacity-80 leading-relaxed">System is syncing locally.</p>
                 </div>
               </div>
             )}
@@ -133,7 +133,7 @@ export default function CounterPage() {
                         Reception Check-In
                     </CardTitle>
                     <CardDescription>
-                        Verify identity and mark attendance.
+                        Visual verification desk.
                     </CardDescription>
                 </CardHeader>
                 <CardContent className="space-y-6 pt-6">
@@ -141,7 +141,7 @@ export default function CounterPage() {
                         <div className="relative flex-1">
                             <Phone className="absolute left-2.5 top-2.5 h-4 w-4 text-muted-foreground" />
                             <Input 
-                                placeholder="Member Phone Number..." 
+                                placeholder="Phone Number..." 
                                 className="pl-8 h-12 text-lg"
                                 value={searchPhone}
                                 onChange={(e) => setSearchPhone(e.target.value)}
@@ -161,14 +161,14 @@ export default function CounterPage() {
                            ) : (
                               <div className="flex flex-col items-center justify-center h-full text-muted-foreground opacity-20">
                                  <UserX className="h-20 w-20" />
-                                 <p className="font-bold">NO PHOTO ON FILE</p>
+                                 <p className="font-bold">NO PHOTO</p>
                               </div>
                            )}
                            
                            {verifiedMember.authenticated && (
                              <div className="absolute inset-0 bg-green-500/20 backdrop-blur-[2px] flex flex-col items-center justify-center animate-in zoom-in duration-500">
                                 <CheckCircle className="h-24 w-24 text-green-500 drop-shadow-lg" />
-                                <span className="bg-green-500 text-white px-4 py-1 rounded-full text-sm font-bold mt-4 tracking-widest">CHECKED IN</span>
+                                <span className="bg-green-500 text-white px-4 py-1 rounded-full text-sm font-bold mt-4 tracking-widest uppercase">Check-In Success</span>
                              </div>
                            )}
                         </div>
@@ -183,8 +183,8 @@ export default function CounterPage() {
                            
                            <div className="grid grid-cols-2 gap-3 text-sm">
                               <div className="space-y-1">
-                                 <p className="text-muted-foreground text-[10px] uppercase">Plan Category</p>
-                                 <p className="font-semibold capitalize">{verifiedMember.type} Training</p>
+                                 <p className="text-muted-foreground text-[10px] uppercase">Plan</p>
+                                 <p className="font-semibold capitalize">{verifiedMember.type}</p>
                               </div>
                               <div className="space-y-1">
                                  <p className="text-muted-foreground text-[10px] uppercase">Last Seen</p>
@@ -197,8 +197,8 @@ export default function CounterPage() {
 
                         {!verifiedMember.authenticated ? (
                           <div className="grid grid-cols-2 gap-3">
-                             <Button onClick={markAttendance} className="h-14 text-lg font-bold">
-                                <CheckCircle className="mr-2 h-5 w-5" /> Grant Access
+                             <Button onClick={markAttendance} className="h-14 text-lg font-bold" disabled={verifiedMember.status === 'non-active'}>
+                                {verifiedMember.status === 'active' ? 'Grant Access' : 'Inactive'}
                              </Button>
                              <Button variant="outline" onClick={resetSearch} className="h-14">
                                 Clear
@@ -206,14 +206,14 @@ export default function CounterPage() {
                           </div>
                         ) : (
                           <Button variant="outline" onClick={resetSearch} className="w-full h-12">
-                             New Search
+                             Next Search
                           </Button>
                         )}
                       </div>
                     ) : (
                       <div className="flex flex-col items-center justify-center py-20 text-center text-muted-foreground/30 border-2 border-dashed rounded-xl">
                          <UserCheck className="h-16 w-16 mb-4" />
-                         <p className="text-sm font-medium">Search for a member to verify identity.</p>
+                         <p className="text-sm font-medium">Search member to verify.</p>
                       </div>
                     )}
                 </CardContent>
@@ -225,16 +225,11 @@ export default function CounterPage() {
                 <div>
                   <CardTitle className="flex items-center gap-2 text-primary">
                       <History className="h-5 w-5" />
-                      Daily Access Log
+                      Session Log
                   </CardTitle>
                   <CardDescription>
-                      Manual check-ins are recorded for audit and safety.
+                      Manual entry verification.
                   </CardDescription>
-                </div>
-                <div className="flex gap-2">
-                   <Badge variant="outline" className="h-8 gap-1">
-                      <Clock className="h-3 w-3" /> Real-time
-                   </Badge>
                 </div>
             </CardHeader>
             <CardContent className="flex-1 p-0">
@@ -243,7 +238,7 @@ export default function CounterPage() {
                         <TableRow>
                             <TableHead className="w-24">Time</TableHead>
                             <TableHead>Member</TableHead>
-                            <TableHead>Category</TableHead>
+                            <TableHead>Type</TableHead>
                             <TableHead className="text-right">Action</TableHead>
                         </TableRow>
                     </TableHeader>
@@ -263,23 +258,18 @@ export default function CounterPage() {
                                  <Badge variant="outline" className="text-[10px] capitalize">{verifiedMember.type}</Badge>
                               </TableCell>
                               <TableCell className="text-right">
-                                 <Badge className="bg-green-500 text-white border-none text-[10px]">CHECKED IN</Badge>
+                                 <Badge className="bg-green-500 text-white border-none text-[10px]">VERIFIED</Badge>
                               </TableCell>
                            </TableRow>
                         ) : null}
                         
                         <TableRow>
                            <TableCell colSpan={4} className="h-24 text-center text-muted-foreground italic text-xs">
-                              {verifiedMember?.authenticated ? 'End of current session logs.' : 'Awaiting first check-in of the session...'}
+                              End of session feed.
                            </TableCell>
                         </TableRow>
                     </TableBody>
                 </Table>
-                
-                <div className="flex-1 flex flex-col items-center justify-center p-12 text-center text-muted-foreground opacity-40">
-                   <AlertCircle className="h-10 w-10 mb-2" />
-                   <p className="text-xs">Security Note: Staff must visually match member face to profile photo before check-in.</p>
-                </div>
             </CardContent>
         </Card>
     </div>

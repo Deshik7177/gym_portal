@@ -1,13 +1,16 @@
 
 'use client';
 
-import { useState } from 'react';
+import { useState, useMemo } from 'react';
 import { 
   Search, 
   Filter, 
   Download,
-  Calendar as CalendarIcon
+  Calendar as CalendarIcon,
+  Loader2
 } from 'lucide-react';
+import { collection, query } from 'firebase/firestore';
+import { useFirestore, useCollection } from '@/firebase';
 
 import { Button } from '@/components/ui/button';
 import {
@@ -34,24 +37,37 @@ import {
   TableRow,
 } from '@/components/ui/table';
 
-const MOCK_SALES = [
-  { id: 'S1', member: 'John Doe', amount: 300, date: '2024-05-20', category: 'membership', desc: 'Annual Gold' },
-  { id: 'S2', member: 'Jane Smith', amount: 50, date: '2024-05-21', category: 'personal training', desc: '1 Session' },
-  { id: 'S3', member: 'Mike Johnson', amount: 150, date: '2024-05-19', category: 'membership', desc: 'Quarterly Pro' },
-  { id: 'S4', member: 'Sarah Wilson', amount: 50, date: '2024-05-18', category: 'personal training', desc: '1 Session' },
-  { id: 'S5', member: 'Chris Brown', amount: 29.99, date: '2024-05-15', category: 'membership', desc: 'Monthly Basic' },
-];
-
 export default function SalesReportPage() {
+  const db = useFirestore();
   const [filter, setFilter] = useState('all');
-  const [dateRange, setDateRange] = useState('month');
+  const [searchTerm, setSearchTerm] = useState('');
+
+  const salesRef = useMemo(() => db ? query(collection(db, 'sales')) : null, [db]);
+  const { data: sales, loading } = useCollection<any>(salesRef);
+
+  const filteredSales = useMemo(() => {
+    if (!sales) return [];
+    return sales.filter(s => {
+      const matchesSearch = s.memberName?.toLowerCase().includes(searchTerm.toLowerCase());
+      const matchesCategory = filter === 'all' || s.category === filter;
+      return matchesSearch && matchesCategory;
+    });
+  }, [sales, searchTerm, filter]);
+
+  if (loading) {
+    return (
+      <div className="flex h-60 w-full items-center justify-center">
+        <Loader2 className="h-8 w-8 animate-spin text-primary" />
+      </div>
+    );
+  }
 
   return (
     <div className="flex flex-col gap-6">
       <div className="flex flex-col sm:flex-row justify-between items-start sm:items-center gap-4">
         <div>
           <h1 className="text-3xl font-bold font-headline">Sales Report</h1>
-          <p className="text-muted-foreground">Analyze gym revenue and transaction history.</p>
+          <p className="text-muted-foreground">Gym revenue and transaction history.</p>
         </div>
         <Button variant="outline">
           <Download className="mr-2 h-4 w-4" /> Export CSV
@@ -67,6 +83,8 @@ export default function SalesReportPage() {
                 <Input
                   placeholder="Search members..."
                   className="pl-8"
+                  value={searchTerm}
+                  onChange={(e) => setSearchTerm(e.target.value)}
                 />
               </div>
               <Select value={filter} onValueChange={setFilter}>
@@ -78,20 +96,6 @@ export default function SalesReportPage() {
                   <SelectItem value="all">All Categories</SelectItem>
                   <SelectItem value="membership">Membership</SelectItem>
                   <SelectItem value="personal training">Personal Training</SelectItem>
-                </SelectContent>
-              </Select>
-            </div>
-            <div className="flex gap-4">
-              <Select value={dateRange} onValueChange={setDateRange}>
-                <SelectTrigger className="w-[180px]">
-                  <CalendarIcon className="mr-2 h-4 w-4" />
-                  <SelectValue placeholder="Date Range" />
-                </SelectTrigger>
-                <SelectContent>
-                  <SelectItem value="today">Today</SelectItem>
-                  <SelectItem value="week">This Week</SelectItem>
-                  <SelectItem value="month">This Month</SelectItem>
-                  <SelectItem value="year">This Year</SelectItem>
                 </SelectContent>
               </Select>
             </div>
@@ -109,15 +113,23 @@ export default function SalesReportPage() {
               </TableRow>
             </TableHeader>
             <TableBody>
-              {MOCK_SALES.filter(s => filter === 'all' || s.category === filter).map((sale) => (
-                <TableRow key={sale.id}>
-                  <TableCell>{sale.date}</TableCell>
-                  <TableCell className="font-medium">{sale.member}</TableCell>
-                  <TableCell className="capitalize">{sale.category}</TableCell>
-                  <TableCell>{sale.desc}</TableCell>
-                  <TableCell className="text-right font-bold">${sale.amount.toFixed(2)}</TableCell>
+              {filteredSales.length > 0 ? (
+                filteredSales.map((sale) => (
+                  <TableRow key={sale.id}>
+                    <TableCell>{sale.date}</TableCell>
+                    <TableCell className="font-medium">{sale.memberName}</TableCell>
+                    <TableCell className="capitalize">{sale.category}</TableCell>
+                    <TableCell>{sale.description}</TableCell>
+                    <TableCell className="text-right font-bold">₹{sale.amount.toFixed(2)}</TableCell>
+                  </TableRow>
+                ))
+              ) : (
+                <TableRow>
+                  <TableCell colSpan={5} className="h-24 text-center text-muted-foreground">
+                    No sales records found.
+                  </TableCell>
                 </TableRow>
-              ))}
+              )}
             </TableBody>
           </Table>
         </CardContent>
