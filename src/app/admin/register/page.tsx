@@ -1,8 +1,12 @@
 
 'use client';
 
-import { useState, useRef, useEffect } from 'react';
-import { Camera, Search, UserCircle, Save, CheckCircle2, AlertCircle } from 'lucide-react';
+import { useState, useRef, useEffect, useMemo } from 'react';
+import { Camera, Search, UserCircle, Save, CheckCircle2, AlertCircle, Loader2 } from 'lucide-react';
+import { doc, setDoc, getDoc, serverTimestamp } from 'firebase/firestore';
+import { useFirestore } from '@/firebase';
+import { errorEmitter } from '@/firebase/error-emitter';
+import { FirestorePermissionError, type SecurityRuleContext } from '@/firebase/errors';
 
 import { Button } from '@/components/ui/button';
 import {
@@ -18,15 +22,22 @@ import { Label } from '@/components/ui/label';
 import { RadioGroup, RadioGroupItem } from '@/components/ui/radio-group';
 import { Textarea } from '@/components/ui/textarea';
 import { useToast } from '@/hooks/use-toast';
-import { Badge } from '@/components/ui/badge';
 
 export default function RegisterMemberPage() {
   const { toast } = useToast();
+  const db = useFirestore();
   const [isEditMode, setIsEditMode] = useState(false);
+  const [phone, setPhone] = useState('');
+  const [fullName, setFullName] = useState('');
   const [searchQuery, setSearchQuery] = useState('');
   const [durationStatus, setDurationStatus] = useState<'active' | 'non-active'>('active');
   const [membershipType, setMembershipType] = useState<'group' | 'personal'>('group');
   const [photo, setPhoto] = useState<string | null>(null);
+  const [price, setPrice] = useState('');
+  const [description, setDescription] = useState('');
+  const [startDate, setStartDate] = useState('');
+  const [endDate, setEndDate] = useState('');
+  const [daysCount, setDaysCount] = useState('');
   const [loading, setLoading] = useState(false);
   
   const videoRef = useRef<HTMLVideoElement>(null);
@@ -62,34 +73,83 @@ export default function RegisterMemberPage() {
     }
   };
 
-  const handleSearch = () => {
-    if (!searchQuery) return;
+  const handleSearch = async () => {
+    if (!searchQuery || !db) return;
     setLoading(true);
-    // Simulate finding a member
-    setTimeout(() => {
+    try {
+      const docRef = doc(db, 'members', searchQuery);
+      const docSnap = await getDoc(docRef);
+      if (docSnap.exists()) {
+        const data = docSnap.data();
+        setPhone(data.phone);
+        setFullName(data.fullName);
+        setMembershipType(data.type);
+        setDurationStatus(data.status);
+        setPrice(data.price?.toString() || '');
+        setDescription(data.description || '');
+        setPhoto(data.photoData || null);
+        setStartDate(data.startDate || '');
+        setEndDate(data.endDate || '');
+        setDaysCount(data.countOfDays?.toString() || '');
+        setIsEditMode(true);
+        toast({ title: "Member Found", description: `Loading profile for ${data.fullName}` });
+      } else {
+        toast({ variant: "destructive", title: "Not Found", description: "No member found with this phone number." });
+      }
+    } catch (e: any) {
+      toast({ variant: "destructive", title: "Error", description: "Could not retrieve member details." });
+    } finally {
       setLoading(false);
-      setIsEditMode(true);
-      toast({
-        title: "Member Found",
-        description: `Editing profile for ${searchQuery}`
-      });
-    }, 800);
+    }
   };
 
   const handleSubmit = (e: React.FormEvent) => {
     e.preventDefault();
+    if (!db) return;
     setLoading(true);
-    setTimeout(() => {
-      setLoading(false);
-      toast({
-        title: isEditMode ? "Update Success" : "Registration Success",
-        description: isEditMode ? "Member profile updated." : "New member registered successfully."
+
+    const memberId = isEditMode ? phone : phone;
+    const docRef = doc(db, 'members', memberId);
+
+    const data = {
+      fullName,
+      phone,
+      status: durationStatus,
+      type: membershipType,
+      price: parseFloat(price) || 0,
+      description,
+      photoData: photo,
+      startDate: durationStatus === 'non-active' ? startDate : null,
+      endDate: durationStatus === 'non-active' ? endDate : null,
+      countOfDays: durationStatus === 'non-active' ? parseInt(daysCount) || 0 : null,
+      updatedAt: serverTimestamp(),
+      createdAt: isEditMode ? undefined : serverTimestamp(),
+    };
+
+    setDoc(docRef, data, { merge: true })
+      .then(() => {
+        setLoading(false);
+        toast({
+          title: isEditMode ? "Update Success" : "Registration Success",
+          description: isEditMode ? "Member profile updated." : "New member registered successfully."
+        });
+        if (!isEditMode) {
+          setPhone('');
+          setFullName('');
+          setPhoto(null);
+          setPrice('');
+          setDescription('');
+        }
+      })
+      .catch(async (serverError) => {
+        setLoading(false);
+        const permissionError = new FirestorePermissionError({
+          path: docRef.path,
+          operation: isEditMode ? 'update' : 'create',
+          requestResourceData: data,
+        } satisfies SecurityRuleContext);
+        errorEmitter.emit('permission-error', permissionError);
       });
-      if (!isEditMode) {
-        setPhoto(null);
-        setDurationStatus('active');
-      }
-    }, 1000);
   };
 
   return (
@@ -97,7 +157,7 @@ export default function RegisterMemberPage() {
       <div className="flex flex-col md:flex-row justify-between items-start md:items-center gap-4">
         <div>
           <h1 className="text-3xl font-bold font-headline">{isEditMode ? 'Edit Member' : 'Register New Member'}</h1>
-          <p className="text-muted-foreground">Manage profile, duration, and photos.</p>
+          <p className="text-muted-foreground">Manage profile, duration, and photos for identity authentication.</p>
         </div>
         <div className="flex gap-2 w-full md:w-auto">
            <div className="relative flex-1 md:w-64">
@@ -110,9 +170,11 @@ export default function RegisterMemberPage() {
                 onKeyDown={(e) => e.key === 'Enter' && handleSearch()}
               />
            </div>
-           <Button variant="outline" onClick={handleSearch} disabled={loading}>Search</Button>
+           <Button variant="outline" onClick={handleSearch} disabled={loading}>
+             {loading ? <Loader2 className="h-4 w-4 animate-spin" /> : 'Search'}
+           </Button>
            {isEditMode && (
-             <Button variant="ghost" onClick={() => setIsEditMode(false)}>Cancel Edit</Button>
+             <Button variant="ghost" onClick={() => { setIsEditMode(false); setPhone(''); setFullName(''); setPhoto(null); }}>Cancel Edit</Button>
            )}
         </div>
       </div>
@@ -128,11 +190,24 @@ export default function RegisterMemberPage() {
               <div className="grid grid-cols-1 md:grid-cols-2 gap-4">
                 <div className="space-y-2">
                   <Label htmlFor="full-name">Full Name</Label>
-                  <Input id="full-name" placeholder="John Doe" required />
+                  <Input 
+                    id="full-name" 
+                    placeholder="John Doe" 
+                    value={fullName}
+                    onChange={(e) => setFullName(e.target.value)}
+                    required 
+                  />
                 </div>
                 <div className="space-y-2">
                   <Label htmlFor="phone">Phone Number (Username/Primary ID)</Label>
-                  <Input id="phone" placeholder="1234567890" required readOnly={isEditMode} />
+                  <Input 
+                    id="phone" 
+                    placeholder="1234567890" 
+                    value={phone}
+                    onChange={(e) => setPhone(e.target.value)}
+                    required 
+                    readOnly={isEditMode} 
+                  />
                 </div>
               </div>
 
@@ -198,15 +273,34 @@ export default function RegisterMemberPage() {
                 <div className="grid grid-cols-1 md:grid-cols-3 gap-4 p-4 rounded-lg bg-muted/30 animate-in fade-in slide-in-from-top-2 border">
                   <div className="space-y-2">
                     <Label htmlFor="start-date">Start Date</Label>
-                    <Input id="start-date" type="date" required />
+                    <Input 
+                      id="start-date" 
+                      type="date" 
+                      value={startDate}
+                      onChange={(e) => setStartDate(e.target.value)}
+                      required 
+                    />
                   </div>
                   <div className="space-y-2">
                     <Label htmlFor="end-date">End Date</Label>
-                    <Input id="end-date" type="date" required />
+                    <Input 
+                      id="end-date" 
+                      type="date" 
+                      value={endDate}
+                      onChange={(e) => setEndDate(e.target.value)}
+                      required 
+                    />
                   </div>
                   <div className="space-y-2">
                     <Label htmlFor="days-count">Total Count of Days</Label>
-                    <Input id="days-count" type="number" placeholder="30" required />
+                    <Input 
+                      id="days-count" 
+                      type="number" 
+                      placeholder="30" 
+                      value={daysCount}
+                      onChange={(e) => setDaysCount(e.target.value)}
+                      required 
+                    />
                   </div>
                 </div>
               )}
@@ -215,7 +309,15 @@ export default function RegisterMemberPage() {
                 <Label htmlFor="price">Price (Manual Staff Entry)</Label>
                 <div className="relative">
                   <span className="absolute left-3 top-2.5 text-muted-foreground">$</span>
-                  <Input id="price" type="number" placeholder="0.00" className="pl-7" required />
+                  <Input 
+                    id="price" 
+                    type="number" 
+                    placeholder="0.00" 
+                    className="pl-7" 
+                    value={price}
+                    onChange={(e) => setPrice(e.target.value)}
+                    required 
+                  />
                 </div>
                 <p className="text-[10px] text-muted-foreground italic flex items-center gap-1">
                   <AlertCircle className="h-3 w-3" /> Staff must verify payment before submission.
@@ -233,6 +335,8 @@ export default function RegisterMemberPage() {
                 id="description" 
                 placeholder="Medical history, specific goals, or special requirements..." 
                 className="min-h-[120px]" 
+                value={description}
+                onChange={(e) => setDescription(e.target.value)}
               />
             </CardContent>
           </Card>
@@ -241,8 +345,8 @@ export default function RegisterMemberPage() {
         <div className="space-y-6">
           <Card className="sticky top-24">
             <CardHeader>
-              <CardTitle>Profile Photo</CardTitle>
-              <CardDescription>Required for RFID ID verification.</CardDescription>
+              <CardTitle>Authentication Photo</CardTitle>
+              <CardDescription>Required for visual identity verification at front desk.</CardDescription>
             </CardHeader>
             <CardContent className="flex flex-col items-center space-y-4">
               <div className="relative w-full aspect-[4/5] bg-muted rounded-xl overflow-hidden border-2 border-dashed border-muted-foreground/20 flex items-center justify-center">
@@ -268,7 +372,7 @@ export default function RegisterMemberPage() {
                     <Camera className="mr-2 h-4 w-4" /> Start Camera
                   </Button>
                 ) : (
-                  <Button type="button" variant="outline" onClick={() => setPhoto(null)}>
+                  <Button type="button" variant="outline" onClick={() => { setPhoto(null); startCamera(); }}>
                     Retake Photo
                   </Button>
                 )}
@@ -280,13 +384,13 @@ export default function RegisterMemberPage() {
               </div>
             </CardContent>
             <CardFooter className="flex flex-col gap-3 pt-6 border-t">
-              <Button type="submit" className="w-full h-12 text-lg" disabled={loading}>
-                <Save className="mr-2 h-5 w-5" /> 
+              <Button type="submit" className="w-full h-12 text-lg" disabled={loading || !photo}>
+                {loading ? <Loader2 className="mr-2 h-5 w-5 animate-spin" /> : <Save className="mr-2 h-5 w-5" />} 
                 {loading ? 'Processing...' : (isEditMode ? 'Update Profile' : 'Complete Registration')}
               </Button>
               {isEditMode && (
-                <p className="text-xs text-center text-muted-foreground">
-                  Last updated: Today at 10:30 AM
+                <p className="text-xs text-center text-muted-foreground italic">
+                  *Photo is mandatory for authentication.
                 </p>
               )}
             </CardFooter>
