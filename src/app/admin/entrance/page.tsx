@@ -15,6 +15,7 @@ import {
 import { collection, query, where, getDocs, updateDoc, doc, serverTimestamp, limit } from 'firebase/firestore';
 import { useFirestore } from '@/firebase';
 import { verifyFace } from '@/ai/flows/verify-face-flow';
+import { cn } from '@/lib/utils';
 
 import { Button } from '@/components/ui/button';
 import { Card, CardContent, CardDescription, CardHeader, CardTitle } from '@/components/ui/card';
@@ -104,8 +105,6 @@ export default function SmartEntrancePage() {
       }
 
       // 3. AI Identification (Check live photo against potential matches)
-      // For the demo, we'll verify against a "likely" candidate if multiple, or just the first for testing
-      // In a real 1:N, we would send the top candidates to the AI
       let matchedMember = null;
       
       for (const member of members) {
@@ -125,7 +124,7 @@ export default function SmartEntrancePage() {
       if (matchedMember) {
         // 4. Mark Attendance
         const memberRef = doc(db, 'members', matchedMember.id);
-        await updateDoc(memberRef, {
+        updateDoc(memberRef, {
           lastCheckIn: serverTimestamp(),
           updatedAt: serverTimestamp()
         });
@@ -149,7 +148,7 @@ export default function SmartEntrancePage() {
       toast({ variant: "destructive", title: "System Error", description: "Facial verification failed." });
     } finally {
       setIsScanning(false);
-      // Reset after 3 seconds
+      // Reset after 4 seconds
       setTimeout(() => {
         setScanResult(null);
         setIdentifiedMember(null);
