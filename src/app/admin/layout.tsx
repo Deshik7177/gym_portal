@@ -1,7 +1,11 @@
 
+'use client';
+
+import { useEffect } from 'react';
 import Link from 'next/link';
+import { useRouter } from 'next/navigation';
+import { useUser } from '@/firebase';
 import {
-  Home,
   Users,
   BarChart3,
   UserPlus,
@@ -10,13 +14,33 @@ import {
   Dumbbell,
   PanelLeft,
   LayoutDashboard,
+  Loader2,
 } from 'lucide-react';
 
 import { Button } from '@/components/ui/button';
-import { Sheet, SheetContent, SheetTrigger } from '@/components/ui/sheet';
+import { Sheet, SheetContent, SheetTrigger, SheetHeader, SheetTitle, SheetDescription } from '@/components/ui/sheet';
 import UserNav from '@/components/user-nav';
 
 export default function ReceptionLayout({ children }: { children: React.ReactNode }) {
+  const { user, loading } = useUser();
+  const router = useRouter();
+
+  useEffect(() => {
+    if (!loading && !user) {
+      router.push('/login');
+    }
+  }, [user, loading, router]);
+
+  if (loading) {
+    return (
+      <div className="flex h-screen w-full items-center justify-center bg-background">
+        <Loader2 className="h-8 w-8 animate-spin text-primary" />
+      </div>
+    );
+  }
+
+  if (!user) return null;
+
   return (
     <div className="flex min-h-screen w-full flex-col bg-background/95">
       <aside className="fixed inset-y-0 left-0 z-10 hidden w-64 flex-col border-r bg-card/50 backdrop-blur-sm sm:flex shadow-xl">
@@ -83,10 +107,13 @@ export default function ReceptionLayout({ children }: { children: React.ReactNod
               </Button>
             </SheetTrigger>
             <SheetContent side="left" className="w-[280px] p-0">
-              <div className="flex h-16 items-center border-b px-6">
-                <Dumbbell className="h-6 w-6 text-primary" />
-                <span className="ml-2 text-lg font-headline text-primary">Thrive Fit</span>
-              </div>
+              <SheetHeader className="px-6 pt-6 pb-2 text-left">
+                <SheetTitle className="flex items-center gap-2">
+                  <Dumbbell className="h-6 w-6 text-primary" />
+                  Thrive Fit
+                </SheetTitle>
+                <SheetDescription>Staff Management Menu</SheetDescription>
+              </SheetHeader>
               <nav className="grid gap-1 px-4 py-6 text-lg font-medium">
                 <Link href="/admin" className="flex items-center gap-4 rounded-lg px-3 py-2 text-muted-foreground hover:text-primary hover:bg-primary/5">
                   <LayoutDashboard className="h-5 w-5" />
@@ -112,7 +139,7 @@ export default function ReceptionLayout({ children }: { children: React.ReactNod
             </SheetContent>
           </Sheet>
           <div className="flex-1">
-             <h2 className="font-semibold text-lg hidden md:block">Front Desk Portal</h2>
+             <h2 className="font-semibold text-lg hidden md:block text-primary font-headline">Front Desk Portal</h2>
           </div>
           <UserNav />
         </header>
