@@ -33,6 +33,16 @@ export function loadFaceModels() {
 }
 
 /**
+ * Lightweight check to see if a face is in the frame.
+ */
+export async function isFaceInFrame(input: HTMLVideoElement | HTMLCanvasElement | HTMLImageElement) {
+  await loadFaceModels();
+  const options = new faceapi.TinyFaceDetectorOptions({ inputSize: 128, scoreThreshold: 0.5 });
+  const detection = await faceapi.detectSingleFace(input, options);
+  return !!detection;
+}
+
+/**
  * Calculates cosine similarity between two 128D embeddings.
  */
 export function cosineSimilarity(vecA: number[], vecB: number[]) {
@@ -50,7 +60,6 @@ export function cosineSimilarity(vecA: number[], vecB: number[]) {
 export async function generateEmbedding(input: HTMLVideoElement | HTMLCanvasElement | HTMLImageElement) {
   await loadFaceModels();
   
-  // Use a smaller detection scale to improve performance (less main thread blocking)
   const options = new faceapi.TinyFaceDetectorOptions({ inputSize: 128, scoreThreshold: 0.5 });
   
   const detection = await faceapi.detectSingleFace(input, options)

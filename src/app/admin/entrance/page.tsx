@@ -19,7 +19,7 @@ import {
 } from 'lucide-react';
 import { collection, query, where, getDocs, updateDoc, doc, serverTimestamp, limit, getDoc } from 'firebase/firestore';
 import { useFirestore } from '@/firebase';
-import { loadFaceModels, generateEmbedding, findBestMatch } from '@/lib/face-logic';
+import { loadFaceModels, generateEmbedding, findBestMatch, isFaceInFrame } from '@/lib/face-logic';
 import { cn } from '@/lib/utils';
 import { errorEmitter } from '@/firebase/error-emitter';
 import { FirestorePermissionError, type SecurityRuleContext } from '@/firebase/errors';
@@ -65,7 +65,7 @@ export default function SmartEntrancePage() {
     
     return () => {
       stopCamera();
-      if (loopRef.current) clearInterval(loopRef.current);
+      if (loopRef.current) clearTimeout(loopRef.current);
     };
   }, [facingMode]);
 
@@ -92,6 +92,10 @@ export default function SmartEntrancePage() {
   const triggerVerification = useCallback(async () => {
     if (!modelsReady || isProcessing || scanResult || !videoRef.current || !db || activeMode !== 'kiosk') return;
 
+    // Fast check for face presence before triggering "Identifying" UI
+    const facePresent = await isFaceInFrame(videoRef.current);
+    if (!facePresent) return;
+
     setIsProcessing(true);
     
     try {
@@ -101,7 +105,7 @@ export default function SmartEntrancePage() {
         return;
       }
 
-      const q = query(collection(db, 'members'), where('status', '==', 'active'), limit(100));
+      const q = query(collection(db, 'members'), where('status', '==', 'active'), limit(200));
       const snapshot = await getDocs(q);
       const members = snapshot.docs.map(d => ({ id: d.id, ...d.data() }));
 
@@ -128,7 +132,11 @@ export default function SmartEntrancePage() {
             confidence: (confidence * 100).toFixed(0) + '%'
         }, ...prev].slice(0, 10));
 
-        setTimeout(() => { setScanResult(null); setIdentifiedMember(null); }, 4000);
+        // Display welcome for 4 seconds, then clear success state
+        setTimeout(() => { 
+            setScanResult(null); 
+            setIdentifiedMember(null); 
+        }, 4000);
       } else {
         setScanResult('failure');
         setTimeout(() => setScanResult(null), 2000);
@@ -141,14 +149,21 @@ export default function SmartEntrancePage() {
   }, [modelsReady, isProcessing, scanResult, db, activeMode]);
 
   useEffect(() => {
-    if (isKioskActive && activeMode === 'kiosk') {
-      loopRef.current = setInterval(() => {
-        if (!isProcessing && !scanResult) triggerVerification();
-      }, 5000);
+    const runLoop = async () => {
+      if (isKioskActive && activeMode === 'kiosk' && !isProcessing && !scanResult) {
+        await triggerVerification();
+      }
+      // Poll every 2 seconds for presence, but only if not currently processing or showing success
+      loopRef.current = setTimeout(runLoop, scanResult ? 5000 : 2000);
+    };
+
+    if (isKioskActive) {
+      runLoop();
     } else {
-      if (loopRef.current) clearInterval(loopRef.current);
+      if (loopRef.current) clearTimeout(loopRef.current);
     }
-    return () => { if (loopRef.current) clearInterval(loopRef.current); };
+    
+    return () => { if (loopRef.current) clearTimeout(loopRef.current); };
   }, [isKioskActive, isProcessing, scanResult, triggerVerification, activeMode]);
 
   // --- ENROLLMENT LOGIC ---
