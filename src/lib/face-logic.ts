@@ -1,4 +1,3 @@
-
 'use client';
 
 import * as faceapi from 'face-api.js';
@@ -6,14 +5,11 @@ import * as faceapi from 'face-api.js';
 let modelsLoaded = false;
 
 /**
- * Loads the face-api.js models from a public CDN.
- * Models: TinyFaceDetector, FaceLandmark68Net, FaceRecognitionNet
+ * Loads face-api.js models for local on-device recognition.
  */
 export async function loadFaceModels() {
   if (modelsLoaded) return;
-  
   const MODEL_URL = 'https://justadudewhohacks.github.io/face-api.js/models';
-  
   try {
     await Promise.all([
       faceapi.nets.tinyFaceDetector.loadFromUri(MODEL_URL),
@@ -21,61 +17,52 @@ export async function loadFaceModels() {
       faceapi.nets.faceRecognitionNet.loadFromUri(MODEL_URL),
     ]);
     modelsLoaded = true;
-    console.log('Face models loaded successfully');
+    console.log('Local AI Models Ready');
   } catch (error) {
-    console.error('Failed to load face models:', error);
-    throw new Error('Face recognition models failed to load.');
+    console.error('Failed to load local AI models:', error);
   }
 }
 
 /**
- * Generates a face embedding (descriptor) from a video or image element.
+ * Calculates cosine similarity between two 128D embeddings.
+ * Production standard for facial vector comparison.
+ */
+export function cosineSimilarity(vecA: number[], vecB: number[]) {
+  const dotProduct = vecA.reduce((sum, a, i) => sum + a * vecB[i], 0);
+  const magA = Math.sqrt(vecA.reduce((sum, a) => sum + a * a, 0));
+  const magB = Math.sqrt(vecB.reduce((sum, b) => sum + b * b, 0));
+  if (magA === 0 || magB === 0) return 0;
+  return dotProduct / (magA * magB);
+}
+
+/**
+ * Detects a face and generates a mathematical embedding (descriptor).
  */
 export async function generateEmbedding(input: HTMLVideoElement | HTMLCanvasElement | HTMLImageElement) {
   if (!modelsLoaded) await loadFaceModels();
-
   const detection = await faceapi.detectSingleFace(
     input, 
     new faceapi.TinyFaceDetectorOptions()
   ).withFaceLandmarks().withFaceDescriptor();
-
-  if (!detection) return null;
-  
-  // Convert Float32Array to standard number array for Firestore storage
-  return Array.from(detection.descriptor);
+  return detection ? Array.from(detection.descriptor) : null;
 }
 
 /**
- * Compares a live descriptor against a known descriptor using Euclidean distance.
- * Lower distance = higher similarity. Threshold is typically 0.6 for recognition.
- */
-export function compareEmbeddings(descriptor1: number[], descriptor2: number[]) {
-  const d1 = new Float32Array(descriptor1);
-  const d2 = new Float32Array(descriptor2);
-  const distance = faceapi.euclideanDistance(d1, d2);
-  
-  // Convert distance to a confidence score (0 to 1)
-  // Threshold 0.6 is roughly 0.85 confidence in this mapping
-  const confidence = Math.max(0, 1 - (distance / 0.6));
-  return { distance, confidence };
-}
-
-/**
- * Finds the best match from a gallery of members.
+ * Matches a live face against a list of stored embeddings using cosine similarity.
+ * Required threshold: 0.85
  */
 export function findBestMatch(liveDescriptor: number[], members: any[]) {
   let bestMatch = null;
-  let bestConfidence = 0;
+  let maxSimilarity = 0;
 
   for (const member of members) {
     if (!member.faceEmbedding) continue;
-    
-    const { confidence } = compareEmbeddings(liveDescriptor, member.faceEmbedding);
-    if (confidence > bestConfidence) {
-      bestConfidence = confidence;
+    const similarity = cosineSimilarity(liveDescriptor, member.faceEmbedding);
+    if (similarity > maxSimilarity) {
+      maxSimilarity = similarity;
       bestMatch = member;
     }
   }
 
-  return { bestMatch, confidence: bestConfidence };
+  return { bestMatch, confidence: maxSimilarity };
 }

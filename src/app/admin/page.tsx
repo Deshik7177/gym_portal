@@ -122,7 +122,7 @@ export default function ReceptionDashboard() {
 
             <div className="pt-6 border-t border-border/50">
               <div className="flex items-center justify-between">
-                <span className="text-sm font-medium">Monthly Growth</span>
+                <span className="text-sm font-medium Monthly Growth</span>
                 <span className="text-sm text-green-500 font-bold flex items-center gap-1">
                   <TrendingUp className="h-3 w-3" /> +12%
                 </span>
