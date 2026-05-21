@@ -1,14 +1,8 @@
-'use client';
-
-/**
- * Replace the placeholder values below with your actual Firebase project configuration.
- * You can find this in your Firebase Console: Project Settings > General > Your Apps.
- */
 export const firebaseConfig = {
-  apiKey: "REPLACE_WITH_YOUR_API_KEY",
-  authDomain: "REPLACE_WITH_YOUR_PROJECT_ID.firebaseapp.com",
-  projectId: "REPLACE_WITH_YOUR_PROJECT_ID",
-  storageBucket: "REPLACE_WITH_YOUR_PROJECT_ID.firebasestorage.app",
-  messagingSenderId: "REPLACE_WITH_YOUR_SENDER_ID",
-  appId: "REPLACE_WITH_YOUR_APP_ID"
+  apiKey: "AIzaSyC7MOBvS0RvcMn2810Z5I3N8n4RK3IVki4",
+  authDomain: "studio-1536246552-55579.firebaseapp.com",
+  projectId: "studio-1536246552-55579",
+  storageBucket: "studio-1536246552-55579.firebasestorage.app",
+  messagingSenderId: "748616672014",
+  appId: "1:748616672014:web:18e9c28c275275489e6d5f"
 };
