@@ -6,12 +6,13 @@ let modelsLoadedPromise: Promise<void> | null = null;
 
 /**
  * Loads face-api.js models for local on-device recognition.
+ * These models are optimized for mobile browser performance.
  */
 export function loadFaceModels() {
   if (typeof window === 'undefined') return Promise.resolve();
   if (modelsLoadedPromise) return modelsLoadedPromise;
   
-  // Using the primary reliable mirror for models
+  // Reliable model URLs
   const MODEL_URL = 'https://justadudewhohacks.github.io/face-api.js/models';
   
   modelsLoadedPromise = (async () => {
@@ -21,7 +22,6 @@ export function loadFaceModels() {
         faceapi.nets.faceLandmark68Net.loadFromUri(MODEL_URL),
         faceapi.nets.faceRecognitionNet.loadFromUri(MODEL_URL),
       ]);
-      console.log('Local AI models loaded successfully');
     } catch (error) {
       console.error('Failed to load local AI models:', error);
       modelsLoadedPromise = null; 
@@ -33,8 +33,7 @@ export function loadFaceModels() {
 }
 
 /**
- * Checks if a face is clearly present in the frame.
- * Optimized for mobile browsers.
+ * Lightweight check for face presence before starting heavy recognition.
  */
 export async function isFaceInFrame(input: HTMLVideoElement | HTMLCanvasElement | HTMLImageElement) {
   if (input instanceof HTMLVideoElement) {
@@ -44,9 +43,8 @@ export async function isFaceInFrame(input: HTMLVideoElement | HTMLCanvasElement 
   
   await loadFaceModels();
   
-  // Adjusted threshold for better responsiveness on mobile
   const options = new faceapi.TinyFaceDetectorOptions({ 
-    inputSize: 160, 
+    inputSize: 128, 
     scoreThreshold: 0.5 
   });
   
@@ -56,6 +54,7 @@ export async function isFaceInFrame(input: HTMLVideoElement | HTMLCanvasElement 
 
 /**
  * Calculates cosine similarity between two 128D embeddings.
+ * Production standard for vector comparison.
  */
 export function cosineSimilarity(vecA: number[], vecB: number[]) {
   const dotProduct = vecA.reduce((sum, a, i) => sum + a * vecB[i], 0);
@@ -66,7 +65,7 @@ export function cosineSimilarity(vecA: number[], vecB: number[]) {
 }
 
 /**
- * Detects a face and generates a mathematical embedding.
+ * Detects face and generates the 128-dimensional mathematical descriptor.
  */
 export async function generateEmbedding(input: HTMLVideoElement | HTMLCanvasElement | HTMLImageElement) {
   if (input instanceof HTMLVideoElement && input.readyState < 2) return null;
@@ -74,7 +73,7 @@ export async function generateEmbedding(input: HTMLVideoElement | HTMLCanvasElem
   await loadFaceModels();
   
   const options = new faceapi.TinyFaceDetectorOptions({ 
-    inputSize: 224, 
+    inputSize: 160, 
     scoreThreshold: 0.6 
   });
   
@@ -91,7 +90,7 @@ export async function generateEmbedding(input: HTMLVideoElement | HTMLCanvasElem
 }
 
 /**
- * Matches a live face against a list of stored embeddings.
+ * Performs a 1:N local search against cached members.
  */
 export function findBestMatch(liveDescriptor: number[], members: any[]) {
   let bestMatch = null;
