@@ -1,0 +1,52 @@
+
+{
+  "entities": {
+    "Member": {
+      "title": "Member",
+      "description": "A gym member profile.",
+      "type": "object",
+      "properties": {
+        "fullName": { "type": "string" },
+        "phone": { "type": "string", "description": "Used as the primary key/ID" },
+        "status": { "type": "string", "enum": ["active", "non-active"] },
+        "type": { "type": "string", "enum": ["group", "personal"], "description": "Analytics category" },
+        "startDate": { "type": "string", "format": "date" },
+        "endDate": { "type": "string", "format": "date" },
+        "countOfDays": { "type": "number" },
+        "price": { "type": "number" },
+        "photoData": { "type": "string", "description": "Base64 photo data" },
+        "description": { "type": "string" },
+        "lastCheckIn": { "type": "string", "format": "date-time" },
+        "createdAt": { "type": "string", "format": "date-time" }
+      },
+      "required": ["fullName", "phone", "status", "price"]
+    },
+    "Sale": {
+      "title": "Sale",
+      "description": "A transaction record.",
+      "type": "object",
+      "properties": {
+        "memberId": { "type": "string" },
+        "memberName": { "type": "string" },
+        "amount": { "type": "number" },
+        "date": { "type": "string", "format": "date" },
+        "category": { "type": "string", "enum": ["membership", "personal training", "other"] },
+        "description": { "type": "string" }
+      },
+      "required": ["memberId", "amount", "date", "category"]
+    }
+  },
+  "auth": {
+    "providers": ["password"]
+  },
+  "firestore": {
+    "/members/{phone}": {
+      "schema": "#/backend/entities/Member",
+      "description": "Collection of gym members indexed by phone number."
+    },
+    "/sales/{saleId}": {
+      "schema": "#/backend/entities/Sale",
+      "description": "Collection of sales transactions."
+    }
+  }
+}

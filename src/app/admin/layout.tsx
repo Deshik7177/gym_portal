@@ -1,36 +1,19 @@
+
 import Link from 'next/link';
 import {
-  Bell,
   Home,
   Users,
-  CreditCard,
-  Activity,
+  BarChart3,
+  UserPlus,
+  Clock,
   Settings,
   Dumbbell,
   PanelLeft,
 } from 'lucide-react';
 
-import {
-  Breadcrumb,
-  BreadcrumbItem,
-  BreadcrumbLink,
-  BreadcrumbList,
-  BreadcrumbPage,
-  BreadcrumbSeparator,
-} from '@/components/ui/breadcrumb';
 import { Button } from '@/components/ui/button';
-import {
-  DropdownMenu,
-  DropdownMenuContent,
-  DropdownMenuItem,
-  DropdownMenuLabel,
-  DropdownMenuSeparator,
-  DropdownMenuTrigger,
-} from '@/components/ui/dropdown-menu';
-import { Input } from '@/components/ui/input';
 import { Sheet, SheetContent, SheetTrigger } from '@/components/ui/sheet';
 import UserNav from '@/components/user-nav';
-import Logo from '@/components/logo';
 
 export default function AdminLayout({ children }: { children: React.ReactNode }) {
   return (
@@ -46,37 +29,44 @@ export default function AdminLayout({ children }: { children: React.ReactNode })
           </Link>
           <Link
             href="/admin"
-            className="flex items-center gap-3 rounded-lg px-3 py-2 text-muted-foreground transition-all hover:text-primary"
+            className="flex items-center gap-3 w-full rounded-lg px-3 py-2 text-muted-foreground transition-all hover:text-primary"
           >
             <Home className="h-4 w-4" />
             Dashboard
           </Link>
           <Link
-            href="/admin/users"
-            className="flex items-center gap-3 rounded-lg px-3 py-2 text-muted-foreground transition-all hover:text-primary"
+            href="/admin/members"
+            className="flex items-center gap-3 w-full rounded-lg px-3 py-2 text-muted-foreground transition-all hover:text-primary"
           >
             <Users className="h-4 w-4" />
-            Users
+            Members List
           </Link>
           <Link
-            href="/admin/plans"
-            className="flex items-center gap-3 rounded-lg px-3 py-2 text-muted-foreground transition-all hover:text-primary"
+            href="/admin/sales"
+            className="flex items-center gap-3 w-full rounded-lg px-3 py-2 text-muted-foreground transition-all hover:text-primary"
           >
-            <CreditCard className="h-4 w-4" />
-            Plans
+            <BarChart3 className="h-4 w-4" />
+            Sales Report
           </Link>
           <Link
-            href="/admin/logs"
-            className="flex items-center gap-3 rounded-lg px-3 py-2 text-muted-foreground transition-all hover:text-primary"
+            href="/admin/absent"
+            className="flex items-center gap-3 w-full rounded-lg px-3 py-2 text-muted-foreground transition-all hover:text-primary"
           >
-            <Activity className="h-4 w-4" />
-            Access Logs
+            <Clock className="h-4 w-4" />
+            Frequent Absent
+          </Link>
+          <Link
+            href="/admin/register"
+            className="flex items-center gap-3 w-full rounded-lg px-3 py-2 text-muted-foreground transition-all hover:text-primary"
+          >
+            <UserPlus className="h-4 w-4" />
+            New Registration
           </Link>
         </nav>
         <nav className="mt-auto flex flex-col items-center gap-4 px-2 sm:py-5">
           <Link
             href="#"
-            className="flex items-center gap-3 rounded-lg px-3 py-2 text-muted-foreground transition-all hover:text-primary"
+            className="flex items-center gap-3 w-full rounded-lg px-3 py-2 text-muted-foreground transition-all hover:text-primary"
           >
             <Settings className="h-4 w-4" />
             Settings
@@ -105,31 +95,31 @@ export default function AdminLayout({ children }: { children: React.ReactNode })
                   <Home className="h-5 w-5" />
                   Dashboard
                 </Link>
-                <Link href="/admin/users" className="flex items-center gap-4 px-2.5 text-foreground">
+                <Link href="/admin/members" className="flex items-center gap-4 px-2.5 text-muted-foreground hover:text-foreground">
                   <Users className="h-5 w-5" />
-                  Users
+                  Members
                 </Link>
-                <Link href="/admin/plans" className="flex items-center gap-4 px-2.5 text-muted-foreground hover:text-foreground">
-                  <CreditCard className="h-5 w-5" />
-                  Plans
+                <Link href="/admin/sales" className="flex items-center gap-4 px-2.5 text-muted-foreground hover:text-foreground">
+                  <BarChart3 className="h-5 w-5" />
+                  Sales
                 </Link>
-                <Link href="/admin/logs" className="flex items-center gap-4 px-2.5 text-muted-foreground hover:text-foreground">
-                  <Activity className="h-5 w-5" />
-                  Access Logs
+                <Link href="/admin/absent" className="flex items-center gap-4 px-2.5 text-muted-foreground hover:text-foreground">
+                  <Clock className="h-5 w-5" />
+                  Absents
                 </Link>
-                <Link href="#" className="flex items-center gap-4 px-2.5 text-muted-foreground hover:text-foreground">
-                  <Settings className="h-5 w-5" />
-                  Settings
+                <Link href="/admin/register" className="flex items-center gap-4 px-2.5 text-muted-foreground hover:text-foreground">
+                  <UserPlus className="h-5 w-5" />
+                  Register
                 </Link>
               </nav>
             </SheetContent>
           </Sheet>
           <div className="relative ml-auto flex-1 md:grow-0">
-            <h1 className="font-semibold text-lg font-headline">Admin Panel</h1>
+            <h1 className="font-semibold text-lg font-headline">Thrive Fit Portal</h1>
           </div>
           <UserNav />
         </header>
-        <main className="grid flex-1 items-start gap-4 p-4 sm:px-6 sm:py-0 md:gap-8 bg-background">
+        <main className="grid flex-1 items-start gap-4 p-4 sm:px-6 sm:py-0 md:gap-8">
             {children}
         </main>
       </div>
