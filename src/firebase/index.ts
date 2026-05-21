@@ -1,12 +1,12 @@
-
 'use client';
 
 import { initializeApp, getApps, getApp, FirebaseApp } from 'firebase/app';
 import { 
-  initializeFirestore, 
+  getFirestore,
   Firestore, 
   persistentLocalCache, 
-  persistentMultipleTabManager 
+  persistentMultipleTabManager,
+  initializeFirestore
 } from 'firebase/firestore';
 import { getAuth, Auth } from 'firebase/auth';
 import { firebaseConfig } from './config';
@@ -14,13 +14,18 @@ import { firebaseConfig } from './config';
 export function initializeFirebase() {
   const firebaseApp = getApps().length === 0 ? initializeApp(firebaseConfig) : getApp();
   
-  // Enable Persistent Offline Cache
-  // This allows the app to work without an internet connection by caching data in IndexedDB.
-  const firestore = initializeFirestore(firebaseApp, {
-    localCache: persistentLocalCache({
-      tabManager: persistentMultipleTabManager(),
-    }),
-  });
+  let firestore: Firestore;
+  try {
+    // Attempt to initialize with persistence
+    firestore = initializeFirestore(firebaseApp, {
+      localCache: persistentLocalCache({
+        tabManager: persistentMultipleTabManager(),
+      }),
+    });
+  } catch (e) {
+    // If already initialized, get the existing instance
+    firestore = getFirestore(firebaseApp);
+  }
 
   const auth = getAuth(firebaseApp);
 

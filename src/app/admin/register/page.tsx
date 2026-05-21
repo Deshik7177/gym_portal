@@ -1,8 +1,8 @@
 'use client';
 
 import { useState, useEffect, Suspense } from 'react';
-import { useSearchParams } from 'next/navigation';
-import { Search, UserCircle, Save, CheckCircle2, AlertCircle, Loader2, Info } from 'lucide-react';
+import { useSearchParams, useRouter } from 'next/navigation';
+import { Search, Save, CheckCircle2, Loader2, Info } from 'lucide-react';
 import { doc, setDoc, getDoc, serverTimestamp } from 'firebase/firestore';
 import { useFirestore } from '@/firebase';
 import { errorEmitter } from '@/firebase/error-emitter';
@@ -27,6 +27,7 @@ import { Alert, AlertDescription, AlertTitle } from '@/components/ui/alert';
 function RegisterForm() {
   const { toast } = useToast();
   const db = useFirestore();
+  const router = useRouter();
   const searchParams = useSearchParams();
   const editId = searchParams.get('edit');
   
@@ -45,7 +46,6 @@ function RegisterForm() {
   const [loading, setLoading] = useState(false);
   const [isEnrolled, setIsEnrolled] = useState(false);
 
-  // Load member if in edit mode from URL
   useEffect(() => {
     if (editId && db) {
       setLoading(true);
@@ -123,17 +123,9 @@ function RegisterForm() {
       createdAt: isEditMode ? undefined : serverTimestamp(),
     };
 
+    // Initiate write - DO NOT await
     setDoc(docRef, data, { merge: true })
-      .then(() => {
-        setLoading(false);
-        toast({ 
-          title: "Member Data Saved", 
-          description: isEditMode ? "Profile updated successfully." : "Member details registered. Proceed to Kiosk for face enrollment." 
-        });
-        if (!isEditMode) resetForm();
-      })
       .catch(async () => {
-        setLoading(false);
         const permissionError = new FirestorePermissionError({
           path: docRef.path,
           operation: 'write',
@@ -141,6 +133,17 @@ function RegisterForm() {
         } satisfies SecurityRuleContext);
         errorEmitter.emit('permission-error', permissionError);
       });
+
+    // Update UI immediately (Optimistic UI)
+    setLoading(false);
+    toast({ 
+      title: "Member Data Saved", 
+      description: isEditMode ? "Profile updated successfully." : "Member details registered. Proceed to Kiosk for face enrollment." 
+    });
+    
+    if (!isEditMode) {
+      resetForm();
+    }
   };
 
   const resetForm = () => {
@@ -154,6 +157,7 @@ function RegisterForm() {
     setEndDate('');
     setDaysCount('');
     setIsEnrolled(false);
+    router.replace('/admin/register');
   };
 
   return (
@@ -237,7 +241,6 @@ function RegisterForm() {
               </RadioGroup>
             </div>
 
-            {/* Date section always visible if dates are present or if non-active is selected */}
             {(durationStatus === 'non-active' || startDate || endDate) && (
               <div className="grid grid-cols-1 md:grid-cols-3 gap-4 p-4 bg-muted/20 rounded-lg animate-in fade-in zoom-in duration-200">
                 <div className="space-y-1">
