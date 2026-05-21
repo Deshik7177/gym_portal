@@ -3,18 +3,23 @@
   "entities": {
     "Member": {
       "title": "Member",
-      "description": "A gym member profile.",
+      "description": "A gym member profile with local face embeddings.",
       "type": "object",
       "properties": {
         "fullName": { "type": "string" },
-        "phone": { "type": "string", "description": "Used as the primary key/ID" },
+        "phone": { "type": "string", "description": "Primary ID" },
         "status": { "type": "string", "enum": ["active", "non-active"] },
-        "type": { "type": "string", "enum": ["group", "personal"], "description": "Analytics category" },
+        "type": { "type": "string", "enum": ["group", "personal"] },
         "startDate": { "type": "string", "format": "date" },
         "endDate": { "type": "string", "format": "date" },
         "countOfDays": { "type": "number" },
         "price": { "type": "number" },
         "photoData": { "type": "string", "description": "Base64 photo data" },
+        "faceEmbedding": { 
+          "type": "array", 
+          "items": { "type": "number" }, 
+          "description": "128D face descriptor vector for local matching" 
+        },
         "description": { "type": "string" },
         "lastCheckIn": { "type": "string", "format": "date-time" },
         "createdAt": { "type": "string", "format": "date-time" }
