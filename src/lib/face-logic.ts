@@ -1,31 +1,39 @@
+
 'use client';
 
 import * as faceapi from 'face-api.js';
 
-let modelsLoaded = false;
+let modelsLoadedPromise: Promise<void> | null = null;
 
 /**
  * Loads face-api.js models for local on-device recognition.
+ * Memoized to prevent multiple redundant loads.
  */
-export async function loadFaceModels() {
-  if (modelsLoaded) return;
+export function loadFaceModels() {
+  if (modelsLoadedPromise) return modelsLoadedPromise;
+  
   const MODEL_URL = 'https://justadudewhohacks.github.io/face-api.js/models';
-  try {
-    await Promise.all([
-      faceapi.nets.tinyFaceDetector.loadFromUri(MODEL_URL),
-      faceapi.nets.faceLandmark68Net.loadFromUri(MODEL_URL),
-      faceapi.nets.faceRecognitionNet.loadFromUri(MODEL_URL),
-    ]);
-    modelsLoaded = true;
-    console.log('Local AI Models Ready');
-  } catch (error) {
-    console.error('Failed to load local AI models:', error);
-  }
+  
+  modelsLoadedPromise = (async () => {
+    try {
+      await Promise.all([
+        faceapi.nets.tinyFaceDetector.loadFromUri(MODEL_URL),
+        faceapi.nets.faceLandmark68Net.loadFromUri(MODEL_URL),
+        faceapi.nets.faceRecognitionNet.loadFromUri(MODEL_URL),
+      ]);
+      console.log('Local AI Models Ready');
+    } catch (error) {
+      console.error('Failed to load local AI models:', error);
+      modelsLoadedPromise = null; // Allow retry on failure
+      throw error;
+    }
+  })();
+  
+  return modelsLoadedPromise;
 }
 
 /**
  * Calculates cosine similarity between two 128D embeddings.
- * Production standard for facial vector comparison.
  */
 export function cosineSimilarity(vecA: number[], vecB: number[]) {
   const dotProduct = vecA.reduce((sum, a, i) => sum + a * vecB[i], 0);
@@ -36,27 +44,31 @@ export function cosineSimilarity(vecA: number[], vecB: number[]) {
 }
 
 /**
- * Detects a face and generates a mathematical embedding (descriptor).
+ * Detects a face and generates a mathematical embedding.
+ * Uses TinyFaceDetector for better performance on mobile.
  */
 export async function generateEmbedding(input: HTMLVideoElement | HTMLCanvasElement | HTMLImageElement) {
-  if (!modelsLoaded) await loadFaceModels();
-  const detection = await faceapi.detectSingleFace(
-    input, 
-    new faceapi.TinyFaceDetectorOptions()
-  ).withFaceLandmarks().withFaceDescriptor();
+  await loadFaceModels();
+  
+  // Use a smaller detection scale to improve performance (less main thread blocking)
+  const options = new faceapi.TinyFaceDetectorOptions({ inputSize: 128, scoreThreshold: 0.5 });
+  
+  const detection = await faceapi.detectSingleFace(input, options)
+    .withFaceLandmarks()
+    .withFaceDescriptor();
+    
   return detection ? Array.from(detection.descriptor) : null;
 }
 
 /**
- * Matches a live face against a list of stored embeddings using cosine similarity.
- * Required threshold: 0.85
+ * Matches a live face against a list of stored embeddings.
  */
 export function findBestMatch(liveDescriptor: number[], members: any[]) {
   let bestMatch = null;
   let maxSimilarity = 0;
 
   for (const member of members) {
-    if (!member.faceEmbedding) continue;
+    if (!member.faceEmbedding || !Array.isArray(member.faceEmbedding)) continue;
     const similarity = cosineSimilarity(liveDescriptor, member.faceEmbedding);
     if (similarity > maxSimilarity) {
       maxSimilarity = similarity;

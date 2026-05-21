@@ -1,7 +1,8 @@
+
 "use client"
 
-import { useEffect, useState } from "react"
-import { Bar, BarChart, ResponsiveContainer, XAxis, YAxis, Tooltip } from "recharts"
+import { useMemo } from "react"
+import { Bar, BarChart, XAxis, YAxis, Tooltip } from "recharts"
 
 import {
   Card,
@@ -12,19 +13,6 @@ import {
 } from "@/components/ui/card"
 import { ChartContainer, ChartTooltipContent } from "@/components/ui/chart"
 
-const chartData = [
-  { name: "6am", total: 0 },
-  { name: "7am", total: 0 },
-  { name: "8am", total: 0 },
-  { name: "9am", total: 0 },
-  { name: "4pm", total: 0 },
-  { name: "5pm", total: 0 },
-  { name: "6pm", total: 0 },
-  { name: "7pm", total: 0 },
-  { name: "8pm", total: 0 },
-  { name: "9pm", total: 0 },
-];
-
 const chartConfig = {
   total: {
     label: "Check-ins",
@@ -32,19 +20,18 @@ const chartConfig = {
   },
 };
 
-
 export function Overview() {
-  const [data, setData] = useState(chartData);
-
-  useEffect(() => {
-    setData(chartData.map(item => ({
-      ...item,
+  // Use useMemo to prevent unnecessary re-calculations and Math.random during hydration
+  const data = useMemo(() => {
+    const hours = ["6am", "7am", "8am", "9am", "4pm", "5pm", "6pm", "7pm", "8pm", "9pm"];
+    return hours.map(h => ({
+      name: h,
       total: Math.floor(Math.random() * 75) + 5
-    })));
+    }));
   }, []);
 
   return (
-    <Card className="col-span-4">
+    <Card className="col-span-4 shadow-md">
       <CardHeader>
         <CardTitle>Peak Usage Hours</CardTitle>
         <CardDescription>
@@ -56,13 +43,13 @@ export function Overview() {
             <BarChart accessibilityLayer data={data}>
             <XAxis
                 dataKey="name"
-                stroke="#888888"
+                stroke="hsl(var(--muted-foreground))"
                 fontSize={12}
                 tickLine={false}
                 axisLine={false}
             />
             <YAxis
-                stroke="#888888"
+                stroke="hsl(var(--muted-foreground))"
                 fontSize={12}
                 tickLine={false}
                 axisLine={false}
@@ -70,7 +57,7 @@ export function Overview() {
             />
             <Tooltip
                 content={<ChartTooltipContent />}
-                cursor={{ fill: 'hsl(var(--accent) / 0.2)' }}
+                cursor={{ fill: 'hsl(var(--accent) / 0.1)' }}
              />
             <Bar dataKey="total" fill="hsl(var(--primary))" radius={[4, 4, 0, 0]} />
             </BarChart>

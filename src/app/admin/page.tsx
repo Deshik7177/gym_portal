@@ -2,13 +2,12 @@
 'use client';
 
 import { useMemo } from 'react';
+import dynamic from 'next/dynamic';
 import {
-  BarChart3,
   Clock,
   UserPlus,
   Users,
   ArrowUpRight,
-  TrendingUp,
   Activity,
   Loader2
 } from 'lucide-react';
@@ -24,7 +23,12 @@ import {
   CardHeader,
   CardTitle,
 } from '@/components/ui/card';
-import { Overview } from './components/overview';
+
+// Lazy load the heavy chart component to improve TBT and FCP
+const Overview = dynamic(() => import('./components/overview').then(mod => mod.Overview), {
+  loading: () => <div className="h-[350px] w-full bg-muted/20 animate-pulse rounded-xl" />,
+  ssr: false
+});
 
 export default function ReceptionDashboard() {
   const db = useFirestore();
@@ -68,10 +72,10 @@ export default function ReceptionDashboard() {
 
       <div className="grid gap-4 md:grid-cols-2 lg:grid-cols-4">
         <Card className="hover:border-primary transition-all cursor-pointer group shadow-md border-border/40">
-          <Link href="/admin/sales">
+          <Link href="/admin/sales" aria-label="View Sales Report">
             <CardHeader className="flex flex-row items-center justify-between space-y-0 pb-2">
               <CardTitle className="text-sm font-medium">Revenue</CardTitle>
-              <span className="text-xl font-bold">₹</span>
+              <span className="text-xl font-bold" aria-hidden="true">₹</span>
             </CardHeader>
             <CardContent>
               <div className="text-2xl font-bold">₹{totalRevenue.toLocaleString()}</div>
@@ -80,7 +84,7 @@ export default function ReceptionDashboard() {
           </Link>
         </Card>
         <Card className="hover:border-primary transition-all cursor-pointer group shadow-md border-border/40">
-          <Link href="/admin/members">
+          <Link href="/admin/members" aria-label="View Member Directory">
             <CardHeader className="flex flex-row items-center justify-between space-y-0 pb-2">
               <CardTitle className="text-sm font-medium">Members</CardTitle>
               <Users className="h-4 w-4 text-muted-foreground group-hover:text-primary" />
@@ -92,7 +96,7 @@ export default function ReceptionDashboard() {
           </Link>
         </Card>
         <Card className="hover:border-primary transition-all cursor-pointer group shadow-md border-border/40">
-          <Link href="/admin/absent">
+          <Link href="/admin/absent" aria-label="View Retention Alerts">
             <CardHeader className="flex flex-row items-center justify-between space-y-0 pb-2">
               <CardTitle className="text-sm font-medium">Retention</CardTitle>
               <Clock className="h-4 w-4 text-muted-foreground group-hover:text-primary" />
@@ -104,7 +108,7 @@ export default function ReceptionDashboard() {
           </Link>
         </Card>
         <Card className="bg-primary text-primary-foreground hover:bg-primary/90 transition-all cursor-pointer group shadow-lg border-none">
-          <Link href="/admin/register">
+          <Link href="/admin/register" aria-label="Register New Member">
             <CardHeader className="flex flex-row items-center justify-between space-y-0 pb-2">
               <CardTitle className="text-sm font-medium">Registration</CardTitle>
               <UserPlus className="h-4 w-4" />
@@ -139,7 +143,10 @@ export default function ReceptionDashboard() {
                 <span className="font-bold">{stats.group}</span>
               </div>
               <div className="w-full bg-muted rounded-full h-2">
-                <div className="bg-primary h-2 rounded-full" style={{ width: stats.total > 0 ? `${(stats.group / stats.total) * 100}%` : '0%' }} />
+                <div 
+                  className="bg-primary h-2 rounded-full transition-all duration-500" 
+                  style={{ width: stats.total > 0 ? `${(stats.group / stats.total) * 100}%` : '0%' }} 
+                />
               </div>
             </div>
 
@@ -152,7 +159,10 @@ export default function ReceptionDashboard() {
                 <span className="font-bold">{stats.personal}</span>
               </div>
               <div className="w-full bg-muted rounded-full h-2">
-                <div className="bg-accent/60 h-2 rounded-full" style={{ width: stats.total > 0 ? `${(stats.personal / stats.total) * 100}%` : '0%' }} />
+                <div 
+                  className="bg-accent/60 h-2 rounded-full transition-all duration-500" 
+                  style={{ width: stats.total > 0 ? `${(stats.personal / stats.total) * 100}%` : '0%' }} 
+                />
               </div>
             </div>
 
