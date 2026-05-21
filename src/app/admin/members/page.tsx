@@ -1,11 +1,25 @@
-
 'use client';
 
 import { useState, useMemo } from 'react';
-import { Search, UserCircle, MoreHorizontal, Mail, Phone, Users, User, ArrowUpRight, Loader2 } from 'lucide-react';
-import { collection, query } from 'firebase/firestore';
+import { 
+  Search, 
+  UserCircle, 
+  MoreHorizontal, 
+  Mail, 
+  Phone, 
+  Users, 
+  User, 
+  ArrowUpRight, 
+  Loader2, 
+  Trash2, 
+  Plus, 
+  Calendar as CalendarIcon,
+  CreditCard
+} from 'lucide-react';
+import { collection, query, doc, deleteDoc, updateDoc, serverTimestamp } from 'firebase/firestore';
 import { useFirestore, useCollection } from '@/firebase';
 import Link from 'next/link';
+import { useRouter } from 'next/navigation';
 
 import { Badge } from '@/components/ui/badge';
 import { Button } from '@/components/ui/button';
@@ -22,6 +36,7 @@ import {
   DropdownMenuItem,
   DropdownMenuLabel,
   DropdownMenuTrigger,
+  DropdownMenuSeparator,
 } from '@/components/ui/dropdown-menu';
 import { Input } from '@/components/ui/input';
 import {
@@ -32,10 +47,44 @@ import {
   TableHeader,
   TableRow,
 } from '@/components/ui/table';
+import {
+  AlertDialog,
+  AlertDialogAction,
+  AlertDialogCancel,
+  AlertDialogContent,
+  AlertDialogDescription,
+  AlertDialogFooter,
+  AlertDialogHeader,
+  AlertDialogTitle,
+} from "@/components/ui/alert-dialog";
+import {
+  Dialog,
+  DialogContent,
+  DialogDescription,
+  DialogFooter,
+  DialogHeader,
+  DialogTitle,
+} from "@/components/ui/dialog";
+import { Label } from '@/components/ui/label';
+import { useToast } from '@/hooks/use-toast';
+import { errorEmitter } from '@/firebase/error-emitter';
+import { FirestorePermissionError } from '@/firebase/errors';
 
 export default function MembersListPage() {
   const db = useFirestore();
+  const { toast } = useToast();
+  const router = useRouter();
   const [searchTerm, setSearchTerm] = useState('');
+  
+  // Action States
+  const [memberToDelete, setMemberToDelete] = useState<any>(null);
+  const [memberForPT, setMemberForPT] = useState<any>(null);
+  const [isUpdatingPT, setIsUpdatingPT] = useState(false);
+  
+  // PT Dialog States
+  const [ptPrice, setPtPrice] = useState('');
+  const [ptStartDate, setPtStartDate] = useState('');
+  const [ptEndDate, setPtEndDate] = useState('');
 
   const membersRef = useMemo(() => db ? query(collection(db, 'members')) : null, [db]);
   const { data: members, loading } = useCollection<any>(membersRef);
@@ -58,6 +107,59 @@ export default function MembersListPage() {
       nonActive: members.filter(m => m.status === 'non-active').length
     };
   }, [members]);
+
+  const handleDeleteMember = () => {
+    if (!db || !memberToDelete) return;
+
+    const docRef = doc(db, 'members', memberToDelete.phone);
+    deleteDoc(docRef)
+      .then(() => {
+        toast({ title: "Member Deleted", description: `${memberToDelete.fullName} has been removed.` });
+        setMemberToDelete(null);
+      })
+      .catch(async (e) => {
+        const permissionError = new FirestorePermissionError({
+          path: docRef.path,
+          operation: 'delete',
+        });
+        errorEmitter.emit('permission-error', permissionError);
+      });
+  };
+
+  const handleAddPT = () => {
+    if (!db || !memberForPT) return;
+    setIsUpdatingPT(true);
+
+    const docRef = doc(db, 'members', memberForPT.phone);
+    const updateData = {
+      type: 'personal',
+      price: parseFloat(ptPrice) || memberForPT.price,
+      startDate: ptStartDate || memberForPT.startDate || null,
+      endDate: ptEndDate || memberForPT.endDate || null,
+      updatedAt: serverTimestamp(),
+    };
+
+    updateDoc(docRef, updateData)
+      .then(() => {
+        toast({ 
+          title: "PT Membership Added", 
+          description: `${memberForPT.fullName} is now enrolled in Personal Training.` 
+        });
+        setMemberForPT(null);
+        setPtPrice('');
+        setPtStartDate('');
+        setPtEndDate('');
+      })
+      .catch(async (e) => {
+        const permissionError = new FirestorePermissionError({
+          path: docRef.path,
+          operation: 'update',
+          requestResourceData: updateData,
+        });
+        errorEmitter.emit('permission-error', permissionError);
+      })
+      .finally(() => setIsUpdatingPT(false));
+  };
 
   if (loading) {
     return (
@@ -171,9 +273,22 @@ export default function MembersListPage() {
                       </Badge>
                     </TableCell>
                     <TableCell className="capitalize">
-                      <span className={`text-xs px-2 py-1 rounded-full ${member.type === 'group' ? 'bg-primary/10 text-primary' : 'bg-accent/10 text-accent'}`}>
-                        {member.type}
-                      </span>
+                      <div className="flex items-center gap-2">
+                        <span className={`text-[10px] px-2 py-0.5 rounded-full font-bold uppercase ${member.type === 'group' ? 'bg-primary/10 text-primary' : 'bg-accent/10 text-accent'}`}>
+                          {member.type}
+                        </span>
+                        {member.type !== 'personal' && (
+                          <Button 
+                            variant="ghost" 
+                            size="icon" 
+                            className="h-6 w-6 rounded-full bg-accent/5 hover:bg-accent/20 text-accent"
+                            onClick={() => setMemberForPT(member)}
+                            title="Add Personal Training"
+                          >
+                            <Plus className="h-3 w-3" />
+                          </Button>
+                        )}
+                      </div>
                     </TableCell>
                     <TableCell className="text-xs text-muted-foreground">
                       {member.status === 'active' ? 'Ongoing' : member.endDate || 'N/A'}
@@ -186,13 +301,17 @@ export default function MembersListPage() {
                           </Button>
                         </DropdownMenuTrigger>
                         <DropdownMenuContent align="end">
-                          <DropdownMenuLabel>Member Ops</DropdownMenuLabel>
-                          <DropdownMenuItem asChild>
-                            <Link href={`/admin/register?edit=${member.phone}`}>
-                              <ArrowUpRight className="mr-2 h-4 w-4" /> Edit Profile
-                            </Link>
+                          <DropdownMenuLabel>Actions</DropdownMenuLabel>
+                          <DropdownMenuItem onClick={() => router.push(`/admin/register?edit=${member.phone}`)}>
+                            <ArrowUpRight className="mr-2 h-4 w-4" /> Edit Profile
                           </DropdownMenuItem>
-                          <DropdownMenuItem><Mail className="mr-2 h-4 w-4" /> View History</DropdownMenuItem>
+                          <DropdownMenuItem onClick={() => setMemberForPT(member)}>
+                            <CreditCard className="mr-2 h-4 w-4" /> Add PT Session
+                          </DropdownMenuItem>
+                          <DropdownMenuSeparator />
+                          <DropdownMenuItem className="text-destructive focus:text-destructive" onClick={() => setMemberToDelete(member)}>
+                            <Trash2 className="mr-2 h-4 w-4" /> Delete Member
+                          </DropdownMenuItem>
                         </DropdownMenuContent>
                       </DropdownMenu>
                     </TableCell>
@@ -209,6 +328,72 @@ export default function MembersListPage() {
           </Table>
         </CardContent>
       </Card>
+
+      {/* Delete Confirmation */}
+      <AlertDialog open={!!memberToDelete} onOpenChange={() => setMemberToDelete(null)}>
+        <AlertDialogContent>
+          <AlertDialogHeader>
+            <AlertDialogTitle>Are you absolutely sure?</AlertDialogTitle>
+            <AlertDialogDescription>
+              This will permanently delete <b>{memberToDelete?.fullName}</b> and all their records. This action cannot be undone.
+            </AlertDialogDescription>
+          </AlertDialogHeader>
+          <AlertDialogFooter>
+            <AlertDialogCancel>Cancel</AlertDialogCancel>
+            <AlertDialogAction onClick={handleDeleteMember} className="bg-destructive hover:bg-destructive/90">
+              Delete Forever
+            </AlertDialogAction>
+          </AlertDialogFooter>
+        </AlertDialogContent>
+      </AlertDialog>
+
+      {/* Add PT Dialog */}
+      <Dialog open={!!memberForPT} onOpenChange={() => setMemberForPT(null)}>
+        <DialogContent className="sm:max-w-[425px]">
+          <DialogHeader>
+            <DialogTitle>Add Personal Training</DialogTitle>
+            <DialogDescription>
+              Upgrade <b>{memberForPT?.fullName}</b> to Personal Training membership.
+            </DialogDescription>
+          </DialogHeader>
+          <div className="grid gap-4 py-4">
+            <div className="grid gap-2">
+              <Label>PT Package Price (INR)</Label>
+              <div className="relative">
+                <span className="absolute left-3 top-2.5 text-muted-foreground">₹</span>
+                <Input 
+                  type="number" 
+                  className="pl-7" 
+                  placeholder="0.00" 
+                  value={ptPrice}
+                  onChange={(e) => setPtPrice(e.target.value)}
+                />
+              </div>
+            </div>
+            <div className="grid grid-cols-2 gap-4">
+              <div className="grid gap-2">
+                <Label className="text-xs uppercase font-bold text-muted-foreground flex items-center gap-1">
+                  <CalendarIcon className="h-3 w-3" /> Start
+                </Label>
+                <Input type="date" value={ptStartDate} onChange={(e) => setPtStartDate(e.target.value)} />
+              </div>
+              <div className="grid gap-2">
+                <Label className="text-xs uppercase font-bold text-muted-foreground flex items-center gap-1">
+                  <CalendarIcon className="h-3 w-3" /> End
+                </Label>
+                <Input type="date" value={ptEndDate} onChange={(e) => setPtEndDate(e.target.value)} />
+              </div>
+            </div>
+          </div>
+          <DialogFooter>
+            <Button variant="outline" onClick={() => setMemberForPT(null)}>Cancel</Button>
+            <Button onClick={handleAddPT} disabled={isUpdatingPT}>
+              {isUpdatingPT ? <Loader2 className="h-4 w-4 animate-spin mr-2" /> : <Plus className="h-4 w-4 mr-2" />}
+              Assign PT
+            </Button>
+          </DialogFooter>
+        </DialogContent>
+      </Dialog>
     </div>
   );
 }

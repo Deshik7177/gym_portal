@@ -1,7 +1,7 @@
-
 'use client';
 
-import { useState, useEffect } from 'react';
+import { useState, useEffect, Suspense } from 'react';
+import { useSearchParams } from 'next/navigation';
 import { Search, UserCircle, Save, CheckCircle2, AlertCircle, Loader2, Info } from 'lucide-react';
 import { doc, setDoc, getDoc, serverTimestamp } from 'firebase/firestore';
 import { useFirestore } from '@/firebase';
@@ -24,9 +24,11 @@ import { useToast } from '@/hooks/use-toast';
 import { Badge } from '@/components/ui/badge';
 import { Alert, AlertDescription, AlertTitle } from '@/components/ui/alert';
 
-export default function RegisterMemberPage() {
+function RegisterForm() {
   const { toast } = useToast();
   const db = useFirestore();
+  const searchParams = useSearchParams();
+  const editId = searchParams.get('edit');
   
   const [isEditMode, setIsEditMode] = useState(false);
   const [phone, setPhone] = useState('');
@@ -42,6 +44,29 @@ export default function RegisterMemberPage() {
   
   const [loading, setLoading] = useState(false);
   const [isEnrolled, setIsEnrolled] = useState(false);
+
+  // Load member if in edit mode from URL
+  useEffect(() => {
+    if (editId && db) {
+      setLoading(true);
+      getDoc(doc(db, 'members', editId)).then(snap => {
+        if (snap.exists()) {
+          const data = snap.data();
+          setPhone(data.phone);
+          setFullName(data.fullName);
+          setMembershipType(data.type);
+          setDurationStatus(data.status);
+          setPrice(data.price?.toString() || '');
+          setDescription(data.description || '');
+          setStartDate(data.startDate || '');
+          setEndDate(data.endDate || '');
+          setDaysCount(data.countOfDays?.toString() || '');
+          setIsEnrolled(!!data.faceEmbedding);
+          setIsEditMode(true);
+        }
+      }).finally(() => setLoading(false));
+    }
+  }, [editId, db]);
 
   const handleSearch = async () => {
     if (!searchQuery || !db) return;
@@ -91,9 +116,9 @@ export default function RegisterMemberPage() {
       type: membershipType,
       price: parseFloat(price) || 0,
       description,
-      startDate: durationStatus === 'non-active' ? startDate : null,
-      endDate: durationStatus === 'non-active' ? endDate : null,
-      countOfDays: durationStatus === 'non-active' ? parseInt(daysCount) || 0 : null,
+      startDate: durationStatus === 'non-active' ? startDate : (startDate || null),
+      endDate: durationStatus === 'non-active' ? endDate : (endDate || null),
+      countOfDays: durationStatus === 'non-active' ? (parseInt(daysCount) || 0) : (parseInt(daysCount) || null),
       updatedAt: serverTimestamp(),
       createdAt: isEditMode ? undefined : serverTimestamp(),
     };
@@ -103,7 +128,7 @@ export default function RegisterMemberPage() {
         setLoading(false);
         toast({ 
           title: "Member Data Saved", 
-          description: "Member details registered. Proceed to Kiosk for face enrollment." 
+          description: isEditMode ? "Profile updated successfully." : "Member details registered. Proceed to Kiosk for face enrollment." 
         });
         if (!isEditMode) resetForm();
       })
@@ -212,19 +237,20 @@ export default function RegisterMemberPage() {
               </RadioGroup>
             </div>
 
-            {durationStatus === 'non-active' && (
+            {/* Date section always visible if dates are present or if non-active is selected */}
+            {(durationStatus === 'non-active' || startDate || endDate) && (
               <div className="grid grid-cols-1 md:grid-cols-3 gap-4 p-4 bg-muted/20 rounded-lg animate-in fade-in zoom-in duration-200">
                 <div className="space-y-1">
                   <Label className="text-[10px] uppercase font-bold text-muted-foreground">Start Date</Label>
-                  <Input type="date" value={startDate} onChange={(e) => setStartDate(e.target.value)} required />
+                  <Input type="date" value={startDate} onChange={(e) => setStartDate(e.target.value)} required={durationStatus === 'non-active'} />
                 </div>
                 <div className="space-y-1">
                   <Label className="text-[10px] uppercase font-bold text-muted-foreground">End Date</Label>
-                  <Input type="date" value={endDate} onChange={(e) => setEndDate(e.target.value)} required />
+                  <Input type="date" value={endDate} onChange={(e) => setEndDate(e.target.value)} required={durationStatus === 'non-active'} />
                 </div>
                 <div className="space-y-1">
                   <Label className="text-[10px] uppercase font-bold text-muted-foreground">Total Sessions/Days</Label>
-                  <Input type="number" placeholder="e.g. 30" value={daysCount} onChange={(e) => setDaysCount(e.target.value)} required />
+                  <Input type="number" placeholder="e.g. 30" value={daysCount} onChange={(e) => setDaysCount(e.target.value)} required={durationStatus === 'non-active'} />
                 </div>
               </div>
             )}
@@ -239,11 +265,19 @@ export default function RegisterMemberPage() {
           </CardContent>
           <CardFooter className="bg-muted/5 border-t p-6">
             <Button type="submit" className="w-full h-14 text-lg font-bold shadow-xl" disabled={loading}>
-              {loading ? <Loader2 className="h-5 w-5 animate-spin" /> : (isEditMode ? 'Update Member Data' : 'Register & Proceed to Kiosk')}
+              {loading ? <Loader2 className="h-5 w-5 animate-spin" /> : (isEditMode ? 'Update Member Profile' : 'Register & Proceed to Kiosk')}
             </Button>
           </CardFooter>
         </Card>
       </form>
     </div>
+  );
+}
+
+export default function RegisterMemberPage() {
+  return (
+    <Suspense fallback={<div className="flex h-screen w-full items-center justify-center"><Loader2 className="h-8 w-8 animate-spin text-primary" /></div>}>
+      <RegisterForm />
+    </Suspense>
   );
 }
