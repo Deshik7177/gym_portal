@@ -1,7 +1,7 @@
 
 'use client';
 
-import { useEffect } from 'react';
+import { useEffect, useState } from 'react';
 import Link from 'next/link';
 import { useRouter } from 'next/navigation';
 import { useUser } from '@/firebase';
@@ -15,20 +15,35 @@ import {
   PanelLeft,
   LayoutDashboard,
   Loader2,
+  Wifi,
+  WifiOff
 } from 'lucide-react';
 
 import { Button } from '@/components/ui/button';
 import { Sheet, SheetContent, SheetTrigger, SheetHeader, SheetTitle, SheetDescription } from '@/components/ui/sheet';
 import UserNav from '@/components/user-nav';
+import { Badge } from '@/components/ui/badge';
 
 export default function ReceptionLayout({ children }: { children: React.ReactNode }) {
   const { user, loading } = useUser();
   const router = useRouter();
+  const [isOnline, setIsOnline] = useState(true);
 
   useEffect(() => {
+    setIsOnline(navigator.onLine);
+    const handleOnline = () => setIsOnline(true);
+    const handleOffline = () => setIsOnline(false);
+    window.addEventListener('online', handleOnline);
+    window.addEventListener('offline', handleOffline);
+    
     if (!loading && !user) {
       router.push('/login');
     }
+
+    return () => {
+      window.removeEventListener('online', handleOnline);
+      window.removeEventListener('offline', handleOffline);
+    };
   }, [user, loading, router]);
 
   if (loading) {
@@ -87,7 +102,16 @@ export default function ReceptionLayout({ children }: { children: React.ReactNod
             New Registration
           </Link>
         </nav>
-        <nav className="mt-auto flex flex-col gap-1 px-4 py-6 border-t border-border/40">
+        <div className="mt-auto px-6 py-4">
+           <Badge variant={isOnline ? "outline" : "destructive"} className="w-full justify-center gap-2 py-1">
+             {isOnline ? (
+               <> <Wifi className="h-3 w-3 text-green-500" /> Cloud Synced </>
+             ) : (
+               <> <WifiOff className="h-3 w-3" /> Offline Mode </>
+             )}
+           </Badge>
+        </div>
+        <nav className="flex flex-col gap-1 px-4 pb-6">
           <Link
             href="#"
             className="flex items-center gap-3 rounded-lg px-3 py-2 text-sm font-medium text-muted-foreground transition-all hover:text-primary"

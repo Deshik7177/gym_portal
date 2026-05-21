@@ -13,7 +13,8 @@ import {
   Camera, 
   ScanFace,
   History,
-  WifiOff
+  WifiOff,
+  AlertCircle
 } from 'lucide-react';
 
 import { Badge } from '@/components/ui/badge';
@@ -94,7 +95,7 @@ export default function CounterPage() {
 
     try {
       const docRef = doc(db, 'members', searchPhone);
-      // getDoc will check local cache first if configured
+      // Firestore SDK will check local persistent cache automatically
       const docSnap = await getDoc(docRef);
 
       if (docSnap.exists()) {
@@ -102,7 +103,7 @@ export default function CounterPage() {
         setVerifiedMember(data);
         toast({
           title: "Member Found",
-          description: `Loaded profile for ${data.fullName}.`
+          description: `Identity pulled from ${isOnline ? 'cloud' : 'local cache'}.`
         });
       } else {
         toast({
@@ -126,8 +127,8 @@ export default function CounterPage() {
     if (!isOnline) {
       toast({
         variant: "destructive",
-        title: "Offline Mode",
-        description: "AI Facial Authentication requires an internet connection. Please verify identity manually."
+        title: "AI Offline",
+        description: "Facial matching requires internet. Please use manual check-in."
       });
       return;
     }
@@ -144,7 +145,7 @@ export default function CounterPage() {
       const livePhoto = canvasRef.current.toDataURL('image/jpeg');
 
       if (!verifiedMember.photoData) {
-        throw new Error("Member has no stored profile photo.");
+        throw new Error("Member has no profile photo stored for comparison.");
       }
 
       const result = await verifyFace({
@@ -154,14 +155,11 @@ export default function CounterPage() {
 
       if (result.isMatch) {
         const docRef = doc(db, 'members', verifiedMember.phone);
-        // Mutation is non-blocking, will sync when online
-        updateDoc(docRef, {
-          lastCheckIn: serverTimestamp()
-        });
+        updateDoc(docRef, { lastCheckIn: serverTimestamp() });
 
         toast({
-          title: "Success",
-          description: `Verified ${verifiedMember.fullName}. Confidence: ${(result.confidence * 100).toFixed(0)}%`
+          title: "Identity Verified",
+          description: `Confidence: ${(result.confidence * 100).toFixed(0)}%`
         });
         
         setVerifiedMember(prev => ({ ...prev, authenticated: true }));
@@ -169,15 +167,15 @@ export default function CounterPage() {
       } else {
         toast({
           variant: "destructive",
-          title: "Identity Mismatch",
-          description: result.reason || "The face does not match."
+          title: "Mismatch",
+          description: result.reason || "The face does not match the profile photo."
         });
       }
     } catch (err: any) {
       toast({
         variant: "destructive",
-        title: "AI Auth Failed",
-        description: err.message || "Could not reach AI services."
+        title: "AI Failed",
+        description: "Communication error with AI model."
       });
     } finally {
       setVerifyingFace(false);
@@ -187,32 +185,41 @@ export default function CounterPage() {
   const markAttendanceManually = async () => {
     if (!verifiedMember || !db) return;
     const docRef = doc(db, 'members', verifiedMember.phone);
+    
+    // updateDoc updates local cache immediately and syncs when online
     updateDoc(docRef, { lastCheckIn: serverTimestamp() });
+    
     setVerifiedMember(prev => ({ ...prev, authenticated: true }));
-    toast({ title: "Manual Check-In", description: "Attendance marked for " + verifiedMember.fullName });
+    toast({ 
+      title: "Manual Check-In", 
+      description: `Attendance logged for ${verifiedMember.fullName}. (Will sync when online)` 
+    });
   };
 
   return (
     <div className="grid gap-6 md:grid-cols-1 lg:grid-cols-12 max-w-7xl mx-auto">
         <div className="lg:col-span-5 flex flex-col gap-6">
             {!isOnline && (
-              <div className="bg-orange-500/20 border border-orange-500/50 p-3 rounded-lg flex items-center gap-3 text-orange-500 text-sm">
-                <WifiOff className="h-5 w-5" />
-                <span>You are currently offline. Data will sync automatically, but AI verification is unavailable.</span>
+              <div className="bg-destructive/10 border border-destructive/20 p-4 rounded-xl flex items-start gap-3 animate-in fade-in slide-in-from-top-2">
+                <WifiOff className="h-5 w-5 text-destructive shrink-0 mt-0.5" />
+                <div className="space-y-1">
+                   <p className="font-bold text-sm text-destructive uppercase">Offline Mode Active</p>
+                   <p className="text-xs opacity-80 leading-relaxed">AI facial matching is unavailable. Please verify identities manually using profile photos. Data will sync automatically.</p>
+                </div>
               </div>
             )}
 
-            <Card className="border-primary shadow-lg bg-card/50">
-                <CardHeader>
+            <Card className="border-primary shadow-lg bg-card/50 overflow-hidden">
+                <CardHeader className="bg-primary/5 border-b border-primary/10">
                     <CardTitle className="flex items-center gap-2 text-primary">
                         <ScanFace className="h-5 w-5" />
-                        Staff Verification
+                        Verification Station
                     </CardTitle>
                     <CardDescription>
-                        Match live face or verify manually in offline mode.
+                        {isOnline ? 'Choose between AI matching or manual override.' : 'Manual identity verification only.'}
                     </CardDescription>
                 </CardHeader>
-                <CardContent className="space-y-6">
+                <CardContent className="space-y-6 pt-6">
                     <div className="flex gap-2">
                         <div className="relative flex-1">
                             <Phone className="absolute left-2.5 top-2.5 h-4 w-4 text-muted-foreground" />
@@ -233,7 +240,7 @@ export default function CounterPage() {
                         {verifiedMember?.authenticated ? (
                           <div className="absolute inset-0 flex flex-col items-center justify-center bg-green-500/10 backdrop-blur-sm z-10 animate-in fade-in zoom-in">
                              <CheckCircle className="h-20 w-20 text-green-500 mb-2" />
-                             <span className="font-bold text-green-500 uppercase tracking-widest">Entry Granted</span>
+                             <span className="font-bold text-green-500 uppercase tracking-widest text-xl">ACCESS GRANTED</span>
                           </div>
                         ) : null}
 
@@ -246,15 +253,21 @@ export default function CounterPage() {
                         
                         {!cameraActive && !verifiedMember?.authenticated && (
                           <div className="absolute inset-0 flex flex-col items-center justify-center p-6 text-center text-muted-foreground">
-                            <Camera className="h-12 w-12 mb-3 opacity-20" />
-                            <p className="text-sm">Camera inactive. Search member to start.</p>
+                            {verifiedMember ? (
+                               <img src={verifiedMember.photoData} className="w-full h-full object-cover opacity-30 grayscale" alt="Ghost" />
+                            ) : (
+                               <Camera className="h-12 w-12 mb-3 opacity-20" />
+                            )}
+                            <p className="text-sm absolute z-10 font-bold bg-background/80 px-3 py-1 rounded-full border">
+                              {verifiedMember ? 'Start Camera for AI' : 'Search Member to Begin'}
+                            </p>
                           </div>
                         )}
                         
                         {verifyingFace && (
-                           <div className="absolute inset-0 bg-black/40 backdrop-blur-[2px] flex flex-col items-center justify-center z-20">
+                           <div className="absolute inset-0 bg-black/60 backdrop-blur-[2px] flex flex-col items-center justify-center z-20">
                               <Loader2 className="h-10 w-10 animate-spin text-primary mb-2" />
-                              <span className="text-white text-xs font-bold uppercase tracking-tighter">AI Verification...</span>
+                              <span className="text-white text-xs font-bold uppercase tracking-widest animate-pulse">Running AI Analysis...</span>
                            </div>
                         )}
                     </div>
@@ -266,9 +279,9 @@ export default function CounterPage() {
                               <Button 
                                 onClick={startCamera} 
                                 disabled={!verifiedMember || verifiedMember.authenticated} 
-                                className="w-full"
+                                className="w-full h-12 text-base"
                               >
-                                <Camera className="mr-2 h-4 w-4" /> Start AI Scanner
+                                <Camera className="mr-2 h-4 w-4" /> Open Identity Scanner
                               </Button>
                             ) : (
                               <Button 
@@ -277,103 +290,131 @@ export default function CounterPage() {
                                 className="w-full h-12 text-lg font-bold"
                               >
                                 {verifyingFace ? <Loader2 className="mr-2 h-5 w-5 animate-spin" /> : <ScanFace className="mr-2 h-5 w-5" />}
-                                Verify Identity
+                                Confirm Identity (AI)
                               </Button>
                             )}
                           </>
                         ) : (
-                          <Button 
-                            variant="secondary"
-                            disabled={!verifiedMember || verifiedMember.authenticated}
-                            onClick={markAttendanceManually}
-                            className="w-full h-12"
-                          >
-                            <UserCheck className="mr-2 h-5 w-5" /> Manual Check-In (Offline)
-                          </Button>
+                          <div className="p-4 bg-muted/50 rounded-lg border border-dashed text-center">
+                             <p className="text-xs text-muted-foreground mb-3">AI features are disabled while offline.</p>
+                             <Button 
+                                variant="default"
+                                disabled={!verifiedMember || verifiedMember.authenticated}
+                                onClick={markAttendanceManually}
+                                className="w-full h-12"
+                              >
+                                <UserCheck className="mr-2 h-5 w-5" /> Manual ID Verification
+                              </Button>
+                          </div>
                         )}
+                        
+                        {verifiedMember && isOnline && !verifiedMember.authenticated && (
+                           <Button variant="ghost" size="sm" onClick={markAttendanceManually} className="text-xs text-muted-foreground">
+                              Override AI (Manual Check-In)
+                           </Button>
+                        )}
+
                         {cameraActive && (
-                           <Button variant="ghost" size="sm" onClick={stopCamera}>
-                              Cancel
+                           <Button variant="outline" size="sm" onClick={stopCamera}>
+                              Close Camera
                            </Button>
                         )}
                     </div>
                 </CardContent>
             </Card>
 
-            <Card>
-                <CardHeader>
-                    <CardTitle className="text-sm">Profile Preview</CardTitle>
+            <Card className={verifiedMember?.status === 'non-active' ? 'border-destructive/50' : ''}>
+                <CardHeader className="pb-2">
+                    <CardTitle className="text-xs uppercase tracking-widest text-muted-foreground">Member Data Profile</CardTitle>
                 </CardHeader>
                 <CardContent>
                     {verifiedMember ? (
-                        <div className="flex items-center gap-4">
-                            <div className="h-16 w-16 rounded-full overflow-hidden border-2 border-primary/20">
+                        <div className="flex items-center gap-5">
+                            <div className="h-24 w-24 rounded-xl overflow-hidden border-4 border-background shadow-xl ring-2 ring-primary/20 shrink-0">
                                 {verifiedMember.photoData ? (
-                                    <img src={verifiedMember.photoData} className="w-full h-full object-cover" alt="ID" />
+                                    <img src={verifiedMember.photoData} className="w-full h-full object-cover" alt="Stored ID" />
                                 ) : (
                                     <div className="w-full h-full bg-muted flex items-center justify-center"><UserCheck className="text-muted-foreground" /></div>
                                 )}
                             </div>
-                            <div className="space-y-1">
-                                <h4 className="font-bold font-headline">{verifiedMember.fullName}</h4>
-                                <div className="flex gap-2">
+                            <div className="space-y-2 flex-1">
+                                <div className="flex items-center gap-2">
+                                  <h4 className="font-bold text-lg font-headline truncate">{verifiedMember.fullName}</h4>
                                   <Badge variant={verifiedMember.status === 'active' ? 'default' : 'destructive'} className="text-[10px] h-4">
                                       {verifiedMember.status?.toUpperCase()}
                                   </Badge>
-                                  <Badge variant="outline" className="text-[10px] h-4 capitalize">{verifiedMember.type}</Badge>
+                                </div>
+                                <div className="grid grid-cols-2 gap-2">
+                                   <div className="bg-muted/50 p-2 rounded text-center">
+                                      <p className="text-[10px] text-muted-foreground">Type</p>
+                                      <p className="text-xs font-bold capitalize">{verifiedMember.type}</p>
+                                   </div>
+                                   <div className="bg-muted/50 p-2 rounded text-center">
+                                      <p className="text-[10px] text-muted-foreground">Membership</p>
+                                      <p className="text-xs font-bold">{verifiedMember.status === 'active' ? 'Unlimited' : 'Term-Based'}</p>
+                                   </div>
                                 </div>
                             </div>
                         </div>
                     ) : (
-                        <p className="text-xs text-muted-foreground italic">No member searched.</p>
+                        <div className="flex flex-col items-center justify-center py-6 text-center">
+                           <AlertCircle className="h-8 w-8 text-muted-foreground opacity-20 mb-2" />
+                           <p className="text-sm text-muted-foreground italic">No member profile loaded.</p>
+                        </div>
                     )}
                 </CardContent>
             </Card>
         </div>
 
-        <Card className="lg:col-span-7 shadow-xl border-border/40">
-            <CardHeader className="flex flex-row items-center justify-between">
+        <Card className="lg:col-span-7 shadow-xl border-border/40 flex flex-col">
+            <CardHeader className="flex flex-row items-center justify-between border-b">
                 <div>
-                  <CardTitle className="flex items-center gap-2">
-                      <History className="h-5 w-5 text-primary" />
-                      Attendance History
+                  <CardTitle className="flex items-center gap-2 text-primary">
+                      <History className="h-5 w-5" />
+                      Daily Access Log
                   </CardTitle>
                   <CardDescription>
-                      Logs will sync with the cloud once online.
+                      {isOnline ? 'Real-time synchronization active.' : 'Queued entries will sync when online.'}
                   </CardDescription>
                 </div>
                 <Button variant="outline" size="sm" asChild>
                    <Link href="/admin/absent">View Retention</Link>
                 </Button>
             </CardHeader>
-            <CardContent>
+            <CardContent className="flex-1 p-0">
                 <Table>
-                    <TableHeader>
+                    <TableHeader className="bg-muted/30">
                         <TableRow>
-                            <TableHead>Time</TableHead>
+                            <TableHead className="w-24">Time</TableHead>
                             <TableHead>Member</TableHead>
-                            <TableHead>Type</TableHead>
-                            <TableHead className="text-right">Status</TableHead>
+                            <TableHead>Category</TableHead>
+                            <TableHead className="text-right">Access Status</TableHead>
                         </TableRow>
                     </TableHeader>
                     <TableBody>
-                        <TableRow className="hover:bg-primary/5 transition-colors">
-                            <TableCell className="text-xs font-mono">Recent</TableCell>
+                        <TableRow className="bg-primary/5 border-primary/10">
+                            <TableCell className="text-xs font-mono text-primary animate-pulse">LIVE</TableCell>
                             <TableCell>
                                 <div className="flex flex-col">
-                                    <span className="font-medium text-sm">Live Feed</span>
-                                    <span className="text-[10px] text-muted-foreground">Monitoring active sessions...</span>
+                                    <span className="font-bold text-sm">System Monitoring</span>
+                                    <span className="text-[10px] text-muted-foreground">Monitoring active gym traffic...</span>
                                 </div>
                             </TableCell>
                             <TableCell>
-                                <Badge variant="outline" className="text-[10px]">SYSTEM</Badge>
+                                <Badge variant="outline" className="text-[10px] bg-background">SYSTEM</Badge>
                             </TableCell>
                             <TableCell className="text-right">
-                                <Badge variant="secondary" className="bg-green-500/10 text-green-500 border-none text-[10px]">READY</Badge>
+                                <Badge className="bg-green-500 hover:bg-green-500 text-white border-none text-[10px]">STANDBY</Badge>
                             </TableCell>
                         </TableRow>
+                        {/* More logs could be mapped here from a 'logs' collection if desired */}
                     </TableBody>
                 </Table>
+                
+                <div className="flex-1 flex flex-col items-center justify-center p-12 text-center text-muted-foreground opacity-40">
+                   <Users className="h-12 w-12 mb-4" />
+                   <p className="text-sm">Scan a member to start logging session entries.</p>
+                </div>
             </CardContent>
         </Card>
     </div>
