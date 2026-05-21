@@ -6,13 +6,11 @@ let modelsLoadedPromise: Promise<void> | null = null;
 
 /**
  * Loads face-api.js models for local on-device recognition.
- * These models are optimized for mobile browser performance.
  */
 export function loadFaceModels() {
   if (typeof window === 'undefined') return Promise.resolve();
   if (modelsLoadedPromise) return modelsLoadedPromise;
   
-  // Reliable model URLs
   const MODEL_URL = 'https://justadudewhohacks.github.io/face-api.js/models';
   
   modelsLoadedPromise = (async () => {
@@ -33,7 +31,7 @@ export function loadFaceModels() {
 }
 
 /**
- * Lightweight check for face presence before starting heavy recognition.
+ * Check for face presence.
  */
 export async function isFaceInFrame(input: HTMLVideoElement | HTMLCanvasElement | HTMLImageElement) {
   if (input instanceof HTMLVideoElement) {
@@ -53,8 +51,7 @@ export async function isFaceInFrame(input: HTMLVideoElement | HTMLCanvasElement 
 }
 
 /**
- * Calculates cosine similarity between two 128D embeddings.
- * Production standard for vector comparison.
+ * Cosine similarity between two vectors.
  */
 export function cosineSimilarity(vecA: number[], vecB: number[]) {
   const dotProduct = vecA.reduce((sum, a, i) => sum + a * vecB[i], 0);
@@ -65,7 +62,7 @@ export function cosineSimilarity(vecA: number[], vecB: number[]) {
 }
 
 /**
- * Detects face and generates the 128-dimensional mathematical descriptor.
+ * Generates 128D face descriptor.
  */
 export async function generateEmbedding(input: HTMLVideoElement | HTMLCanvasElement | HTMLImageElement) {
   if (input instanceof HTMLVideoElement && input.readyState < 2) return null;
@@ -90,7 +87,7 @@ export async function generateEmbedding(input: HTMLVideoElement | HTMLCanvasElem
 }
 
 /**
- * Performs a 1:N local search against cached members.
+ * 1:N local search.
  */
 export function findBestMatch(liveDescriptor: number[], members: any[]) {
   let bestMatch = null;

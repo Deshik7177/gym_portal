@@ -108,7 +108,7 @@ export default function SmartEntrancePage() {
 
       const { bestMatch, confidence } = findBestMatch(liveEmbedding, cachedMembers);
 
-      if (bestMatch && confidence > 0.82) {
+      if (bestMatch && confidence > 0.85) {
         const memberRef = doc(db, 'members', bestMatch.id);
         const updateData = { lastCheckIn: serverTimestamp(), updatedAt: serverTimestamp() };
 

@@ -123,7 +123,6 @@ function RegisterForm() {
       createdAt: isEditMode ? undefined : serverTimestamp(),
     };
 
-    // Initiate write - DO NOT await
     setDoc(docRef, data, { merge: true })
       .catch(async () => {
         const permissionError = new FirestorePermissionError({
@@ -134,7 +133,6 @@ function RegisterForm() {
         errorEmitter.emit('permission-error', permissionError);
       });
 
-    // Update UI immediately (Optimistic UI)
     setLoading(false);
     toast({ 
       title: "Member Data Saved", 
