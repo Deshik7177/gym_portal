@@ -1,9 +1,8 @@
-
 'use client';
 
 import { useEffect, useState } from 'react';
 import Link from 'next/link';
-import { useRouter } from 'next/navigation';
+import { useRouter, usePathname } from 'next/navigation';
 import { useUser } from '@/firebase';
 import {
   Users,
@@ -16,17 +15,20 @@ import {
   LayoutDashboard,
   Loader2,
   Wifi,
-  WifiOff
+  WifiOff,
+  Scan
 } from 'lucide-react';
 
 import { Button } from '@/components/ui/button';
 import { Sheet, SheetContent, SheetTrigger, SheetHeader, SheetTitle, SheetDescription } from '@/components/ui/sheet';
 import UserNav from '@/components/user-nav';
 import { Badge } from '@/components/ui/badge';
+import { cn } from '@/lib/utils';
 
 export default function ReceptionLayout({ children }: { children: React.ReactNode }) {
   const { user, loading } = useUser();
   const router = useRouter();
+  const pathname = usePathname();
   const [isOnline, setIsOnline] = useState(true);
 
   useEffect(() => {
@@ -56,6 +58,15 @@ export default function ReceptionLayout({ children }: { children: React.ReactNod
 
   if (!user) return null;
 
+  const navItems = [
+    { href: '/admin', label: 'Dashboard', icon: LayoutDashboard },
+    { href: '/admin/members', label: 'Members List', icon: Users },
+    { href: '/admin/entrance', label: 'Entrance Kiosk', icon: Scan },
+    { href: '/admin/sales', label: 'Sales Report', icon: BarChart3 },
+    { href: '/admin/absent', label: 'Retention Alerts', icon: Clock },
+    { href: '/admin/register', label: 'Registration', icon: UserPlus },
+  ];
+
   return (
     <div className="flex min-h-screen w-full flex-col bg-background/95">
       <aside className="fixed inset-y-0 left-0 z-10 hidden w-64 flex-col border-r bg-card/50 backdrop-blur-sm sm:flex shadow-xl">
@@ -66,41 +77,19 @@ export default function ReceptionLayout({ children }: { children: React.ReactNod
           </Link>
         </div>
         <nav className="flex flex-col gap-1 px-4 py-6">
-          <Link
-            href="/admin"
-            className="flex items-center gap-3 rounded-lg px-3 py-2.5 text-sm font-medium text-muted-foreground transition-all hover:text-primary hover:bg-primary/5"
-          >
-            <LayoutDashboard className="h-4 w-4" />
-            Dashboard
-          </Link>
-          <Link
-            href="/admin/members"
-            className="flex items-center gap-3 rounded-lg px-3 py-2.5 text-sm font-medium text-muted-foreground transition-all hover:text-primary hover:bg-primary/5"
-          >
-            <Users className="h-4 w-4" />
-            Members List
-          </Link>
-          <Link
-            href="/admin/sales"
-            className="flex items-center gap-3 rounded-lg px-3 py-2.5 text-sm font-medium text-muted-foreground transition-all hover:text-primary hover:bg-primary/5"
-          >
-            <BarChart3 className="h-4 w-4" />
-            Sales Report
-          </Link>
-          <Link
-            href="/admin/absent"
-            className="flex items-center gap-3 rounded-lg px-3 py-2.5 text-sm font-medium text-muted-foreground transition-all hover:text-primary hover:bg-primary/5"
-          >
-            <Clock className="h-4 w-4" />
-            Frequent Absents
-          </Link>
-          <Link
-            href="/admin/register"
-            className="flex items-center gap-3 rounded-lg px-3 py-2.5 text-sm font-medium text-muted-foreground transition-all hover:text-primary hover:bg-primary/5"
-          >
-            <UserPlus className="h-4 w-4" />
-            New Registration
-          </Link>
+          {navItems.map((item) => (
+            <Link
+              key={item.href}
+              href={item.href}
+              className={cn(
+                "flex items-center gap-3 rounded-lg px-3 py-2.5 text-sm font-medium transition-all hover:bg-primary/5",
+                pathname === item.href ? "text-primary bg-primary/10" : "text-muted-foreground hover:text-primary"
+              )}
+            >
+              <item.icon className="h-4 w-4" />
+              {item.label}
+            </Link>
+          ))}
         </nav>
         <div className="mt-auto px-6 py-4">
            <Badge variant={isOnline ? "outline" : "destructive"} className="w-full justify-center gap-2 py-1">
@@ -139,31 +128,26 @@ export default function ReceptionLayout({ children }: { children: React.ReactNod
                 <SheetDescription>Staff Management Menu</SheetDescription>
               </SheetHeader>
               <nav className="grid gap-1 px-4 py-6 text-lg font-medium">
-                <Link href="/admin" className="flex items-center gap-4 rounded-lg px-3 py-2 text-muted-foreground hover:text-primary hover:bg-primary/5">
-                  <LayoutDashboard className="h-5 w-5" />
-                  Dashboard
-                </Link>
-                <Link href="/admin/members" className="flex items-center gap-4 rounded-lg px-3 py-2 text-muted-foreground hover:text-primary hover:bg-primary/5">
-                  <Users className="h-5 w-5" />
-                  Members
-                </Link>
-                <Link href="/admin/sales" className="flex items-center gap-4 rounded-lg px-3 py-2 text-muted-foreground hover:text-primary hover:bg-primary/5">
-                  <BarChart3 className="h-5 w-5" />
-                  Sales Report
-                </Link>
-                <Link href="/admin/absent" className="flex items-center gap-4 rounded-lg px-3 py-2 text-muted-foreground hover:text-primary hover:bg-primary/5">
-                  <Clock className="h-5 w-5" />
-                  Absents
-                </Link>
-                <Link href="/admin/register" className="flex items-center gap-4 rounded-lg px-3 py-2 text-muted-foreground hover:text-primary hover:bg-primary/5">
-                  <UserPlus className="h-5 w-5" />
-                  Register
-                </Link>
+                {navItems.map((item) => (
+                   <Link 
+                    key={item.href}
+                    href={item.href} 
+                    className={cn(
+                      "flex items-center gap-4 rounded-lg px-3 py-2 hover:bg-primary/5",
+                      pathname === item.href ? "text-primary bg-primary/10" : "text-muted-foreground hover:text-primary"
+                    )}
+                  >
+                    <item.icon className="h-5 w-5" />
+                    {item.label}
+                  </Link>
+                ))}
               </nav>
             </SheetContent>
           </Sheet>
           <div className="flex-1">
-             <h2 className="font-semibold text-lg hidden md:block text-primary font-headline">Front Desk Portal</h2>
+             <h2 className="font-semibold text-lg hidden md:block text-primary font-headline">
+               {navItems.find(item => item.href === pathname)?.label || 'Portal'}
+             </h2>
           </div>
           <UserNav />
         </header>
