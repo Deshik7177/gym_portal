@@ -1,3 +1,4 @@
+
 'use client';
 
 import { useState, useRef, useEffect, useCallback } from 'react';
@@ -11,13 +12,14 @@ import {
   User, 
   History,
   AlertCircle,
-  RefreshCw,
-  Maximize
+  RefreshCw
 } from 'lucide-react';
 import { collection, query, where, getDocs, updateDoc, doc, serverTimestamp, limit } from 'firebase/firestore';
 import { useFirestore } from '@/firebase';
 import { verifyFace } from '@/ai/flows/verify-face-flow';
 import { cn } from '@/lib/utils';
+import { errorEmitter } from '@/firebase/error-emitter';
+import { FirestorePermissionError, type SecurityRuleContext } from '@/firebase/errors';
 
 import { Button } from '@/components/ui/button';
 import { Card, CardContent, CardDescription, CardHeader, CardTitle } from '@/components/ui/card';
@@ -104,8 +106,8 @@ export default function SmartEntrancePage() {
     const livePhoto = canvasRef.current.toDataURL('image/jpeg');
 
     try {
-      // 1. Fetch Active Members (Checking top 30 active members for speed)
-      const q = query(collection(db, 'members'), where('status', '==', 'active'), limit(30));
+      // 1. Fetch Active Members (Limited for performance)
+      const q = query(collection(db, 'members'), where('status', '==', 'active'), limit(20));
       const snapshot = await getDocs(q);
       const members = snapshot.docs.map(d => ({ ...d.data(), id: d.id }));
 
@@ -114,7 +116,7 @@ export default function SmartEntrancePage() {
         return;
       }
 
-      // 2. AI Identification
+      // 2. AI Identification Loop
       let matchedMember = null;
       for (const member of members) {
         if (!member.photoData) continue;
@@ -130,17 +132,27 @@ export default function SmartEntrancePage() {
             break;
           }
         } catch (e) {
-          // Continue if one individual match fails
-          continue;
+          continue; 
         }
       }
 
       if (matchedMember) {
         const memberRef = doc(db, 'members', matchedMember.id);
-        updateDoc(memberRef, {
+        const updateData = {
           lastCheckIn: serverTimestamp(),
           updatedAt: serverTimestamp()
-        });
+        };
+
+        // Non-blocking mutation
+        updateDoc(memberRef, updateData)
+          .catch(async (serverError) => {
+            const permissionError = new FirestorePermissionError({
+              path: memberRef.path,
+              operation: 'update',
+              requestResourceData: updateData,
+            } satisfies SecurityRuleContext);
+            errorEmitter.emit('permission-error', permissionError);
+          });
 
         setIdentifiedMember(matchedMember);
         setScanResult('success');
@@ -150,14 +162,13 @@ export default function SmartEntrancePage() {
             status: 'Authorized'
         }, ...prev].slice(0, 5));
         
-        // Auto-reset after 5 seconds to scanning mode
+        // Auto-reset
         setTimeout(() => {
           setScanResult(null);
           setIdentifiedMember(null);
         }, 5000);
       } else {
         setScanResult('failure');
-        // Reset failures quickly so next person can try
         setTimeout(() => {
           setScanResult(null);
         }, 3000);
@@ -170,14 +181,13 @@ export default function SmartEntrancePage() {
     }
   }, [isOnline, isScanning, scanResult, db]);
 
-  // Heartbeat loop for Kiosk Mode
   useEffect(() => {
     if (isKioskActive && isOnline) {
       scanIntervalRef.current = setInterval(() => {
         if (!isScanning && !scanResult) {
           triggerAutoVerify();
         }
-      }, 7000); // Pulse every 7 seconds
+      }, 7000);
     } else {
       if (scanIntervalRef.current) clearInterval(scanIntervalRef.current);
     }
@@ -189,13 +199,14 @@ export default function SmartEntrancePage() {
   const toggleKiosk = () => {
     setIsKioskActive(!isKioskActive);
     if (!isKioskActive) {
-      toast({ title: "Kiosk Mode Active", description: "The system is now automatically scanning for faces." });
+      toast({ title: "Kiosk Mode Stopped", description: "Returning to manual control." });
+    } else {
+       toast({ title: "Kiosk Active", description: "Automated scanning engaged." });
     }
   };
 
   return (
     <div className="grid grid-cols-1 lg:grid-cols-12 gap-6 max-w-7xl mx-auto h-[calc(100vh-140px)]">
-      {/* Left Panel: Camera Scanner */}
       <Card className="lg:col-span-8 overflow-hidden border-2 flex flex-col shadow-2xl relative bg-black">
         <div className="absolute top-4 left-4 z-20 flex flex-wrap gap-2">
            {!isOnline && (
@@ -204,11 +215,11 @@ export default function SmartEntrancePage() {
              </Badge>
            )}
            <Badge variant="outline" className={cn(
-             "bg-background/80 backdrop-blur-sm border-primary/20 transition-colors",
+             "bg-background/80 backdrop-blur-sm border-primary/20 transition-colors font-mono",
              isKioskActive ? "text-green-500 border-green-500/50" : "text-primary"
            )}>
               <Scan className={cn("h-3 w-3 mr-1", isKioskActive && "animate-pulse")} /> 
-              {isKioskActive ? 'AUTO-SCAN ACTIVE' : 'MANUAL MODE'}
+              {isKioskActive ? 'AUTO-KIOSK' : 'MANUAL'}
            </Badge>
         </div>
 
@@ -227,29 +238,27 @@ export default function SmartEntrancePage() {
             className={cn(
               "w-full h-full object-cover transition-all duration-700",
               isScanning ? "brightness-50 scale-105 blur-[2px]" : "brightness-90",
-              scanResult === 'success' ? "opacity-30" : ""
+              scanResult === 'success' ? "opacity-40" : ""
             )}
           />
           <canvas ref={canvasRef} className="hidden" />
 
-          {/* Scanning Overlay */}
           {isScanning && (
             <div className="absolute inset-0 flex flex-col items-center justify-center z-10 pointer-events-none">
                 <div className="w-48 h-48 border-4 border-primary border-t-transparent rounded-full animate-spin mb-6" />
-                <div className="text-white font-headline text-2xl tracking-widest animate-pulse drop-shadow-lg">ANALYZING...</div>
+                <div className="text-white font-headline text-2xl tracking-widest animate-pulse drop-shadow-lg uppercase">Scanning Identity...</div>
             </div>
           )}
 
-          {/* Result Overlays */}
           {scanResult === 'success' && identifiedMember && (
             <div className="absolute inset-0 flex flex-col items-center justify-center z-10 bg-green-600/20 backdrop-blur-sm animate-in zoom-in duration-500">
                <CheckCircle2 className="h-40 w-40 text-green-500 mb-6 drop-shadow-2xl" />
-               <h2 className="text-5xl font-headline font-bold text-white mb-2 tracking-tight">WELCOME BACK</h2>
-               <p className="text-3xl text-green-300 uppercase tracking-widest font-black drop-shadow-md">
+               <h2 className="text-5xl font-headline font-bold text-white mb-2 tracking-tight">WELCOME</h2>
+               <p className="text-3xl text-green-300 uppercase tracking-widest font-black drop-shadow-md text-center px-6">
                  {identifiedMember.fullName}
                </p>
-               <div className="mt-8 bg-green-500 text-white px-6 py-2 rounded-full font-bold animate-bounce">
-                  ENTRY AUTHORIZED
+               <div className="mt-8 bg-green-500 text-white px-8 py-3 rounded-full font-bold animate-bounce shadow-xl">
+                  ENTRY GRANTED
                </div>
             </div>
           )}
@@ -257,17 +266,16 @@ export default function SmartEntrancePage() {
           {scanResult === 'failure' && (
             <div className="absolute inset-0 flex flex-col items-center justify-center z-10 bg-destructive/10 backdrop-blur-[2px] animate-in shake duration-300">
                <XCircle className="h-32 w-32 text-destructive mb-6 drop-shadow-2xl" />
-               <h2 className="text-4xl font-headline font-bold text-white mb-2">TRY AGAIN</h2>
-               <p className="text-xl text-destructive-foreground uppercase tracking-widest font-bold">Face Not Recognized</p>
+               <h2 className="text-4xl font-headline font-bold text-white mb-2">NOT RECOGNIZED</h2>
+               <p className="text-xl text-destructive-foreground uppercase tracking-widest font-bold">Please see staff</p>
             </div>
           )}
 
-          {/* Target Reticle */}
           {!scanResult && !isScanning && isKioskActive && (
              <div className="absolute inset-0 flex items-center justify-center pointer-events-none opacity-40">
-                <div className="w-64 h-80 border-2 border-white/30 rounded-[3rem] relative">
+                <div className="w-64 h-80 border-2 border-dashed border-white/50 rounded-[3rem] relative">
                     <div className="absolute top-0 left-1/2 -translate-x-1/2 -translate-y-full mb-4">
-                       <span className="text-white/60 text-[10px] uppercase tracking-widest">Position Face Here</span>
+                       <span className="text-white text-[10px] uppercase tracking-widest font-bold bg-black/40 px-2 py-1 rounded">Position Face Here</span>
                     </div>
                 </div>
              </div>
@@ -277,16 +285,16 @@ export default function SmartEntrancePage() {
         <CardContent className="p-4 bg-background border-t">
            <div className="flex items-center justify-between gap-4">
               <div className="hidden sm:block space-y-0.5">
-                 <p className="text-xs font-bold text-muted-foreground uppercase tracking-widest">Mobile Kiosk Node #1</p>
-                 <p className="text-[10px] italic opacity-60">Heartbeat: Every 7 seconds</p>
+                 <p className="text-xs font-bold text-muted-foreground uppercase tracking-widest">Entrance Station #1</p>
+                 <p className="text-[10px] italic opacity-60">Status: {isOnline ? 'Online' : 'Local Only'}</p>
               </div>
               <div className="flex gap-2 w-full sm:w-auto">
                 <Button 
                     variant={isKioskActive ? "destructive" : "default"}
                     onClick={toggleKiosk}
-                    className="flex-1 sm:flex-initial h-12 px-6 font-bold shadow-lg"
+                    className="flex-1 sm:flex-initial h-12 px-8 font-bold shadow-lg"
                 >
-                    {isKioskActive ? "Stop Auto-Kiosk" : "Start Auto-Kiosk"}
+                    {isKioskActive ? "Disable Auto-Entry" : "Enable Auto-Entry"}
                 </Button>
                 {!isKioskActive && (
                     <Button 
@@ -295,7 +303,7 @@ export default function SmartEntrancePage() {
                         disabled={isScanning || !isOnline}
                         className="h-12 px-6 font-bold"
                     >
-                        {isScanning ? <Loader2 className="h-4 w-4 animate-spin" /> : "Single Scan"}
+                        {isScanning ? <Loader2 className="h-4 w-4 animate-spin" /> : "Manual Verification"}
                     </Button>
                 )}
               </div>
@@ -303,20 +311,18 @@ export default function SmartEntrancePage() {
         </CardContent>
       </Card>
 
-      {/* Right Panel: Identity Info & Logs */}
       <div className="lg:col-span-4 flex flex-col gap-6">
-        <Card className="flex-1 shadow-xl flex flex-col">
-          <CardHeader className="pb-4">
-            <CardTitle className="text-lg flex items-center gap-2">
-               <History className="h-5 w-5 text-primary" />
-               Daily Activity
+        <Card className="flex-1 shadow-xl flex flex-col overflow-hidden">
+          <CardHeader className="pb-4 border-b bg-muted/20">
+            <CardTitle className="text-sm flex items-center gap-2 uppercase tracking-wider font-bold">
+               <History className="h-4 w-4 text-primary" />
+               Access Logs
             </CardTitle>
-            <CardDescription className="text-xs">Live entrance tracking.</CardDescription>
           </CardHeader>
           <CardContent className="p-0 flex-1 overflow-auto">
              <Table>
-                <TableHeader className="bg-muted/50">
-                   <TableRow>
+                <TableHeader>
+                   <TableRow className="bg-muted/50">
                       <TableHead className="text-[10px] h-8">TIME</TableHead>
                       <TableHead className="text-[10px] h-8">MEMBER</TableHead>
                       <TableHead className="text-right text-[10px] h-8">STATUS</TableHead>
@@ -327,10 +333,10 @@ export default function SmartEntrancePage() {
                      recentLogs.map((log, idx) => (
                        <TableRow key={idx} className="animate-in slide-in-from-right-4 duration-300">
                           <TableCell className="text-[10px] font-mono opacity-60">{log.time}</TableCell>
-                          <TableCell className="font-bold text-xs">{log.name}</TableCell>
+                          <TableCell className="font-bold text-xs truncate max-w-[120px]">{log.name}</TableCell>
                           <TableCell className="text-right">
-                             <Badge variant="outline" className="bg-green-500/10 text-green-500 border-green-500/20 text-[9px] py-0">
-                                {log.status}
+                             <Badge className="bg-green-500/20 text-green-500 border-green-500/30 text-[9px] py-0 px-1.5 h-5">
+                                OK
                              </Badge>
                           </TableCell>
                        </TableRow>
@@ -338,7 +344,7 @@ export default function SmartEntrancePage() {
                    ) : (
                      <TableRow>
                         <TableCell colSpan={3} className="h-32 text-center text-muted-foreground italic text-xs">
-                           Awaiting scans...
+                           Waiting for scans...
                         </TableCell>
                      </TableRow>
                    )}
@@ -346,33 +352,31 @@ export default function SmartEntrancePage() {
              </Table>
           </CardContent>
           <div className="p-4 border-t bg-muted/20">
-             <div className="flex items-center gap-2 text-[10px] text-muted-foreground">
-                <AlertCircle className="h-3 w-3" />
-                <span>AI confidence threshold: 85%</span>
+             <div className="flex items-center gap-2 text-[10px] text-muted-foreground font-medium">
+                <AlertCircle className="h-3.5 w-3.5 text-primary" />
+                <span>AI Identity Threshold: High (85%)</span>
              </div>
           </div>
         </Card>
 
         <Card className="bg-primary/5 border-primary/20">
            <CardHeader className="py-3">
-              <CardTitle className="text-[11px] uppercase tracking-tighter flex items-center gap-2">
-                 <User className="h-3 w-3" /> Mobile Optimization
+              <CardTitle className="text-[10px] uppercase tracking-widest flex items-center gap-2 font-bold text-muted-foreground">
+                 <User className="h-3 w-3" /> System Metrics
               </CardTitle>
            </CardHeader>
-           <CardContent className="space-y-3 pb-4 text-[10px]">
+           <CardContent className="space-y-3 pb-4 text-[11px]">
               <div className="flex justify-between items-center">
-                 <span className="text-muted-foreground">Camera Type</span>
-                 <span className="font-bold uppercase">{facingMode}</span>
+                 <span className="text-muted-foreground">Mobile Camera</span>
+                 <span className="font-bold uppercase text-primary">{facingMode}</span>
               </div>
               <div className="flex justify-between items-center">
-                 <span className="text-muted-foreground">Network Mode</span>
-                 <span className={cn("font-bold", isOnline ? "text-green-500" : "text-destructive")}>
-                    {isOnline ? 'CLOUD SYNC' : 'OFFLINE'}
-                 </span>
+                 <span className="text-muted-foreground">Verification</span>
+                 <span className="font-bold text-green-500">ACTIVE</span>
               </div>
               <div className="pt-2 border-t border-primary/10">
-                 <p className="leading-relaxed opacity-60 italic">
-                    *Kiosk mode will automatically cycle through potential matches in your member directory.
+                 <p className="leading-relaxed opacity-60 italic text-[10px]">
+                    Note: Members must have a valid profile photo for automatic entry.
                  </p>
               </div>
            </CardContent>
