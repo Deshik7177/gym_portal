@@ -8,9 +8,10 @@ let modelsLoadedPromise: Promise<void> | null = null;
  * Loads face-api.js models for local on-device recognition.
  */
 export function loadFaceModels() {
+  if (typeof window === 'undefined') return Promise.resolve();
   if (modelsLoadedPromise) return modelsLoadedPromise;
   
-  // Using a more reliable mirror for models if possible, or sticking to the primary one
+  // Using the primary reliable mirror for models
   const MODEL_URL = 'https://justadudewhohacks.github.io/face-api.js/models';
   
   modelsLoadedPromise = (async () => {
@@ -36,14 +37,17 @@ export function loadFaceModels() {
  * Optimized for mobile browsers.
  */
 export async function isFaceInFrame(input: HTMLVideoElement | HTMLCanvasElement | HTMLImageElement) {
-  if (input instanceof HTMLVideoElement && input.readyState < 2) return false;
+  if (input instanceof HTMLVideoElement) {
+    if (input.readyState < 2) return false;
+    if (input.videoWidth === 0) return false;
+  }
   
   await loadFaceModels();
   
-  // Higher score threshold (0.8) to prevent background noise triggers
+  // Adjusted threshold for better responsiveness on mobile
   const options = new faceapi.TinyFaceDetectorOptions({ 
     inputSize: 160, 
-    scoreThreshold: 0.8 
+    scoreThreshold: 0.5 
   });
   
   const detection = await faceapi.detectSingleFace(input, options);
@@ -71,7 +75,7 @@ export async function generateEmbedding(input: HTMLVideoElement | HTMLCanvasElem
   
   const options = new faceapi.TinyFaceDetectorOptions({ 
     inputSize: 224, 
-    scoreThreshold: 0.7 
+    scoreThreshold: 0.6 
   });
   
   try {

@@ -1,4 +1,3 @@
-
 'use client';
 
 import { useState, useRef, useEffect, useCallback } from 'react';
@@ -30,8 +29,6 @@ import { Badge } from '@/components/ui/badge';
 import { useToast } from '@/hooks/use-toast';
 import { Table, TableBody, TableCell, TableRow } from '@/components/ui/table';
 import { Input } from '@/components/ui/input';
-import { Label } from '@/components/ui/label';
-import { Tabs, TabsContent, TabsList, TabsTrigger } from '@/components/ui/tabs';
 
 export default function SmartEntrancePage() {
   const db = useFirestore();
@@ -43,6 +40,7 @@ export default function SmartEntrancePage() {
   // Kiosk States
   const [isKioskActive, setIsKioskActive] = useState(false);
   const [isProcessing, setIsProcessing] = useState(false);
+  const [isSearching, setIsSearching] = useState(false);
   const [modelsReady, setModelsReady] = useState(false);
   const [facingMode, setFacingMode] = useState<'user' | 'environment'>('user');
   const [identifiedMember, setIdentifiedMember] = useState<any>(null);
@@ -57,10 +55,14 @@ export default function SmartEntrancePage() {
 
   const videoRef = useRef<HTMLVideoElement>(null);
   const loopRef = useRef<NodeJS.Timeout | null>(null);
+  const isProcessingRef = useRef(false);
 
   useEffect(() => {
     setIsOnline(navigator.onLine);
-    loadFaceModels().then(() => setModelsReady(true));
+    loadFaceModels().then(() => setModelsReady(true)).catch(err => {
+      console.error("Failed to load models", err);
+      toast({ variant: "destructive", title: "Model Error", description: "Failed to load AI models." });
+    });
     startCamera();
     
     return () => {
@@ -72,7 +74,7 @@ export default function SmartEntrancePage() {
   const startCamera = async () => {
     try {
       const stream = await navigator.mediaDevices.getUserMedia({ 
-        video: { facingMode: facingMode } 
+        video: { facingMode: facingMode, width: { ideal: 640 }, height: { ideal: 480 } } 
       });
       if (videoRef.current) {
         videoRef.current.srcObject = stream;
@@ -89,23 +91,22 @@ export default function SmartEntrancePage() {
   };
 
   // --- KIOSK LOGIC ---
-  const triggerVerification = useCallback(async () => {
-    if (!modelsReady || isProcessing || scanResult || !videoRef.current || !db || activeMode !== 'kiosk') return;
+  const triggerVerification = async () => {
+    if (!modelsReady || isProcessingRef.current || scanResult || !videoRef.current || !db || activeMode !== 'kiosk') return;
 
-    // Fast check for face presence before triggering "Identifying" UI
+    setIsSearching(true);
     const facePresent = await isFaceInFrame(videoRef.current);
-    if (!facePresent) {
-      return;
-    }
+    setIsSearching(false);
+    
+    if (!facePresent) return;
 
+    isProcessingRef.current = true;
     setIsProcessing(true);
     
     try {
-      // Small delay to allow the subject to stabilize
-      await new Promise(r => setTimeout(r, 400));
-      
       const liveEmbedding = await generateEmbedding(videoRef.current);
       if (!liveEmbedding) {
+        isProcessingRef.current = false;
         setIsProcessing(false);
         return;
       }
@@ -116,8 +117,7 @@ export default function SmartEntrancePage() {
 
       const { bestMatch, confidence } = findBestMatch(liveEmbedding, members);
 
-      // Increased threshold to 0.88 for higher security and fewer false positives
-      if (bestMatch && confidence > 0.88) {
+      if (bestMatch && confidence > 0.85) {
         const memberRef = doc(db, 'members', bestMatch.id);
         const updateData = { lastCheckIn: serverTimestamp(), updatedAt: serverTimestamp() };
 
@@ -138,43 +138,42 @@ export default function SmartEntrancePage() {
             confidence: (confidence * 100).toFixed(0) + '%'
         }, ...prev].slice(0, 10));
 
-        // Display welcome for 4 seconds
         setTimeout(() => { 
             setScanResult(null); 
             setIdentifiedMember(null); 
             setIsProcessing(false);
+            isProcessingRef.current = false;
         }, 4000);
       } else {
         setScanResult('failure');
         setTimeout(() => {
           setScanResult(null);
           setIsProcessing(false);
+          isProcessingRef.current = false;
         }, 2000);
       }
     } catch (error) {
       console.error('Kiosk matching error:', error);
       setIsProcessing(false);
+      isProcessingRef.current = false;
     }
-  }, [modelsReady, isProcessing, scanResult, db, activeMode]);
+  };
 
   useEffect(() => {
     const runLoop = async () => {
-      if (isKioskActive && activeMode === 'kiosk' && !isProcessing && !scanResult) {
+      if (isKioskActive && activeMode === 'kiosk' && !isProcessingRef.current && !scanResult) {
         await triggerVerification();
       }
-      // Poll every 2 seconds for presence, but only if not currently processing or showing success
-      const nextInterval = scanResult ? 6000 : 2500;
+      const nextInterval = scanResult ? 5000 : 1500;
       loopRef.current = setTimeout(runLoop, nextInterval);
     };
 
-    if (isKioskActive) {
+    if (isKioskActive && activeMode === 'kiosk') {
       runLoop();
-    } else {
-      if (loopRef.current) clearTimeout(loopRef.current);
     }
     
     return () => { if (loopRef.current) clearTimeout(loopRef.current); };
-  }, [isKioskActive, isProcessing, scanResult, triggerVerification, activeMode]);
+  }, [isKioskActive, scanResult, activeMode]);
 
   // --- ENROLLMENT LOGIC ---
   const handleFindMember = async () => {
@@ -234,7 +233,12 @@ export default function SmartEntrancePage() {
 
   return (
     <div className="max-w-7xl mx-auto space-y-6">
-      <Tabs value={activeMode} onValueChange={(v: any) => { setActiveMode(v); setIsKioskActive(false); setScanResult(null); setIsProcessing(false); }} className="w-full">
+      <div className="flex flex-col gap-2">
+         <h1 className="text-3xl font-bold font-headline">Smart Entrance</h1>
+         <p className="text-muted-foreground">Automated biometric entry system.</p>
+      </div>
+
+      <Tabs value={activeMode} onValueChange={(v: any) => { setActiveMode(v); setIsKioskActive(false); setScanResult(null); setIsProcessing(false); isProcessingRef.current = false; }} className="w-full">
         <TabsList className="grid w-full grid-cols-2 h-14 bg-muted/50 p-1">
           <TabsTrigger value="kiosk" className="text-lg font-bold">
             <Scan className="mr-2 h-5 w-5" /> AUTO-KIOSK
@@ -252,6 +256,9 @@ export default function SmartEntrancePage() {
               </Badge>
               {isKioskActive && activeMode === 'kiosk' && (
                 <Badge className="bg-green-500 animate-pulse">KIOSK ACTIVE</Badge>
+              )}
+              {isSearching && !isProcessing && (
+                <Badge variant="secondary" className="bg-primary/20 text-primary animate-pulse border-primary/20">SEARCHING...</Badge>
               )}
             </div>
 
@@ -272,6 +279,13 @@ export default function SmartEntrancePage() {
                   (scanResult === 'success' || isProcessing) ? "opacity-40" : "opacity-90"
                 )}
               />
+
+              {/* Heartbeat Scanner Line */}
+              {isKioskActive && !isProcessing && !scanResult && (
+                <div className="absolute inset-0 pointer-events-none overflow-hidden">
+                   <div className="w-full h-[2px] bg-primary/50 absolute animate-[scan_3s_ease-in-out_infinite] shadow-[0_0_15px_rgba(var(--primary),0.8)]" />
+                </div>
+              )}
 
               {isProcessing && !scanResult && (
                 <div className="absolute inset-0 flex flex-col items-center justify-center z-10 bg-black/20 backdrop-blur-[2px]">
@@ -315,7 +329,12 @@ export default function SmartEntrancePage() {
                   <Button 
                       size="lg"
                       variant={isKioskActive ? "destructive" : "default"}
-                      onClick={() => { setIsKioskActive(!isKioskActive); setScanResult(null); setIsProcessing(false); }}
+                      onClick={() => { 
+                        setIsKioskActive(!isKioskActive); 
+                        setScanResult(null); 
+                        setIsProcessing(false);
+                        isProcessingRef.current = false;
+                      }}
                       className="px-12 font-bold h-14 text-lg rounded-xl shadow-lg transition-all active:scale-95"
                   >
                       {isKioskActive ? "DISABLE KIOSK" : "ACTIVATE AUTO-SCAN"}
@@ -417,13 +436,20 @@ export default function SmartEntrancePage() {
                   </p>
                   <div className="pt-4 border-t border-primary/5 flex justify-between">
                     <span className="opacity-60">Recognition Threshold</span>
-                    <span className="font-bold text-primary">0.88 Cosine</span>
+                    <span className="font-bold text-primary">0.85 Cosine</span>
                   </div>
               </CardContent>
             </Card>
           </div>
         </div>
       </Tabs>
+      <style jsx global>{`
+        @keyframes scan {
+          0% { top: 0%; opacity: 0.2; }
+          50% { top: 100%; opacity: 0.8; }
+          100% { top: 0%; opacity: 0.2; }
+        }
+      `}</style>
     </div>
   );
 }
