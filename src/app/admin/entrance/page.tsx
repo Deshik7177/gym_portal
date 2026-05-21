@@ -1,4 +1,3 @@
-
 'use client';
 
 import { useState, useRef, useEffect, useCallback } from 'react';
@@ -16,7 +15,7 @@ import {
 } from 'lucide-react';
 import { collection, query, where, getDocs, updateDoc, doc, serverTimestamp, limit } from 'firebase/firestore';
 import { useFirestore } from '@/firebase';
-import { verifyFace } from '@/ai/flows/verify-face-flow';
+import { identifyMember } from '@/ai/flows/verify-face-flow';
 import { cn } from '@/lib/utils';
 import { errorEmitter } from '@/firebase/error-emitter';
 import { FirestorePermissionError, type SecurityRuleContext } from '@/firebase/errors';
@@ -106,67 +105,63 @@ export default function SmartEntrancePage() {
     const livePhoto = canvasRef.current.toDataURL('image/jpeg');
 
     try {
-      // 1. Fetch Active Members (Limited for performance)
+      // 1. Fetch Active Members (Limited for performance and context)
       const q = query(collection(db, 'members'), where('status', '==', 'active'), limit(20));
       const snapshot = await getDocs(q);
-      const members = snapshot.docs.map(d => ({ ...d.data(), id: d.id }));
+      const members = snapshot.docs.map(d => ({ 
+        id: d.id,
+        name: d.data().fullName,
+        photoDataUri: d.data().photoData,
+        ...d.data()
+      }));
 
       if (members.length === 0) {
         setIsScanning(false);
         return;
       }
 
-      // 2. AI Identification Loop
-      let matchedMember = null;
-      for (const member of members) {
-        if (!member.photoData) continue;
-        
-        try {
-          const result = await verifyFace({
-            storedPhotoDataUri: member.photoData,
-            livePhotoDataUri: livePhoto
-          });
+      // 2. AI Identification (Batch comparison in ONE request)
+      const result = await identifyMember({
+        livePhotoDataUri: livePhoto,
+        candidates: members.filter(m => !!m.photoDataUri).map(m => ({
+          id: m.id,
+          name: m.name,
+          photoDataUri: m.photoDataUri
+        }))
+      });
 
-          if (result.isMatch && result.confidence > 0.85) {
-            matchedMember = member;
-            break;
-          }
-        } catch (e) {
-          continue; 
+      if (result.matchedMemberId) {
+        const matchedMember = members.find(m => m.id === result.matchedMemberId);
+        if (matchedMember) {
+            const memberRef = doc(db, 'members', matchedMember.id);
+            const updateData = {
+              lastCheckIn: serverTimestamp(),
+              updatedAt: serverTimestamp()
+            };
+
+            updateDoc(memberRef, updateData)
+              .catch(async (serverError) => {
+                const permissionError = new FirestorePermissionError({
+                  path: memberRef.path,
+                  operation: 'update',
+                  requestResourceData: updateData,
+                } satisfies SecurityRuleContext);
+                errorEmitter.emit('permission-error', permissionError);
+              });
+
+            setIdentifiedMember(matchedMember);
+            setScanResult('success');
+            setRecentLogs(prev => [{
+                name: matchedMember.name,
+                time: new Date().toLocaleTimeString(),
+                status: 'Authorized'
+            }, ...prev].slice(0, 5));
+            
+            setTimeout(() => {
+              setScanResult(null);
+              setIdentifiedMember(null);
+            }, 5000);
         }
-      }
-
-      if (matchedMember) {
-        const memberRef = doc(db, 'members', matchedMember.id);
-        const updateData = {
-          lastCheckIn: serverTimestamp(),
-          updatedAt: serverTimestamp()
-        };
-
-        // Non-blocking mutation
-        updateDoc(memberRef, updateData)
-          .catch(async (serverError) => {
-            const permissionError = new FirestorePermissionError({
-              path: memberRef.path,
-              operation: 'update',
-              requestResourceData: updateData,
-            } satisfies SecurityRuleContext);
-            errorEmitter.emit('permission-error', permissionError);
-          });
-
-        setIdentifiedMember(matchedMember);
-        setScanResult('success');
-        setRecentLogs(prev => [{
-            name: matchedMember.fullName,
-            time: new Date().toLocaleTimeString(),
-            status: 'Authorized'
-        }, ...prev].slice(0, 5));
-        
-        // Auto-reset
-        setTimeout(() => {
-          setScanResult(null);
-          setIdentifiedMember(null);
-        }, 5000);
       } else {
         setScanResult('failure');
         setTimeout(() => {
@@ -187,7 +182,7 @@ export default function SmartEntrancePage() {
         if (!isScanning && !scanResult) {
           triggerAutoVerify();
         }
-      }, 7000);
+      }, 8000); // Pulse every 8 seconds (staying safely under 15 RPM)
     } else {
       if (scanIntervalRef.current) clearInterval(scanIntervalRef.current);
     }
@@ -198,7 +193,7 @@ export default function SmartEntrancePage() {
 
   const toggleKiosk = () => {
     setIsKioskActive(!isKioskActive);
-    if (!isKioskActive) {
+    if (isKioskActive) {
       toast({ title: "Kiosk Mode Stopped", description: "Returning to manual control." });
     } else {
        toast({ title: "Kiosk Active", description: "Automated scanning engaged." });
@@ -255,7 +250,7 @@ export default function SmartEntrancePage() {
                <CheckCircle2 className="h-40 w-40 text-green-500 mb-6 drop-shadow-2xl" />
                <h2 className="text-5xl font-headline font-bold text-white mb-2 tracking-tight">WELCOME</h2>
                <p className="text-3xl text-green-300 uppercase tracking-widest font-black drop-shadow-md text-center px-6">
-                 {identifiedMember.fullName}
+                 {identifiedMember.name}
                </p>
                <div className="mt-8 bg-green-500 text-white px-8 py-3 rounded-full font-bold animate-bounce shadow-xl">
                   ENTRY GRANTED
@@ -354,7 +349,7 @@ export default function SmartEntrancePage() {
           <div className="p-4 border-t bg-muted/20">
              <div className="flex items-center gap-2 text-[10px] text-muted-foreground font-medium">
                 <AlertCircle className="h-3.5 w-3.5 text-primary" />
-                <span>AI Identity Threshold: High (85%)</span>
+                <span>AI Efficiency: Batch Identity Check</span>
              </div>
           </div>
         </Card>
@@ -376,7 +371,7 @@ export default function SmartEntrancePage() {
               </div>
               <div className="pt-2 border-t border-primary/10">
                  <p className="leading-relaxed opacity-60 italic text-[10px]">
-                    Note: Members must have a valid profile photo for automatic entry.
+                    Free tier quota: ~15 verifications per minute allowed.
                  </p>
               </div>
            </CardContent>

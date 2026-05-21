@@ -1,65 +1,72 @@
 'use server';
 /**
- * @fileOverview A facial verification flow for gym member authentication.
+ * @fileOverview A facial identification flow for gym member authentication.
  *
- * - verifyFace - A function that compares two photos to verify identity.
- * - VerifyFaceInput - The input type for the verifyFace function.
- * - VerifyFaceOutput - The return type for the verifyFace function.
+ * - identifyMember - A function that identifies a person from a gallery of photos.
+ * - IdentifyMemberInput - The input type for the identifyMember function.
+ * - IdentifyMemberOutput - The return type for the identifyMember function.
  */
 
 import { ai } from '@/ai/genkit';
 import { z } from 'genkit';
 
-const VerifyFaceInputSchema = z.object({
-  storedPhotoDataUri: z
-    .string()
-    .describe(
-      "The stored profile photo of the member as a data URI."
-    ),
+const IdentifyMemberInputSchema = z.object({
   livePhotoDataUri: z
     .string()
-    .describe(
-      "The live capture photo as a data URI."
-    ),
+    .describe("The live capture photo as a data URI."),
+  candidates: z.array(z.object({
+    id: z.string(),
+    name: z.string(),
+    photoDataUri: z.string()
+  })).describe("List of potential members to match against.")
 });
-export type VerifyFaceInput = z.infer<typeof VerifyFaceInputSchema>;
+export type IdentifyMemberInput = z.infer<typeof IdentifyMemberInputSchema>;
 
-const VerifyFaceOutputSchema = z.object({
-  isMatch: z.boolean().describe('Whether the two photos belong to the same person.'),
+const IdentifyMemberOutputSchema = z.object({
+  matchedMemberId: z.string().nullable().describe('The ID of the matched member, or null if no match.'),
   confidence: z.number().describe('Confidence score between 0 and 1.'),
   reason: z.string().describe('Brief explanation for the decision.'),
 });
-export type VerifyFaceOutput = z.infer<typeof VerifyFaceOutputSchema>;
+export type IdentifyMemberOutput = z.infer<typeof IdentifyMemberOutputSchema>;
 
-export async function verifyFace(input: VerifyFaceInput): Promise<VerifyFaceOutput> {
-  return verifyFaceFlow(input);
+export async function identifyMember(input: IdentifyMemberInput): Promise<IdentifyMemberOutput> {
+  return identifyMemberFlow(input);
 }
 
 const prompt = ai.definePrompt({
-  name: 'verifyFacePrompt',
-  input: { schema: VerifyFaceInputSchema },
-  output: { schema: VerifyFaceOutputSchema },
-  prompt: `You are an expert in facial recognition and identity verification.
+  name: 'identifyMemberPrompt',
+  input: { schema: IdentifyMemberInputSchema },
+  output: { schema: IdentifyMemberOutputSchema },
+  prompt: `You are a security expert in facial recognition.
 
-Compare the following two images:
-1. Stored Profile Photo: {{media url=storedPhotoDataUri}}
-2. Live Capture: {{media url=livePhotoDataUri}}
+Live Capture: {{media url=livePhotoDataUri}}
 
-Determine if they represent the same individual. High accuracy is required for gym security. 
-Consider lighting, angles, and facial features. 
+Gallery of Registered Members:
+{{#each candidates}}
+- ID: {{id}}, Name: {{name}}, Photo: {{media url=photoDataUri}}
+{{/each}}
+
+Task:
+Compare the Live Capture against the Gallery. Determine if the person in the Live Capture is one of the members in the gallery. 
+
+If there is a match with high confidence (above 85%), return the matchedMemberId. If no one matches clearly, return matchedMemberId as null.
 
 Provide your analysis in the specified JSON format.`,
 });
 
-const verifyFaceFlow = ai.defineFlow(
+const identifyMemberFlow = ai.defineFlow(
   {
-    name: 'verifyFaceFlow',
-    inputSchema: VerifyFaceInputSchema,
-    outputSchema: VerifyFaceOutputSchema,
+    name: 'identifyMemberFlow',
+    inputSchema: IdentifyMemberInputSchema,
+    outputSchema: IdentifyMemberOutputSchema,
   },
   async (input) => {
+    // If no candidates, don't waste an AI call
+    if (input.candidates.length === 0) {
+      return { matchedMemberId: null, confidence: 0, reason: "No members to compare against." };
+    }
     const { output } = await prompt(input);
-    if (!output) throw new Error('AI failed to verify face.');
+    if (!output) throw new Error('AI failed to identify member.');
     return output;
   }
 );
