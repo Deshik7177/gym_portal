@@ -1,10 +1,14 @@
 'use client';
 
+/**
+ * Replace the placeholder values below with your actual Firebase project configuration.
+ * You can find this in your Firebase Console: Project Settings > General > Your Apps.
+ */
 export const firebaseConfig = {
-  apiKey: "AIzaSy...", // This is a placeholder, Firebase Studio will inject real config
-  authDomain: "your-project.firebaseapp.com",
-  projectId: "your-project",
-  storageBucket: "your-project.appspot.com",
-  messagingSenderId: "123456789",
-  appId: "1:123456789:web:abcdef"
+  apiKey: "REPLACE_WITH_YOUR_API_KEY",
+  authDomain: "REPLACE_WITH_YOUR_PROJECT_ID.firebaseapp.com",
+  projectId: "REPLACE_WITH_YOUR_PROJECT_ID",
+  storageBucket: "REPLACE_WITH_YOUR_PROJECT_ID.firebasestorage.app",
+  messagingSenderId: "REPLACE_WITH_YOUR_SENDER_ID",
+  appId: "REPLACE_WITH_YOUR_APP_ID"
 };
