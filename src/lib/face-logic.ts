@@ -21,7 +21,6 @@ export function loadFaceModels() {
         faceapi.nets.faceLandmark68Net.loadFromUri(MODEL_URL),
         faceapi.nets.faceRecognitionNet.loadFromUri(MODEL_URL),
       ]);
-      console.log('Local AI Models Ready');
     } catch (error) {
       console.error('Failed to load local AI models:', error);
       modelsLoadedPromise = null; // Allow retry on failure
@@ -34,10 +33,12 @@ export function loadFaceModels() {
 
 /**
  * Lightweight check to see if a face is in the frame.
+ * Increased threshold and size for better accuracy.
  */
 export async function isFaceInFrame(input: HTMLVideoElement | HTMLCanvasElement | HTMLImageElement) {
   await loadFaceModels();
-  const options = new faceapi.TinyFaceDetectorOptions({ inputSize: 128, scoreThreshold: 0.5 });
+  // Using higher score threshold to prevent background objects from triggering "Identifying"
+  const options = new faceapi.TinyFaceDetectorOptions({ inputSize: 160, scoreThreshold: 0.7 });
   const detection = await faceapi.detectSingleFace(input, options);
   return !!detection;
 }
@@ -55,12 +56,12 @@ export function cosineSimilarity(vecA: number[], vecB: number[]) {
 
 /**
  * Detects a face and generates a mathematical embedding.
- * Uses TinyFaceDetector for better performance on mobile.
  */
 export async function generateEmbedding(input: HTMLVideoElement | HTMLCanvasElement | HTMLImageElement) {
   await loadFaceModels();
   
-  const options = new faceapi.TinyFaceDetectorOptions({ inputSize: 128, scoreThreshold: 0.5 });
+  // Use slightly larger input size for better descriptors
+  const options = new faceapi.TinyFaceDetectorOptions({ inputSize: 224, scoreThreshold: 0.6 });
   
   const detection = await faceapi.detectSingleFace(input, options)
     .withFaceLandmarks()
@@ -75,6 +76,9 @@ export async function generateEmbedding(input: HTMLVideoElement | HTMLCanvasElem
 export function findBestMatch(liveDescriptor: number[], members: any[]) {
   let bestMatch = null;
   let maxSimilarity = 0;
+
+  // Ensure liveDescriptor is valid
+  if (!liveDescriptor || liveDescriptor.length === 0) return { bestMatch: null, confidence: 0 };
 
   for (const member of members) {
     if (!member.faceEmbedding || !Array.isArray(member.faceEmbedding)) continue;
