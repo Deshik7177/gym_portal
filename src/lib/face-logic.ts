@@ -42,8 +42,8 @@ export async function isFaceInFrame(input: HTMLVideoElement | HTMLCanvasElement 
   await loadFaceModels();
   
   const options = new faceapi.TinyFaceDetectorOptions({ 
-    inputSize: 128, 
-    scoreThreshold: 0.5 
+    inputSize: 224, 
+    scoreThreshold: 0.4 
   });
   
   const detection = await faceapi.detectSingleFace(input, options);
@@ -56,7 +56,7 @@ export async function isFaceInFrame(input: HTMLVideoElement | HTMLCanvasElement 
 export function cosineSimilarity(vecA: number[], vecB: number[]) {
   const dotProduct = vecA.reduce((sum, a, i) => sum + a * vecB[i], 0);
   const magA = Math.sqrt(vecA.reduce((sum, a) => sum + a * a, 0));
-  const magB = Math.sqrt(vecB.reduce((sum, b) => sum + b * b, 0));
+  const magB = Math.sqrt(vecA.reduce((sum, b) => sum + b * b, 0));
   if (magA === 0 || magB === 0) return 0;
   return dotProduct / (magA * magB);
 }
@@ -70,8 +70,8 @@ export async function generateEmbedding(input: HTMLVideoElement | HTMLCanvasElem
   await loadFaceModels();
   
   const options = new faceapi.TinyFaceDetectorOptions({ 
-    inputSize: 160, 
-    scoreThreshold: 0.6 
+    inputSize: 320, 
+    scoreThreshold: 0.4 
   });
   
   try {
@@ -81,7 +81,6 @@ export async function generateEmbedding(input: HTMLVideoElement | HTMLCanvasElem
       
     return detection ? Array.from(detection.descriptor) : null;
   } catch (err) {
-    console.error('Embedding generation error:', err);
     return null;
   }
 }
