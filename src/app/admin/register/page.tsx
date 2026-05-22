@@ -128,40 +128,45 @@ function RegisterForm() {
 
     const docRef = doc(db, 'members', phone);
     
-    setDoc(docRef, memberData, { merge: true })
-      .then(() => {
-        // Log sale only after successful member save
-        const saleData = {
-          memberId: phone,
-          memberName: fullName,
-          amount: parseFloat(price) || 0,
-          date: new Date().toISOString().split('T')[0],
-          category: membershipType === 'personal' ? 'personal training' : 'membership',
-          description: isEditMode ? `Plan Update: ${membershipType}` : `New Enrollment: ${membershipType}`,
-        };
+    try {
+      // We await the setDoc to ensure it clears the client-side validation
+      await setDoc(docRef, memberData, { merge: true });
 
-        addDoc(collection(db, 'sales'), saleData).catch(async (e) => {
-            console.error("Failed to log sale", e);
-        });
+      // Log sale
+      const saleData = {
+        memberId: phone,
+        memberName: fullName,
+        amount: parseFloat(price) || 0,
+        date: new Date().toISOString().split('T')[0],
+        category: membershipType === 'personal' ? 'personal training' : 'membership',
+        description: isEditMode ? `Plan Update: ${membershipType}` : `New Enrollment: ${membershipType}`,
+      };
 
-        toast({ 
-          title: "Saved Successfully", 
-          description: isEditMode ? "Profile updated." : "Member registered and payment logged." 
-        });
-        
-        if (!isEditMode) {
-          resetForm();
-        }
-      })
-      .catch(async () => {
+      await addDoc(collection(db, 'sales'), saleData);
+
+      toast({ 
+        title: "Saved Successfully", 
+        description: isEditMode ? "Profile updated in cloud." : "Member registered and cloud synced." 
+      });
+      
+      if (!isEditMode) {
+        resetForm();
+      }
+    } catch (err: any) {
+      console.error("Firestore Save Error:", err);
+      if (err.code === 'permission-denied') {
         const permissionError = new FirestorePermissionError({
           path: docRef.path,
           operation: 'write',
           requestResourceData: memberData,
         } satisfies SecurityRuleContext);
         errorEmitter.emit('permission-error', permissionError);
-      })
-      .finally(() => setLoading(false));
+      } else {
+        toast({ variant: "destructive", title: "Cloud Sync Failed", description: "Check your internet connection or Firebase Console rules." });
+      }
+    } finally {
+      setLoading(false);
+    }
   };
 
   const resetForm = () => {

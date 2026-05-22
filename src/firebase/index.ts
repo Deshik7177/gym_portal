@@ -6,28 +6,37 @@ import {
   Firestore, 
   persistentLocalCache, 
   persistentMultipleTabManager,
-  initializeFirestore
+  initializeFirestore,
+  enableNetwork
 } from 'firebase/firestore';
 import { getAuth, Auth } from 'firebase/auth';
 import { firebaseConfig } from './config';
 
 /**
  * Initializes Firebase with local persistence for offline-first gym operation.
+ * Ensures the connection to the cloud is active.
  */
 export function initializeFirebase() {
   const firebaseApp = getApps().length === 0 ? initializeApp(firebaseConfig) : getApp();
   
   let firestore: Firestore;
-  // Standard initialization check to prevent "already initialized" errors in Next.js HMR
-  if (getApps().length > 0) {
-    firestore = getFirestore(firebaseApp);
-  } else {
+  
+  // Prevent "Firestore has already been initialized" errors during Next.js Hot Module Replacement
+  try {
     firestore = initializeFirestore(firebaseApp, {
       localCache: persistentLocalCache({
         tabManager: persistentMultipleTabManager(),
       }),
     });
+  } catch (e) {
+    // If already initialized, just get the existing instance
+    firestore = getFirestore(firebaseApp);
   }
+
+  // Ensure network is enabled (cloud sync active)
+  enableNetwork(firestore).catch(() => {
+    // Fail silently if network is already enabled or unavailable
+  });
 
   const auth = getAuth(firebaseApp);
 
