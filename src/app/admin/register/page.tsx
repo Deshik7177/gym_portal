@@ -264,7 +264,7 @@ function RegisterForm() {
                       <CalendarIcon className="h-4 w-4 text-primary" />
                       Start Date
                     </Label>
-                    <Popover open={isStartDateOpen} onValueChange={setIsStartDateOpen}>
+                    <Popover open={isStartDateOpen} onOpenChange={setIsStartDateOpen}>
                       <PopoverTrigger asChild>
                         <Button
                           type="button"
@@ -298,7 +298,7 @@ function RegisterForm() {
                       <CalendarIcon className="h-4 w-4 text-primary" />
                       End Date
                     </Label>
-                    <Popover open={isEndDateOpen} onValueChange={setIsEndDateOpen}>
+                    <Popover open={isEndDateOpen} onOpenChange={setIsEndDateOpen}>
                       <PopoverTrigger asChild>
                         <Button
                           type="button"

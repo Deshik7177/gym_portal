@@ -138,11 +138,8 @@ export default function MembersListPage() {
       });
   };
 
-  // Helper to check if a date is within member's subscription
   const isDateDisabled = (date: Date) => {
-    // Always disable past dates
     if (startOfDay(date) < today) return true;
-
     if (!memberForPT || memberForPT.status !== 'non-active') return false;
     
     try {
@@ -386,7 +383,6 @@ export default function MembersListPage() {
         </CardContent>
       </Card>
 
-      {/* Delete Confirmation */}
       <AlertDialog open={!!memberToDelete} onOpenChange={() => setMemberToDelete(null)}>
         <AlertDialogContent>
           <AlertDialogHeader>
@@ -404,7 +400,6 @@ export default function MembersListPage() {
         </AlertDialogContent>
       </AlertDialog>
 
-      {/* Add PT Dialog */}
       <Dialog open={!!memberForPT} onOpenChange={() => setMemberForPT(null)}>
         <DialogContent className="sm:max-w-[425px]" onOpenAutoFocus={(e) => e.preventDefault()}>
           <DialogHeader>
@@ -443,7 +438,7 @@ export default function MembersListPage() {
                 <Label className="text-xs uppercase font-bold text-muted-foreground flex items-center gap-1 mb-1.5">
                   <CalendarIcon className="h-3 w-3" /> Start
                 </Label>
-                <Popover open={isPtStartDateOpen} onValueChange={setIsPtStartDateOpen}>
+                <Popover open={isPtStartDateOpen} onOpenChange={setIsPtStartDateOpen}>
                   <PopoverTrigger asChild>
                     <Button
                       variant={"outline"}
@@ -475,7 +470,7 @@ export default function MembersListPage() {
                 <Label className="text-xs uppercase font-bold text-muted-foreground flex items-center gap-1 mb-1.5">
                   <CalendarIcon className="h-3 w-3" /> End
                 </Label>
-                <Popover open={isPtEndDateOpen} onValueChange={setIsPtEndDateOpen}>
+                <Popover open={isPtEndDateOpen} onOpenChange={setIsPtEndDateOpen}>
                   <PopoverTrigger asChild>
                     <Button
                       variant={"outline"}
