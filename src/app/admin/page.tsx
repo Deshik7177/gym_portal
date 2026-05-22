@@ -10,10 +10,11 @@ import {
   Activity,
   Loader2,
   TrendingUp,
-  Sparkles
+  Sparkles,
+  UserCircle
 } from 'lucide-react';
 import Link from 'next/link';
-import { collection, query } from 'firebase/firestore';
+import { collection, query, orderBy, limit } from 'firebase/firestore';
 import { useFirestore, useCollection } from '@/firebase';
 
 import { Button } from '@/components/ui/button';
@@ -24,6 +25,7 @@ import {
   CardHeader,
   CardTitle,
 } from '@/components/ui/card';
+import { Badge } from '@/components/ui/badge';
 
 const Overview = dynamic(() => import('./components/overview').then(mod => mod.Overview), {
   loading: () => <div className="h-[350px] w-full bg-muted/20 animate-pulse rounded-xl" />,
@@ -35,6 +37,12 @@ export default function ReceptionDashboard() {
   
   const membersRef = useMemo(() => db ? query(collection(db, 'members')) : null, [db]);
   const { data: members, loading: membersLoading } = useCollection<any>(membersRef);
+
+  const recentMembersQuery = useMemo(() => {
+    if (!db) return null;
+    return query(collection(db, 'members'), orderBy('createdAt', 'desc'), limit(5));
+  }, [db]);
+  const { data: recentMembers } = useCollection<any>(recentMembersQuery);
 
   const salesRef = useMemo(() => db ? query(collection(db, 'sales')) : null, [db]);
   const { data: sales } = useCollection<any>(salesRef);
@@ -125,10 +133,45 @@ export default function ReceptionDashboard() {
       </div>
 
       <div className="grid gap-4 md:grid-cols-7">
-        <div className="col-span-4">
+        <div className="col-span-4 space-y-4">
           <Overview />
+          <Card className="shadow-md border-border/40">
+            <CardHeader>
+              <CardTitle>Recent Registrations</CardTitle>
+              <CardDescription>Latest members added to the cloud database.</CardDescription>
+            </CardHeader>
+            <CardContent>
+              <div className="space-y-4">
+                {recentMembers && recentMembers.length > 0 ? (
+                  recentMembers.map((member: any) => (
+                    <div key={member.phone} className="flex items-center justify-between p-3 rounded-lg border bg-muted/20">
+                      <div className="flex items-center gap-3">
+                        <div className="h-10 w-10 rounded-full bg-primary/10 flex items-center justify-center overflow-hidden">
+                          {member.photoData ? (
+                            <img src={member.photoData} className="w-full h-full object-cover" />
+                          ) : (
+                            <UserCircle className="h-6 w-6 text-primary" />
+                          )}
+                        </div>
+                        <div>
+                          <p className="text-sm font-bold">{member.fullName}</p>
+                          <p className="text-[10px] text-muted-foreground">{member.phone}</p>
+                        </div>
+                      </div>
+                      <Badge variant="outline" className="capitalize text-[10px]">{member.type}</Badge>
+                    </div>
+                  ))
+                ) : (
+                  <p className="text-center text-sm text-muted-foreground py-10">No recent registrations found.</p>
+                )}
+              </div>
+              <Button asChild variant="ghost" className="w-full mt-4 text-xs">
+                <Link href="/admin/members">View Full Directory</Link>
+              </Button>
+            </CardContent>
+          </Card>
         </div>
-        <Card className="col-span-3 shadow-md border-border/40">
+        <Card className="col-span-3 shadow-md border-border/40 h-fit">
           <CardHeader>
             <CardTitle className="flex items-center gap-2">
               <Activity className="h-5 w-5 text-primary" />

@@ -143,9 +143,11 @@ export default function SmartEntrancePage() {
           setIsProcessing(false);
         }, 3000);
       }
-    } catch (error) {
-      console.error(error);
+    } catch (error: any) {
       setIsProcessing(false);
+      // Errors handled centrally via errorEmitter if they are permission related, 
+      // or shown via toast for operational issues.
+      toast({ variant: "destructive", title: "Verification Failed", description: error.message || "An error occurred during scanning." });
     }
   };
 
