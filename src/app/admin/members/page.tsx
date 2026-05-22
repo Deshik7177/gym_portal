@@ -375,7 +375,10 @@ export default function MembersListPage() {
 
       {/* Add PT Dialog */}
       <Dialog open={!!memberForPT} onOpenChange={() => setMemberForPT(null)}>
-        <DialogContent className="sm:max-w-[425px]">
+        <DialogContent 
+          className="sm:max-w-[425px]"
+          onOpenAutoFocus={(e) => e.preventDefault()}
+        >
           <DialogHeader>
             <DialogTitle>Add Personal Training</DialogTitle>
             <DialogDescription>
