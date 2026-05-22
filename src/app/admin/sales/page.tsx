@@ -1,4 +1,3 @@
-
 'use client';
 
 import { useState, useMemo } from 'react';
@@ -7,10 +6,13 @@ import {
   Filter, 
   Download,
   Calendar as CalendarIcon,
-  Loader2
+  Loader2,
+  X,
+  CalendarDays
 } from 'lucide-react';
-import { collection, query } from 'firebase/firestore';
+import { collection, query, orderBy } from 'firebase/firestore';
 import { useFirestore, useCollection } from '@/firebase';
+import { format, startOfDay, endOfDay, isWithinInterval, parseISO } from 'date-fns';
 
 import { Button } from '@/components/ui/button';
 import {
@@ -36,13 +38,31 @@ import {
   TableHeader,
   TableRow,
 } from '@/components/ui/table';
+import { Calendar } from "@/components/ui/calendar";
+import {
+  Popover,
+  PopoverContent,
+  PopoverTrigger,
+} from "@/components/ui/popover";
+import { cn } from '@/lib/utils';
+import { Badge } from '@/components/ui/badge';
 
 export default function SalesReportPage() {
   const db = useFirestore();
   const [filter, setFilter] = useState('all');
   const [searchTerm, setSearchTerm] = useState('');
+  
+  // Date filter states
+  const [dateFrom, setDateFrom] = useState<Date | undefined>(undefined);
+  const [dateTo, setDateTo] = useState<Date | undefined>(undefined);
+  const [isFromOpen, setIsFromOpen] = useState(false);
+  const [isToOpen, setIsToOpen] = useState(false);
 
-  const salesRef = useMemo(() => db ? query(collection(db, 'sales')) : null, [db]);
+  const salesRef = useMemo(() => {
+    if (!db) return null;
+    return query(collection(db, 'sales'), orderBy('date', 'desc'));
+  }, [db]);
+  
   const { data: sales, loading } = useCollection<any>(salesRef);
 
   const filteredSales = useMemo(() => {
@@ -50,9 +70,30 @@ export default function SalesReportPage() {
     return sales.filter(s => {
       const matchesSearch = s.memberName?.toLowerCase().includes(searchTerm.toLowerCase());
       const matchesCategory = filter === 'all' || s.category === filter;
-      return matchesSearch && matchesCategory;
+      
+      let matchesDate = true;
+      if (s.date) {
+        const saleDate = parseISO(s.date);
+        if (dateFrom && saleDate < startOfDay(dateFrom)) matchesDate = false;
+        if (dateTo && saleDate > endOfDay(dateTo)) matchesDate = false;
+      } else if (dateFrom || dateTo) {
+        matchesDate = false; // If filtering by date but sale has no date
+      }
+      
+      return matchesSearch && matchesCategory && matchesDate;
     });
-  }, [sales, searchTerm, filter]);
+  }, [sales, searchTerm, filter, dateFrom, dateTo]);
+
+  const totalRevenue = useMemo(() => {
+    return filteredSales.reduce((acc, s) => acc + (s.amount || 0), 0);
+  }, [filteredSales]);
+
+  const resetFilters = () => {
+    setSearchTerm('');
+    setFilter('all');
+    setDateFrom(undefined);
+    setDateTo(undefined);
+  };
 
   if (loading) {
     return (
@@ -69,27 +110,50 @@ export default function SalesReportPage() {
           <h1 className="text-3xl font-bold font-headline">Sales Report</h1>
           <p className="text-muted-foreground">Gym revenue and transaction history.</p>
         </div>
-        <Button variant="outline">
-          <Download className="mr-2 h-4 w-4" /> Export CSV
-        </Button>
+        <div className="flex gap-2">
+          {(searchTerm || filter !== 'all' || dateFrom || dateTo) && (
+            <Button variant="ghost" size="sm" onClick={resetFilters} className="text-xs h-9">
+              <X className="mr-1 h-3 w-3" /> Clear Filters
+            </Button>
+          )}
+          <Button variant="outline" size="sm" className="h-9">
+            <Download className="mr-2 h-4 w-4" /> Export CSV
+          </Button>
+        </div>
+      </div>
+
+      <div className="grid grid-cols-1 md:grid-cols-4 gap-4">
+        <Card className="bg-primary/5 border-primary/10">
+          <CardContent className="pt-6">
+            <div className="text-2xl font-bold">₹{totalRevenue.toLocaleString()}</div>
+            <p className="text-xs text-muted-foreground uppercase tracking-widest font-bold mt-1">Filtered Revenue</p>
+          </CardContent>
+        </Card>
+        <Card>
+          <CardContent className="pt-6">
+            <div className="text-2xl font-bold">{filteredSales.length}</div>
+            <p className="text-xs text-muted-foreground uppercase tracking-widest font-bold mt-1">Transactions</p>
+          </CardContent>
+        </Card>
       </div>
 
       <Card>
-        <CardHeader>
-          <div className="flex flex-col md:flex-row gap-4 justify-between">
-            <div className="flex flex-1 gap-4">
-              <div className="relative flex-1 max-w-sm">
-                <Search className="absolute left-2.5 top-2.5 h-4 w-4 text-muted-foreground" />
-                <Input
-                  placeholder="Search members..."
-                  className="pl-8"
-                  value={searchTerm}
-                  onChange={(e) => setSearchTerm(e.target.value)}
-                />
-              </div>
+        <CardHeader className="border-b pb-6">
+          <div className="grid grid-cols-1 lg:grid-cols-12 gap-4">
+            <div className="lg:col-span-4 relative">
+              <Search className="absolute left-2.5 top-2.5 h-4 w-4 text-muted-foreground" />
+              <Input
+                placeholder="Search members..."
+                className="pl-8"
+                value={searchTerm}
+                onChange={(e) => setSearchTerm(e.target.value)}
+              />
+            </div>
+            
+            <div className="lg:col-span-2">
               <Select value={filter} onValueChange={setFilter}>
-                <SelectTrigger className="w-[180px]">
-                  <Filter className="mr-2 h-4 w-4" />
+                <SelectTrigger>
+                  <Filter className="mr-2 h-4 w-4 text-muted-foreground" />
                   <SelectValue placeholder="Category" />
                 </SelectTrigger>
                 <SelectContent>
@@ -99,12 +163,69 @@ export default function SalesReportPage() {
                 </SelectContent>
               </Select>
             </div>
+
+            <div className="lg:col-span-3">
+              <Popover open={isFromOpen} onOpenChange={setIsFromOpen}>
+                <PopoverTrigger asChild>
+                  <Button
+                    variant={"outline"}
+                    className={cn(
+                      "w-full justify-start text-left font-normal",
+                      !dateFrom && "text-muted-foreground"
+                    )}
+                  >
+                    <CalendarDays className="mr-2 h-4 w-4 text-muted-foreground" />
+                    {dateFrom ? format(dateFrom, "MMM dd, yyyy") : <span>From Date</span>}
+                  </Button>
+                </PopoverTrigger>
+                <PopoverContent className="w-auto p-0" align="start">
+                  <Calendar
+                    mode="single"
+                    selected={dateFrom}
+                    onSelect={(date) => {
+                      setDateFrom(date);
+                      setIsFromOpen(false);
+                    }}
+                    initialFocus
+                  />
+                </PopoverContent>
+              </Popover>
+            </div>
+
+            <div className="lg:col-span-3">
+              <Popover open={isToOpen} onOpenChange={setIsToOpen}>
+                <PopoverTrigger asChild>
+                  <Button
+                    variant={"outline"}
+                    className={cn(
+                      "w-full justify-start text-left font-normal",
+                      !dateTo && "text-muted-foreground"
+                    )}
+                  >
+                    <CalendarDays className="mr-2 h-4 w-4 text-muted-foreground" />
+                    {dateTo ? format(dateTo, "MMM dd, yyyy") : <span>To Date</span>}
+                  </Button>
+                </PopoverTrigger>
+                <PopoverContent className="w-auto p-0" align="start">
+                  <Calendar
+                    mode="single"
+                    selected={dateTo}
+                    onSelect={(date) => {
+                      setDateTo(date);
+                      setIsToOpen(false);
+                    }}
+                    disabled={(date) => dateFrom ? date < dateFrom : false}
+                    initialFocus
+                  />
+                </PopoverContent>
+              </Popover>
+            </div>
           </div>
         </CardHeader>
-        <CardContent>
+        <CardContent className="p-0">
           <Table>
             <TableHeader>
-              <TableRow>
+              <TableRow className="bg-muted/30">
                 <TableHead>Date</TableHead>
                 <TableHead>Member</TableHead>
                 <TableHead>Category</TableHead>
@@ -116,17 +237,23 @@ export default function SalesReportPage() {
               {filteredSales.length > 0 ? (
                 filteredSales.map((sale) => (
                   <TableRow key={sale.id}>
-                    <TableCell>{sale.date}</TableCell>
+                    <TableCell className="text-xs font-mono">
+                      {sale.date ? format(parseISO(sale.date), 'MMM dd, yyyy') : 'N/A'}
+                    </TableCell>
                     <TableCell className="font-medium">{sale.memberName}</TableCell>
-                    <TableCell className="capitalize">{sale.category}</TableCell>
-                    <TableCell>{sale.description}</TableCell>
-                    <TableCell className="text-right font-bold">₹{sale.amount.toFixed(2)}</TableCell>
+                    <TableCell>
+                      <Badge variant="outline" className="capitalize text-[10px] py-0">
+                        {sale.category}
+                      </Badge>
+                    </TableCell>
+                    <TableCell className="text-xs text-muted-foreground">{sale.description}</TableCell>
+                    <TableCell className="text-right font-bold text-primary">₹{sale.amount.toLocaleString()}</TableCell>
                   </TableRow>
                 ))
               ) : (
                 <TableRow>
-                  <TableCell colSpan={5} className="h-24 text-center text-muted-foreground">
-                    No sales records found.
+                  <TableCell colSpan={5} className="h-32 text-center text-muted-foreground italic">
+                    No transactions found for the selected filters.
                   </TableCell>
                 </TableRow>
               )}
