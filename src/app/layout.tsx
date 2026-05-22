@@ -4,6 +4,7 @@ import './globals.css';
 import { cn } from '@/lib/utils';
 import { Inter, Playfair_Display } from 'next/font/google';
 import { FirebaseClientProvider } from '@/firebase';
+import { FirebaseErrorListener } from '@/components/FirebaseErrorListener';
 
 const inter = Inter({ subsets: ['latin'], variable: '--font-inter' });
 const playfairDisplay = Playfair_Display({ subsets: ['latin'], variable: '--font-playfair-display' });
@@ -26,6 +27,7 @@ export default function RootLayout({
       >
         <FirebaseClientProvider>
           {children}
+          <FirebaseErrorListener />
           <Toaster />
         </FirebaseClientProvider>
       </body>

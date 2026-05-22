@@ -2,7 +2,7 @@
 
 import { useState, useEffect, Suspense } from 'react';
 import { useSearchParams, useRouter } from 'next/navigation';
-import { Search, Save, CheckCircle2, Loader2, Info } from 'lucide-react';
+import { Search, CheckCircle2, Loader2, Info } from 'lucide-react';
 import { doc, setDoc, getDoc, serverTimestamp, collection, addDoc } from 'firebase/firestore';
 import { useFirestore } from '@/firebase';
 import { errorEmitter } from '@/firebase/error-emitter';
@@ -52,10 +52,10 @@ function RegisterForm() {
       getDoc(doc(db, 'members', editId)).then(snap => {
         if (snap.exists()) {
           const data = snap.data();
-          setPhone(data.phone);
-          setFullName(data.fullName);
-          setMembershipType(data.type);
-          setDurationStatus(data.status);
+          setPhone(data.phone || '');
+          setFullName(data.fullName || '');
+          setMembershipType(data.type || 'group');
+          setDurationStatus(data.status || 'active');
           setPrice(data.price?.toString() || '');
           setDescription(data.description || '');
           setStartDate(data.startDate || '');
@@ -97,7 +97,7 @@ function RegisterForm() {
     }
   };
 
-  const handleSubmit = (e: React.FormEvent) => {
+  const handleSubmit = async (e: React.FormEvent) => {
     e.preventDefault();
     if (!db) return;
 
@@ -108,23 +108,26 @@ function RegisterForm() {
 
     setLoading(true);
 
-    const memberData = {
+    const memberData: any = {
       fullName,
       phone,
       status: durationStatus,
       type: membershipType,
       price: parseFloat(price) || 0,
-      description,
+      description: description || '',
       startDate: durationStatus === 'non-active' ? startDate : (startDate || null),
       endDate: durationStatus === 'non-active' ? endDate : (endDate || null),
       countOfDays: durationStatus === 'non-active' ? (parseInt(daysCount) || 0) : (parseInt(daysCount) || null),
       updatedAt: serverTimestamp(),
-      createdAt: isEditMode ? undefined : serverTimestamp(),
     };
+
+    if (!isEditMode) {
+      memberData.createdAt = serverTimestamp();
+    }
 
     const docRef = doc(db, 'members', phone);
     
-    // Save Member
+    // Save Member (Optimistic UI handled by Firestore background queue)
     setDoc(docRef, memberData, { merge: true })
       .catch(async () => {
         const permissionError = new FirestorePermissionError({
@@ -146,15 +149,15 @@ function RegisterForm() {
     };
 
     addDoc(collection(db, 'sales'), saleData).catch(async (e) => {
-        console.error("Failed to log sale", e);
+        console.error("Failed to log sale in background", e);
     });
 
-    setLoading(false);
     toast({ 
-      title: "Member Data Saved", 
-      description: isEditMode ? "Profile updated and transaction logged." : "Member details registered. Proceed to Kiosk for face enrollment." 
+      title: "Saved Locally", 
+      description: isEditMode ? "Profile updated." : "Member registered. Syncing to cloud." 
     });
     
+    setLoading(false);
     if (!isEditMode) {
       resetForm();
     }
@@ -178,8 +181,8 @@ function RegisterForm() {
     <div className="flex flex-col gap-6 max-w-4xl mx-auto pb-10">
       <div className="flex flex-col md:flex-row justify-between items-start md:items-center gap-4">
         <div>
-          <h1 className="text-3xl font-bold font-headline">{isEditMode ? 'Manage Profile' : 'New Registration'}</h1>
-          <p className="text-muted-foreground italic">Step 1: Register member details on laptop.</p>
+          <h1 className="text-3xl font-bold font-headline tracking-tight">{isEditMode ? 'Manage Profile' : 'New Registration'}</h1>
+          <p className="text-muted-foreground italic">Staff Portal: Manual Entry</p>
         </div>
         <div className="flex gap-2">
            <Input 
@@ -187,6 +190,7 @@ function RegisterForm() {
              className="w-48" 
              value={searchQuery}
              onChange={(e) => setSearchQuery(e.target.value)}
+             onKeyDown={(e) => e.key === 'Enter' && handleSearch()}
            />
            <Button variant="outline" onClick={handleSearch} disabled={loading}>
              {loading ? <Loader2 className="h-4 w-4 animate-spin" /> : <Search className="h-4 w-4" />}
@@ -197,17 +201,17 @@ function RegisterForm() {
 
       <Alert className="bg-primary/5 border-primary/20">
         <Info className="h-4 w-4 text-primary" />
-        <AlertTitle className="text-primary font-bold">Workflow Tip</AlertTitle>
+        <AlertTitle className="text-primary font-bold">Registration Step</AlertTitle>
         <AlertDescription>
-          Register basic info here on the laptop. Then, use the <b>Entrance Kiosk</b> on a mobile device to capture the member's face identity.
+          Enter member data here. Face enrollment is completed at the <b>Entrance Kiosk</b> using a mobile device.
         </AlertDescription>
       </Alert>
 
       <form onSubmit={handleSubmit} className="grid gap-6">
-        <Card>
+        <Card className="shadow-lg border-border/40">
           <CardHeader>
             <div className="flex items-center justify-between">
-              <CardTitle>Member Information</CardTitle>
+              <CardTitle>Member Details</CardTitle>
               {isEnrolled && <Badge className="bg-green-500">Biometrics Enrolled</Badge>}
             </div>
           </CardHeader>
@@ -215,48 +219,44 @@ function RegisterForm() {
             <div className="grid grid-cols-1 md:grid-cols-2 gap-6">
               <div className="space-y-2">
                 <Label>Full Name</Label>
-                <Input value={fullName} onChange={(e) => setFullName(e.target.value)} required placeholder="e.g. Rahul Sharma" />
+                <Input value={fullName} onChange={(e) => setFullName(e.target.value)} required placeholder="Full name of member" />
               </div>
               <div className="space-y-2">
-                <Label>Phone Number (Primary ID)</Label>
+                <Label>Phone Number (Document ID)</Label>
                 <Input value={phone} onChange={(e) => setPhone(e.target.value)} required readOnly={isEditMode} placeholder="10-digit mobile" />
               </div>
             </div>
 
             <div className="space-y-3 pt-2">
-              <Label>Training Category</Label>
+              <Label className="text-xs uppercase font-bold text-muted-foreground tracking-widest">Training Category</Label>
               <RadioGroup value={membershipType} onValueChange={(v: any) => setMembershipType(v)} className="flex gap-8">
                 <div className="flex items-center space-x-2">
-                  <RadioGroupItem value="group" id="g" /><Label htmlFor="g" className="cursor-pointer">Group Training</Label>
+                  <RadioGroupItem value="group" id="g" /><Label htmlFor="g" className="cursor-pointer font-bold">Group Training</Label>
                 </div>
                 <div className="flex items-center space-x-2">
-                  <RadioGroupItem value="personal" id="p" /><Label htmlFor="p" className="cursor-pointer">Personal Training</Label>
+                  <RadioGroupItem value="personal" id="p" /><Label htmlFor="p" className="cursor-pointer font-bold">Personal Training</Label>
                 </div>
               </RadioGroup>
             </div>
 
             <div className="space-y-3 pt-2">
-              <Label>Membership Status</Label>
+              <Label className="text-xs uppercase font-bold text-muted-foreground tracking-widest">Membership Status</Label>
               <RadioGroup value={durationStatus} onValueChange={(v: any) => setDurationStatus(v)} className="grid grid-cols-1 md:grid-cols-2 gap-4">
-                  <Label htmlFor="am" className={durationStatus === 'active' ? 'border-primary bg-primary/5 p-4 border-2 rounded-lg cursor-pointer' : 'border p-4 rounded-lg cursor-pointer'}>
-                      <div className="flex justify-between items-center">
-                          <span className="font-bold">Active (Ongoing)</span>
-                          <RadioGroupItem value="active" id="am" className="sr-only" />
-                          {durationStatus === 'active' && <CheckCircle2 className="h-4 w-4 text-primary" />}
-                      </div>
+                  <Label htmlFor="am" className={cn("border p-4 rounded-xl cursor-pointer transition-all flex items-center justify-between", durationStatus === 'active' ? "border-primary bg-primary/5 ring-1 ring-primary" : "hover:bg-muted/50")}>
+                      <span className="font-bold">Active (Ongoing)</span>
+                      <RadioGroupItem value="active" id="am" className="sr-only" />
+                      {durationStatus === 'active' && <CheckCircle2 className="h-4 w-4 text-primary" />}
                   </Label>
-                  <Label htmlFor="nm" className={durationStatus === 'non-active' ? 'border-primary bg-primary/5 p-4 border-2 rounded-lg cursor-pointer' : 'border p-4 rounded-lg cursor-pointer'}>
-                      <div className="flex justify-between items-center">
-                          <span className="font-bold">Non-Active (Fixed Term)</span>
-                          <RadioGroupItem value="non-active" id="nm" className="sr-only" />
-                          {durationStatus === 'non-active' && <CheckCircle2 className="h-4 w-4 text-primary" />}
-                      </div>
+                  <Label htmlFor="nm" className={cn("border p-4 rounded-xl cursor-pointer transition-all flex items-center justify-between", durationStatus === 'non-active' ? "border-primary bg-primary/5 ring-1 ring-primary" : "hover:bg-muted/50")}>
+                      <span className="font-bold">Non-Active (Fixed Term)</span>
+                      <RadioGroupItem value="non-active" id="nm" className="sr-only" />
+                      {durationStatus === 'non-active' && <CheckCircle2 className="h-4 w-4 text-primary" />}
                   </Label>
               </RadioGroup>
             </div>
 
             {(durationStatus === 'non-active' || startDate || endDate) && (
-              <div className="grid grid-cols-1 md:grid-cols-3 gap-4 p-4 bg-muted/20 rounded-lg animate-in fade-in zoom-in duration-200">
+              <div className="grid grid-cols-1 md:grid-cols-3 gap-4 p-4 bg-muted/20 rounded-xl border border-dashed border-border/40 animate-in fade-in slide-in-from-top-2">
                 <div className="space-y-1">
                   <Label className="text-[10px] uppercase font-bold text-muted-foreground">Start Date</Label>
                   <Input type="date" value={startDate} onChange={(e) => setStartDate(e.target.value)} required={durationStatus === 'non-active'} />
@@ -266,23 +266,23 @@ function RegisterForm() {
                   <Input type="date" value={endDate} onChange={(e) => setEndDate(e.target.value)} required={durationStatus === 'non-active'} />
                 </div>
                 <div className="space-y-1">
-                  <Label className="text-[10px] uppercase font-bold text-muted-foreground">Total Sessions/Days</Label>
-                  <Input type="number" placeholder="e.g. 30" value={daysCount} onChange={(e) => setDaysCount(e.target.value)} required={durationStatus === 'non-active'} />
+                  <Label className="text-[10px] uppercase font-bold text-muted-foreground">Sessions/Days</Label>
+                  <Input type="number" placeholder="Total count" value={daysCount} onChange={(e) => setDaysCount(e.target.value)} required={durationStatus === 'non-active'} />
                 </div>
               </div>
             )}
 
-            <div className="space-y-2">
-                <Label>Membership Price (INR)</Label>
+            <div className="space-y-2 pt-2">
+                <Label className="text-xs uppercase font-bold text-muted-foreground tracking-widest">Enrollment Fee (INR)</Label>
                 <div className="relative">
-                  <span className="absolute left-3 top-2.5 text-muted-foreground">₹</span>
-                  <Input type="number" className="pl-7 h-12 text-lg" value={price} onChange={(e) => setPrice(e.target.value)} required placeholder="0.00" />
+                  <span className="absolute left-4 top-1/2 -translate-y-1/2 text-muted-foreground font-bold">₹</span>
+                  <Input type="number" className="pl-8 h-12 text-xl font-bold" value={price} onChange={(e) => setPrice(e.target.value)} required placeholder="0.00" />
                 </div>
             </div>
           </CardContent>
-          <CardFooter className="bg-muted/5 border-t p-6">
-            <Button type="submit" className="w-full h-14 text-lg font-bold shadow-xl" disabled={loading}>
-              {loading ? <Loader2 className="h-5 w-5 animate-spin" /> : (isEditMode ? 'Update & Record Payment' : 'Register & Record Payment')}
+          <CardFooter className="bg-muted/10 border-t p-6">
+            <Button type="submit" className="w-full h-14 text-lg font-bold shadow-lg" disabled={loading}>
+              {loading ? <Loader2 className="h-5 w-5 animate-spin mr-2" /> : (isEditMode ? 'Update Member Profile' : 'Complete Registration')}
             </Button>
           </CardFooter>
         </Card>
