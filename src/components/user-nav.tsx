@@ -29,19 +29,14 @@ export default function UserNav() {
         <DropdownMenuLabel className="font-normal">
           <div className="flex flex-col space-y-1">
             <p className="text-sm font-medium leading-none">Deshik</p>
-            <p className="text-xs leading-none text-muted-foreground">admin@zenithgymos.com</p>
+            <p className="text-xs leading-none text-muted-foreground">admin@thrivefit.com</p>
           </div>
         </DropdownMenuLabel>
         <DropdownMenuSeparator />
         <DropdownMenuGroup>
-          <Link href="/dashboard/profile">
+          <Link href="/admin/profile">
             <DropdownMenuItem>
                 Profile
-            </DropdownMenuItem>
-          </Link>
-          <Link href="/dashboard/billing">
-            <DropdownMenuItem>
-                Billing
             </DropdownMenuItem>
           </Link>
           <DropdownMenuItem>Settings</DropdownMenuItem>
