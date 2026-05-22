@@ -6,6 +6,7 @@ let modelsLoadedPromise: Promise<void> | null = null;
 
 /**
  * Loads face-api.js models for local on-device recognition.
+ * Upgraded to SsdMobilenetv1 for professional-grade accuracy.
  */
 export function loadFaceModels() {
   if (typeof window === 'undefined') return Promise.resolve();
@@ -15,8 +16,9 @@ export function loadFaceModels() {
   
   modelsLoadedPromise = (async () => {
     try {
+      // Using SsdMobilenetv1 instead of TinyFaceDetector for significantly higher accuracy
       await Promise.all([
-        faceapi.nets.tinyFaceDetector.loadFromUri(MODEL_URL),
+        faceapi.nets.ssdMobilenetv1.loadFromUri(MODEL_URL),
         faceapi.nets.faceLandmark68Net.loadFromUri(MODEL_URL),
         faceapi.nets.faceRecognitionNet.loadFromUri(MODEL_URL),
       ]);
@@ -31,7 +33,7 @@ export function loadFaceModels() {
 }
 
 /**
- * Check for face presence.
+ * Check for face presence using high-accuracy SSD Mobilenet.
  */
 export async function isFaceInFrame(input: HTMLVideoElement | HTMLCanvasElement | HTMLImageElement) {
   if (input instanceof HTMLVideoElement) {
@@ -41,9 +43,9 @@ export async function isFaceInFrame(input: HTMLVideoElement | HTMLCanvasElement 
   
   await loadFaceModels();
   
-  const options = new faceapi.TinyFaceDetectorOptions({ 
-    inputSize: 224, 
-    scoreThreshold: 0.4 
+  // SsdMobilenetv1 is much more robust for registration
+  const options = new faceapi.SsdMobilenetv1Options({ 
+    minConfidence: 0.3 // More permissive for detection to ensure we find the face
   });
   
   const detection = await faceapi.detectSingleFace(input, options);
@@ -62,16 +64,15 @@ export function cosineSimilarity(vecA: number[], vecB: number[]) {
 }
 
 /**
- * Generates 128D face descriptor.
+ * Generates 128D face descriptor using high-accuracy SSD Mobilenet.
  */
 export async function generateEmbedding(input: HTMLVideoElement | HTMLCanvasElement | HTMLImageElement) {
   if (input instanceof HTMLVideoElement && input.readyState < 2) return null;
   
   await loadFaceModels();
   
-  const options = new faceapi.TinyFaceDetectorOptions({ 
-    inputSize: 320, 
-    scoreThreshold: 0.4 
+  const options = new faceapi.SsdMobilenetv1Options({ 
+    minConfidence: 0.3 
   });
   
   try {
