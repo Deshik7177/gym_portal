@@ -12,13 +12,14 @@ import {
   Trash2, 
   Plus, 
   Calendar as CalendarIcon,
-  CreditCard
+  CreditCard,
+  Info
 } from 'lucide-react';
 import { collection, query, doc, deleteDoc, updateDoc, serverTimestamp, addDoc } from 'firebase/firestore';
 import { useFirestore, useCollection } from '@/firebase';
 import Link from 'next/link';
 import { useRouter } from 'next/navigation';
-import { format } from 'date-fns';
+import { format, isWithinInterval, startOfDay, parseISO } from 'date-fns';
 
 import { Badge } from '@/components/ui/badge';
 import { Button } from '@/components/ui/button';
@@ -75,6 +76,7 @@ import {
   PopoverTrigger,
 } from "@/components/ui/popover";
 import { cn } from '@/lib/utils';
+import { Alert, AlertDescription } from '@/components/ui/alert';
 
 export default function MembersListPage() {
   const db = useFirestore();
@@ -134,16 +136,40 @@ export default function MembersListPage() {
       });
   };
 
+  // Helper to check if a date is within member's subscription
+  const isDateDisabled = (date: Date) => {
+    if (!memberForPT || memberForPT.status !== 'non-active') return false;
+    
+    try {
+      const start = startOfDay(parseISO(memberForPT.startDate));
+      const end = startOfDay(parseISO(memberForPT.endDate));
+      return !isWithinInterval(startOfDay(date), { start, end });
+    } catch (e) {
+      return false;
+    }
+  };
+
   const handleAddPT = () => {
     if (!db || !memberForPT) return;
+    
+    if (!ptStartDate || !ptEndDate) {
+      toast({ variant: "destructive", title: "Dates Required", description: "Please select start and end dates for PT." });
+      return;
+    }
+
+    if (ptEndDate < ptStartDate) {
+      toast({ variant: "destructive", title: "Invalid Dates", description: "End date cannot be before start date." });
+      return;
+    }
+
     setIsUpdatingPT(true);
 
     const docRef = doc(db, 'members', memberForPT.phone);
     const updateData = {
       type: 'personal',
       price: parseFloat(ptPrice) || memberForPT.price,
-      startDate: ptStartDate ? format(ptStartDate, 'yyyy-MM-dd') : memberForPT.startDate || null,
-      endDate: ptEndDate ? format(ptEndDate, 'yyyy-MM-dd') : memberForPT.endDate || null,
+      startDate: format(ptStartDate, 'yyyy-MM-dd'),
+      endDate: format(ptEndDate, 'yyyy-MM-dd'),
       updatedAt: serverTimestamp(),
     };
 
@@ -155,7 +181,7 @@ export default function MembersListPage() {
           amount: parseFloat(ptPrice) || 0,
           date: new Date().toISOString().split('T')[0],
           category: 'personal training',
-          description: `PT Package: ${ptStartDate ? format(ptStartDate, 'MMM dd') : 'Today'} to ${ptEndDate ? format(ptEndDate, 'MMM dd') : 'End'}`,
+          description: `PT Package: ${format(ptStartDate, 'MMM dd')} to ${format(ptEndDate, 'MMM dd')}`,
           createdAt: serverTimestamp()
         };
         
@@ -385,6 +411,17 @@ export default function MembersListPage() {
               Upgrade <b>{memberForPT?.fullName}</b> to Personal Training membership.
             </DialogDescription>
           </DialogHeader>
+
+          {memberForPT?.status === 'non-active' && (
+            <Alert className="bg-accent/10 border-accent/20">
+              <Info className="h-4 w-4 text-accent" />
+              <AlertDescription className="text-xs italic">
+                Dates restricted to membership period: <br/>
+                <b>{memberForPT.startDate}</b> to <b>{memberForPT.endDate}</b>
+              </AlertDescription>
+            </Alert>
+          )}
+
           <div className="grid gap-4 py-4">
             <div className="grid gap-2">
               <Label>PT Package Price (INR)</Label>
@@ -420,7 +457,6 @@ export default function MembersListPage() {
                     className="w-auto p-0 z-[60]" 
                     align="start" 
                     onOpenAutoFocus={(e) => e.preventDefault()}
-                    onCloseAutoFocus={(e) => e.preventDefault()}
                   >
                     <Calendar
                       mode="single"
@@ -431,6 +467,7 @@ export default function MembersListPage() {
                           setIsPtStartDateOpen(false);
                         }
                       }}
+                      disabled={isDateDisabled}
                       initialFocus
                     />
                   </PopoverContent>
@@ -456,7 +493,6 @@ export default function MembersListPage() {
                     className="w-auto p-0 z-[60]" 
                     align="start"
                     onOpenAutoFocus={(e) => e.preventDefault()}
-                    onCloseAutoFocus={(e) => e.preventDefault()}
                   >
                     <Calendar
                       mode="single"
@@ -467,6 +503,7 @@ export default function MembersListPage() {
                           setIsPtEndDateOpen(false);
                         }
                       }}
+                      disabled={(date) => isDateDisabled(date) || (ptStartDate ? date < ptStartDate : false)}
                       initialFocus
                     />
                   </PopoverContent>
