@@ -16,9 +16,10 @@ import {
   History,
   AlertCircle,
   Zap,
-  Activity
+  Activity,
+  Cloud
 } from 'lucide-react';
-import { collection, query, where, updateDoc, doc, serverTimestamp, getDoc, onSnapshot } from 'firebase/firestore';
+import { collection, query, updateDoc, doc, serverTimestamp, getDoc, onSnapshot } from 'firebase/firestore';
 import { useFirestore } from '@/firebase';
 import { loadFaceModels, detectFacePassive, findBestMatch, checkFrameQuality } from '@/lib/face-logic';
 import * as faceapi from 'face-api.js';
@@ -49,6 +50,7 @@ export default function SmartEntrancePage() {
   const [scanResult, setScanResult] = useState<'success' | 'failure' | null>(null);
   const [recentLogs, setRecentLogs] = useState<any[]>([]);
   const [cachedMembers, setCachedMembers] = useState<any[]>([]);
+  const [isSyncing, setIsSyncing] = useState(false);
   const [searchPhone, setSearchPhone] = useState('');
   const [pendingMember, setPendingMember] = useState<any>(null);
   const [enrollProgress, setEnrollProgress] = useState(0);
@@ -58,9 +60,9 @@ export default function SmartEntrancePage() {
   const passiveLoopTimeoutRef = useRef<NodeJS.Timeout | null>(null);
 
   // Preload all active embeddings into local memory for instant matching
-  // Removed strict server-side 'where' clause to avoid potential indexing lag or string mismatches
   useEffect(() => {
     if (!db) return;
+    setIsSyncing(true);
     const q = query(collection(db, 'members'));
     const unsubscribe = onSnapshot(q, (snapshot) => {
       const members = snapshot.docs
@@ -72,7 +74,9 @@ export default function SmartEntrancePage() {
           m.faceEmbedding.length > 0
         );
       setCachedMembers(members);
+      setIsSyncing(false);
     }, (error) => {
+      setIsSyncing(false);
       errorEmitter.emit('permission-error', new FirestorePermissionError({
         path: 'members',
         operation: 'list',
@@ -112,10 +116,6 @@ export default function SmartEntrancePage() {
     if (passiveLoopTimeoutRef.current) clearTimeout(passiveLoopTimeoutRef.current);
   };
 
-  /**
-   * High-Precision Multi-frame verification logic.
-   * Finalizes the scan by averaging results from 5 high-quality samples.
-   */
   const finalizeScan = useCallback((results: { member: any, similarity: number }[]) => {
     setIsProcessing(false);
     setFeedback('');
@@ -126,7 +126,6 @@ export default function SmartEntrancePage() {
       return;
     }
 
-    // Group by member and find average similarity across frames
     const memberStats: Record<string, { member: any, totalSim: number, count: number }> = {};
     results.forEach(r => {
       if (!memberStats[r.member.id]) {
@@ -140,7 +139,6 @@ export default function SmartEntrancePage() {
       .map(v => ({ member: v.member, avgSim: v.totalSim / v.count }))
       .sort((a, b) => b.avgSim - a.avgSim)[0];
 
-    // Threshold 0.84 for definite auth as per precision guidelines
     if (bestFinal && bestFinal.avgSim >= 0.84 && db) {
       const memberRef = doc(db, 'members', bestFinal.member.id);
       const updateData = { lastCheckIn: serverTimestamp(), updatedAt: serverTimestamp() };
@@ -161,7 +159,6 @@ export default function SmartEntrancePage() {
           confidence: (bestFinal.avgSim * 100).toFixed(0) + '%'
       }, ...prev].slice(0, 10));
 
-      // Reset UI after 5 seconds
       setTimeout(() => { 
           setScanResult(null); 
           setIdentifiedMember(null); 
@@ -172,9 +169,6 @@ export default function SmartEntrancePage() {
     }
   }, [db]);
 
-  /**
-   * Trigger high-precision SSD verification flow.
-   */
   const triggerVerification = useCallback(async () => {
     if (!modelsReady || isProcessing || scanResult || !videoRef.current || !db || cachedMembers.length === 0) return;
 
@@ -188,7 +182,7 @@ export default function SmartEntrancePage() {
     const maxFrames = 40; 
 
     const processFrame = async () => {
-      if (!videoRef.current || !isCameraActive) {
+      if (!videoRef.current || !isCameraActive || !isProcessing) {
         setIsProcessing(false);
         return;
       }
@@ -229,10 +223,6 @@ export default function SmartEntrancePage() {
     scanLoopRef.current = requestAnimationFrame(processFrame);
   }, [modelsReady, isProcessing, scanResult, isCameraActive, cachedMembers, finalizeScan, db]);
 
-  /**
-   * Passive detection loop: Uses TinyFaceDetector to watch for faces without heavy CPU usage.
-   * Auto-triggers high-precision scan when a face is present.
-   */
   useEffect(() => {
     if (activeMode === 'kiosk' && isCameraActive && modelsReady && !isProcessing && !scanResult) {
       const passiveDetection = async () => {
@@ -241,10 +231,8 @@ export default function SmartEntrancePage() {
         try {
           const detection = await detectFacePassive(videoRef.current);
           if (detection && detection.score > 0.55) {
-            // Face detected! Start the high-precision authentication flow.
             triggerVerification();
           } else {
-            // No face, check again in 600ms
             passiveLoopTimeoutRef.current = setTimeout(passiveDetection, 600);
           }
         } catch (e) {
@@ -271,9 +259,6 @@ export default function SmartEntrancePage() {
     }
   };
 
-  /**
-   * Multi-sample enrollment flow for stable master embeddings.
-   */
   const handleCaptureEnrollment = async () => {
     if (!videoRef.current || !db || !pendingMember || !modelsReady) return;
     setIsProcessing(true);
@@ -285,13 +270,12 @@ export default function SmartEntrancePage() {
     const ssdOptions = new faceapi.SsdMobilenetv1Options({ minConfidence: 0.5 });
 
     const enrollLoop = async () => {
-      if (!videoRef.current || !isCameraActive) {
+      if (!videoRef.current || !isCameraActive || !isProcessing) {
         setIsProcessing(false);
         return;
       }
 
       if (samples.length >= maxSamples) {
-        // Average the embeddings for a stable signature
         const averaged = samples[0].map((_, i) => 
           samples.reduce((acc, sample) => acc + sample[i], 0) / samples.length
         );
@@ -347,7 +331,10 @@ export default function SmartEntrancePage() {
     <div className="max-w-7xl mx-auto space-y-6 pb-20">
       <div className="flex flex-col gap-2">
          <h1 className="text-3xl font-bold font-headline">Smart Kiosk</h1>
-         <p className="text-muted-foreground italic">Continuous Biometric Monitoring Active</p>
+         <div className="flex items-center gap-2">
+            <p className="text-muted-foreground italic text-sm">Continuous Biometric Monitoring Active</p>
+            {isSyncing && <Badge variant="outline" className="h-5 text-[9px] animate-pulse border-primary/20 bg-primary/5"><Cloud className="h-2 w-2 mr-1" /> SYNCING DB</Badge>}
+         </div>
       </div>
 
       <Tabs value={activeMode} onValueChange={(v: any) => { setActiveMode(v); setScanResult(null); setIsProcessing(false); }} className="w-full">
@@ -422,8 +409,8 @@ export default function SmartEntrancePage() {
                 <div className="flex flex-col sm:flex-row items-center justify-between gap-4">
                   <div className="space-y-1">
                     <p className="text-[10px] font-black text-muted-foreground uppercase tracking-[0.4em]">Biometric Status</p>
-                    <span className="text-[10px] font-mono text-primary/80">
-                        {modelsReady ? (cachedMembers.length > 0 ? 'Watching for member presence...' : 'No active members preloaded') : 'Booting Neural Pipeline...'}
+                    <span className="text-[10px] font-mono text-primary/80 uppercase">
+                        {modelsReady ? (cachedMembers.length > 0 ? `Watching ${cachedMembers.length} Active Profiles` : 'Waiting for biometric data...') : 'Booting Neural Pipeline...'}
                     </span>
                   </div>
                   <div className="flex gap-2 w-full sm:w-auto">
