@@ -279,8 +279,10 @@ function RegisterForm() {
                           mode="single"
                           selected={startDate}
                           onSelect={(date) => {
-                            setStartDate(date);
-                            setIsStartDateOpen(false);
+                            if (date) {
+                              setStartDate(date);
+                              setIsStartDateOpen(false);
+                            }
                           }}
                           initialFocus
                         />
@@ -309,8 +311,10 @@ function RegisterForm() {
                           mode="single"
                           selected={endDate}
                           onSelect={(date) => {
-                            setEndDate(date);
-                            setIsEndDateOpen(false);
+                            if (date) {
+                              setEndDate(date);
+                              setIsEndDateOpen(false);
+                            }
                           }}
                           initialFocus
                         />
