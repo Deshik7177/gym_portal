@@ -1,3 +1,4 @@
+
 'use client';
 
 import { useState, useEffect, Suspense, useMemo } from 'react';
@@ -262,7 +263,7 @@ function RegisterForm() {
                       <CalendarIcon className="h-4 w-4 text-primary" />
                       Start Date
                     </Label>
-                    <Popover open={isStartDateOpen} onOpenChange={setIsStartDateOpen}>
+                    <Popover open={isStartDateOpen} onOpenChange={setIsStartDateOpen} modal={false}>
                       <PopoverTrigger asChild>
                         <Button
                           type="button"
@@ -275,7 +276,12 @@ function RegisterForm() {
                           {startDate ? format(startDate, "PPP") : <span>Pick a date</span>}
                         </Button>
                       </PopoverTrigger>
-                      <PopoverContent className="w-auto p-0" align="start">
+                      <PopoverContent 
+                        className="w-auto p-0 z-[60]" 
+                        align="start"
+                        onOpenAutoFocus={(e) => e.preventDefault()}
+                        onCloseAutoFocus={(e) => e.preventDefault()}
+                      >
                         <Calendar
                           mode="single"
                           selected={startDate}
@@ -295,7 +301,7 @@ function RegisterForm() {
                       <CalendarIcon className="h-4 w-4 text-primary" />
                       End Date
                     </Label>
-                    <Popover open={isEndDateOpen} onOpenChange={setIsEndDateOpen}>
+                    <Popover open={isEndDateOpen} onOpenChange={setIsEndDateOpen} modal={false}>
                       <PopoverTrigger asChild>
                         <Button
                           type="button"
@@ -308,7 +314,12 @@ function RegisterForm() {
                           {endDate ? format(endDate, "PPP") : <span>Pick a date</span>}
                         </Button>
                       </PopoverTrigger>
-                      <PopoverContent className="w-auto p-0" align="start">
+                      <PopoverContent 
+                        className="w-auto p-0 z-[60]" 
+                        align="start"
+                        onOpenAutoFocus={(e) => e.preventDefault()}
+                        onCloseAutoFocus={(e) => e.preventDefault()}
+                      >
                         <Calendar
                           mode="single"
                           selected={endDate}

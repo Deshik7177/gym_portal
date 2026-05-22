@@ -1,3 +1,4 @@
+
 'use client';
 
 import { useState, useMemo } from 'react';
@@ -401,7 +402,7 @@ export default function MembersListPage() {
                 <Label className="text-xs uppercase font-bold text-muted-foreground flex items-center gap-1 mb-1.5">
                   <CalendarIcon className="h-3 w-3" /> Start
                 </Label>
-                <Popover open={isPtStartDateOpen} onOpenChange={setIsPtStartDateOpen}>
+                <Popover open={isPtStartDateOpen} onOpenChange={setIsPtStartDateOpen} modal={false}>
                   <PopoverTrigger asChild>
                     <Button
                       variant={"outline"}
@@ -413,7 +414,12 @@ export default function MembersListPage() {
                       {ptStartDate ? format(ptStartDate, "PPP") : <span>Pick a date</span>}
                     </Button>
                   </PopoverTrigger>
-                  <PopoverContent className="w-auto p-0" align="start" onFocusOutside={(e) => e.preventDefault()}>
+                  <PopoverContent 
+                    className="w-auto p-0 z-[60]" 
+                    align="start" 
+                    onOpenAutoFocus={(e) => e.preventDefault()}
+                    onCloseAutoFocus={(e) => e.preventDefault()}
+                  >
                     <Calendar
                       mode="single"
                       selected={ptStartDate}
@@ -432,7 +438,7 @@ export default function MembersListPage() {
                 <Label className="text-xs uppercase font-bold text-muted-foreground flex items-center gap-1 mb-1.5">
                   <CalendarIcon className="h-3 w-3" /> End
                 </Label>
-                <Popover open={isPtEndDateOpen} onOpenChange={setIsPtEndDateOpen}>
+                <Popover open={isPtEndDateOpen} onOpenChange={setIsPtEndDateOpen} modal={false}>
                   <PopoverTrigger asChild>
                     <Button
                       variant={"outline"}
@@ -444,7 +450,12 @@ export default function MembersListPage() {
                       {ptEndDate ? format(ptEndDate, "PPP") : <span>Pick a date</span>}
                     </Button>
                   </PopoverTrigger>
-                  <PopoverContent className="w-auto p-0" align="start" onFocusOutside={(e) => e.preventDefault()}>
+                  <PopoverContent 
+                    className="w-auto p-0 z-[60]" 
+                    align="start"
+                    onOpenAutoFocus={(e) => e.preventDefault()}
+                    onCloseAutoFocus={(e) => e.preventDefault()}
+                  >
                     <Calendar
                       mode="single"
                       selected={ptEndDate}
