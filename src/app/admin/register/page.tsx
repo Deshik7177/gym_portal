@@ -123,7 +123,6 @@ function RegisterForm() {
 
     const docRef = doc(db, 'members', phone);
     
-    // Perform writes without awaiting to take advantage of local persistence and background sync
     setDoc(docRef, memberData, { merge: true })
       .then(() => {
         const saleData = {
@@ -138,8 +137,8 @@ function RegisterForm() {
         addDoc(collection(db, 'sales'), saleData);
 
         toast({ 
-          title: "Saved Locally", 
-          description: "Member registered. Syncing to cloud." 
+          title: "Saved Successfully", 
+          description: "Member records are synced with the cloud." 
         });
         
         if (!isEditMode) resetForm();
@@ -194,9 +193,9 @@ function RegisterForm() {
 
       <Alert className="bg-primary/5 border-primary/20">
         <Info className="h-4 w-4 text-primary" />
-        <AlertTitle className="text-primary font-bold">Cloud Sync Active</AlertTitle>
+        <AlertTitle className="text-primary font-bold">Thrive Fit Cloud Sync</AlertTitle>
         <AlertDescription>
-          Data is saving locally and automatically syncing to your Firebase Console.
+          Member data is automatically synchronized with your Cloud Firestore database.
         </AlertDescription>
       </Alert>
 
