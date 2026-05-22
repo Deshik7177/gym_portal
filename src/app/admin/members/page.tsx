@@ -20,6 +20,7 @@ import { collection, query, doc, deleteDoc, updateDoc, serverTimestamp, addDoc }
 import { useFirestore, useCollection } from '@/firebase';
 import Link from 'next/link';
 import { useRouter } from 'next/navigation';
+import { format } from 'date-fns';
 
 import { Badge } from '@/components/ui/badge';
 import { Button } from '@/components/ui/button';
@@ -69,6 +70,13 @@ import { Label } from '@/components/ui/label';
 import { useToast } from '@/hooks/use-toast';
 import { errorEmitter } from '@/firebase/error-emitter';
 import { FirestorePermissionError, type SecurityRuleContext } from '@/firebase/errors';
+import { Calendar } from "@/components/ui/calendar";
+import {
+  Popover,
+  PopoverContent,
+  PopoverTrigger,
+} from "@/components/ui/popover";
+import { cn } from '@/lib/utils';
 
 export default function MembersListPage() {
   const db = useFirestore();
@@ -83,8 +91,8 @@ export default function MembersListPage() {
   
   // PT Dialog States
   const [ptPrice, setPtPrice] = useState('');
-  const [ptStartDate, setPtStartDate] = useState('');
-  const [ptEndDate, setPtEndDate] = useState('');
+  const [ptStartDate, setPtStartDate] = useState<Date | undefined>(undefined);
+  const [ptEndDate, setPtEndDate] = useState<Date | undefined>(undefined);
 
   const membersRef = useMemo(() => db ? query(collection(db, 'members')) : null, [db]);
   const { data: members, loading } = useCollection<any>(membersRef);
@@ -134,21 +142,20 @@ export default function MembersListPage() {
     const updateData = {
       type: 'personal',
       price: parseFloat(ptPrice) || memberForPT.price,
-      startDate: ptStartDate || memberForPT.startDate || null,
-      endDate: ptEndDate || memberForPT.endDate || null,
+      startDate: ptStartDate ? format(ptStartDate, 'yyyy-MM-dd') : memberForPT.startDate || null,
+      endDate: ptEndDate ? format(ptEndDate, 'yyyy-MM-dd') : memberForPT.endDate || null,
       updatedAt: serverTimestamp(),
     };
 
     updateDoc(docRef, updateData)
       .then(() => {
-        // Record the PT Sale
         const saleData = {
           memberId: memberForPT.phone,
           memberName: memberForPT.fullName,
           amount: parseFloat(ptPrice) || 0,
           date: new Date().toISOString().split('T')[0],
           category: 'personal training',
-          description: `PT Package: ${ptStartDate || 'Today'} to ${ptEndDate || 'End'}`,
+          description: `PT Package: ${ptStartDate ? format(ptStartDate, 'MMM dd') : 'Today'} to ${ptEndDate ? format(ptEndDate, 'MMM dd') : 'End'}`,
           createdAt: serverTimestamp()
         };
         
@@ -166,8 +173,8 @@ export default function MembersListPage() {
         });
         setMemberForPT(null);
         setPtPrice('');
-        setPtStartDate('');
-        setPtEndDate('');
+        setPtStartDate(undefined);
+        setPtEndDate(undefined);
       })
       .catch(async (e) => {
         const permissionError = new FirestorePermissionError({
@@ -390,17 +397,57 @@ export default function MembersListPage() {
               </div>
             </div>
             <div className="grid grid-cols-2 gap-4">
-              <div className="grid gap-2">
-                <Label className="text-xs uppercase font-bold text-muted-foreground flex items-center gap-1">
+              <div className="grid gap-2 flex flex-col">
+                <Label className="text-xs uppercase font-bold text-muted-foreground flex items-center gap-1 mb-1.5">
                   <CalendarIcon className="h-3 w-3" /> Start
                 </Label>
-                <Input type="date" value={ptStartDate} onChange={(e) => setPtStartDate(e.target.value)} />
+                <Popover>
+                  <PopoverTrigger asChild>
+                    <Button
+                      variant={"outline"}
+                      className={cn(
+                        "w-full justify-start text-left font-normal",
+                        !ptStartDate && "text-muted-foreground"
+                      )}
+                    >
+                      {ptStartDate ? format(ptStartDate, "PPP") : <span>Pick a date</span>}
+                    </Button>
+                  </PopoverTrigger>
+                  <PopoverContent className="w-auto p-0" align="start">
+                    <Calendar
+                      mode="single"
+                      selected={ptStartDate}
+                      onSelect={setPtStartDate}
+                      initialFocus
+                    />
+                  </PopoverContent>
+                </Popover>
               </div>
-              <div className="grid gap-2">
-                <Label className="text-xs uppercase font-bold text-muted-foreground flex items-center gap-1">
+              <div className="grid gap-2 flex flex-col">
+                <Label className="text-xs uppercase font-bold text-muted-foreground flex items-center gap-1 mb-1.5">
                   <CalendarIcon className="h-3 w-3" /> End
                 </Label>
-                <Input type="date" value={ptEndDate} onChange={(e) => setPtEndDate(e.target.value)} />
+                <Popover>
+                  <PopoverTrigger asChild>
+                    <Button
+                      variant={"outline"}
+                      className={cn(
+                        "w-full justify-start text-left font-normal",
+                        !ptEndDate && "text-muted-foreground"
+                      )}
+                    >
+                      {ptEndDate ? format(ptEndDate, "PPP") : <span>Pick a date</span>}
+                    </Button>
+                  </PopoverTrigger>
+                  <PopoverContent className="w-auto p-0" align="start">
+                    <Calendar
+                      mode="single"
+                      selected={ptEndDate}
+                      onSelect={setPtEndDate}
+                      initialFocus
+                    />
+                  </PopoverContent>
+                </Popover>
               </div>
             </div>
           </div>

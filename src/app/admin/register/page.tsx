@@ -8,6 +8,7 @@ import { useFirestore } from '@/firebase';
 import { errorEmitter } from '@/firebase/error-emitter';
 import { FirestorePermissionError, type SecurityRuleContext } from '@/firebase/errors';
 import { cn } from '@/lib/utils';
+import { format } from 'date-fns';
 
 import { Button } from '@/components/ui/button';
 import {
@@ -24,6 +25,12 @@ import { RadioGroup, RadioGroupItem } from '@/components/ui/radio-group';
 import { useToast } from '@/hooks/use-toast';
 import { Badge } from '@/components/ui/badge';
 import { Alert, AlertDescription, AlertTitle } from '@/components/ui/alert';
+import { Calendar } from "@/components/ui/calendar";
+import {
+  Popover,
+  PopoverContent,
+  PopoverTrigger,
+} from "@/components/ui/popover";
 
 function RegisterForm() {
   const { toast } = useToast();
@@ -39,8 +46,8 @@ function RegisterForm() {
   const [durationStatus, setDurationStatus] = useState<'active' | 'non-active'>('active');
   const [price, setPrice] = useState('');
   const [description, setDescription] = useState('');
-  const [startDate, setStartDate] = useState('');
-  const [endDate, setEndDate] = useState('');
+  const [startDate, setStartDate] = useState<Date | undefined>(undefined);
+  const [endDate, setEndDate] = useState<Date | undefined>(undefined);
   
   const [loading, setLoading] = useState(false);
   const [isEnrolled, setIsEnrolled] = useState(false);
@@ -56,8 +63,8 @@ function RegisterForm() {
           setDurationStatus(data.status || 'active');
           setPrice(data.price?.toString() || '');
           setDescription(data.description || '');
-          setStartDate(data.startDate || '');
-          setEndDate(data.endDate || '');
+          setStartDate(data.startDate ? new Date(data.startDate) : undefined);
+          setEndDate(data.endDate ? new Date(data.endDate) : undefined);
           setIsEnrolled(!!data.faceEmbedding);
           setIsEditMode(true);
         }
@@ -78,8 +85,8 @@ function RegisterForm() {
         setDurationStatus(data.status);
         setPrice(data.price?.toString() || '');
         setDescription(data.description || '');
-        setStartDate(data.startDate || '');
-        setEndDate(data.endDate || '');
+        setStartDate(data.startDate ? new Date(data.startDate) : undefined);
+        setEndDate(data.endDate ? new Date(data.endDate) : undefined);
         setIsEnrolled(!!data.faceEmbedding);
         setIsEditMode(true);
       } else {
@@ -107,11 +114,11 @@ function RegisterForm() {
       fullName,
       phone,
       status: durationStatus,
-      type: 'group', // Default training type for new registrations
+      type: 'group',
       price: parseFloat(price) || 0,
       description: description || '',
-      startDate: startDate || null,
-      endDate: endDate || null,
+      startDate: startDate ? format(startDate, 'yyyy-MM-dd') : null,
+      endDate: endDate ? format(endDate, 'yyyy-MM-dd') : null,
       updatedAt: serverTimestamp(),
     };
 
@@ -160,8 +167,8 @@ function RegisterForm() {
     setPrice('');
     setDescription('');
     setSearchQuery('');
-    setStartDate('');
-    setEndDate('');
+    setStartDate(undefined);
+    setEndDate(undefined);
     setIsEnrolled(false);
     router.replace('/admin/register');
   };
@@ -234,19 +241,59 @@ function RegisterForm() {
 
             {durationStatus === 'non-active' && (
               <div className="grid grid-cols-1 md:grid-cols-2 gap-6 pt-2 animate-in fade-in slide-in-from-top-2">
-                <div className="space-y-2">
-                  <Label className="flex items-center gap-2">
+                <div className="space-y-2 flex flex-col">
+                  <Label className="flex items-center gap-2 mb-1.5">
                     <CalendarIcon className="h-4 w-4 text-primary" />
                     Start Date
                   </Label>
-                  <Input type="date" value={startDate} onChange={(e) => setStartDate(e.target.value)} required />
+                  <Popover>
+                    <PopoverTrigger asChild>
+                      <Button
+                        variant={"outline"}
+                        className={cn(
+                          "w-full justify-start text-left font-normal h-10",
+                          !startDate && "text-muted-foreground"
+                        )}
+                      >
+                        {startDate ? format(startDate, "PPP") : <span>Pick a date</span>}
+                      </Button>
+                    </PopoverTrigger>
+                    <PopoverContent className="w-auto p-0" align="start">
+                      <Calendar
+                        mode="single"
+                        selected={startDate}
+                        onSelect={setStartDate}
+                        initialFocus
+                      />
+                    </PopoverContent>
+                  </Popover>
                 </div>
-                <div className="space-y-2">
-                  <Label className="flex items-center gap-2">
+                <div className="space-y-2 flex flex-col">
+                  <Label className="flex items-center gap-2 mb-1.5">
                     <CalendarIcon className="h-4 w-4 text-primary" />
                     End Date
                   </Label>
-                  <Input type="date" value={endDate} onChange={(e) => setEndDate(e.target.value)} required />
+                  <Popover>
+                    <PopoverTrigger asChild>
+                      <Button
+                        variant={"outline"}
+                        className={cn(
+                          "w-full justify-start text-left font-normal h-10",
+                          !endDate && "text-muted-foreground"
+                        )}
+                      >
+                        {endDate ? format(endDate, "PPP") : <span>Pick a date</span>}
+                      </Button>
+                    </PopoverTrigger>
+                    <PopoverContent className="w-auto p-0" align="start">
+                      <Calendar
+                        mode="single"
+                        selected={endDate}
+                        onSelect={setEndDate}
+                        initialFocus
+                      />
+                    </PopoverContent>
+                  </Popover>
                 </div>
               </div>
             )}
