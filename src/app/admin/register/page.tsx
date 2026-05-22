@@ -2,7 +2,7 @@
 
 import { useState, useEffect, Suspense } from 'react';
 import { useSearchParams, useRouter } from 'next/navigation';
-import { Search, CheckCircle2, Loader2, Info, AlertTriangle } from 'lucide-react';
+import { Search, CheckCircle2, Loader2, Info } from 'lucide-react';
 import { doc, setDoc, getDoc, serverTimestamp, collection, addDoc } from 'firebase/firestore';
 import { useFirestore } from '@/firebase';
 import { errorEmitter } from '@/firebase/error-emitter';
@@ -102,11 +102,6 @@ function RegisterForm() {
     e.preventDefault();
     if (!db) return;
 
-    if (durationStatus === 'non-active' && (!startDate || !endDate)) {
-      toast({ variant: "destructive", title: "Date Required", description: "Non-active members require validity dates." });
-      return;
-    }
-
     setLoading(true);
 
     const memberData: any = {
@@ -116,9 +111,9 @@ function RegisterForm() {
       type: membershipType,
       price: parseFloat(price) || 0,
       description: description || '',
-      startDate: durationStatus === 'non-active' ? startDate : (startDate || null),
-      endDate: durationStatus === 'non-active' ? endDate : (endDate || null),
-      countOfDays: durationStatus === 'non-active' ? (parseInt(daysCount) || 0) : (parseInt(daysCount) || null),
+      startDate: startDate || null,
+      endDate: endDate || null,
+      countOfDays: parseInt(daysCount) || null,
       updatedAt: serverTimestamp(),
     };
 
@@ -128,50 +123,37 @@ function RegisterForm() {
 
     const docRef = doc(db, 'members', phone);
     
-    try {
-      // Create/Update the member document. Firestore creates collections automatically.
-      await setDoc(docRef, memberData, { merge: true });
+    // Perform writes without awaiting to take advantage of local persistence and background sync
+    setDoc(docRef, memberData, { merge: true })
+      .then(() => {
+        const saleData = {
+          memberId: phone,
+          memberName: fullName,
+          amount: parseFloat(price) || 0,
+          date: new Date().toISOString().split('T')[0],
+          category: membershipType === 'personal' ? 'personal training' : 'membership',
+          description: isEditMode ? `Update: ${membershipType}` : `New: ${membershipType}`,
+          createdAt: serverTimestamp()
+        };
+        addDoc(collection(db, 'sales'), saleData);
 
-      // Log the transaction
-      const saleData = {
-        memberId: phone,
-        memberName: fullName,
-        amount: parseFloat(price) || 0,
-        date: new Date().toISOString().split('T')[0],
-        category: membershipType === 'personal' ? 'personal training' : 'membership',
-        description: isEditMode ? `Plan Update: ${membershipType}` : `New Enrollment: ${membershipType}`,
-        createdAt: serverTimestamp()
-      };
-
-      await addDoc(collection(db, 'sales'), saleData);
-
-      toast({ 
-        title: "Registration Success", 
-        description: isEditMode ? "Profile updated successfully." : "New member registered and syncing to cloud." 
-      });
-      
-      if (!isEditMode) {
-        resetForm();
-      }
-    } catch (err: any) {
-      console.error("Firestore Save Error:", err);
-      if (err.code === 'permission-denied') {
+        toast({ 
+          title: "Saved Locally", 
+          description: "Member registered. Syncing to cloud." 
+        });
+        
+        if (!isEditMode) resetForm();
+        setLoading(false);
+      })
+      .catch(async (err: any) => {
+        setLoading(false);
         const permissionError = new FirestorePermissionError({
           path: docRef.path,
           operation: 'write',
           requestResourceData: memberData,
         } satisfies SecurityRuleContext);
         errorEmitter.emit('permission-error', permissionError);
-      } else {
-        toast({ 
-          variant: "destructive", 
-          title: "Save Failed", 
-          description: "Could not save to Firebase. Please check your internet connection." 
-        });
-      }
-    } finally {
-      setLoading(false);
-    }
+      });
   };
 
   const resetForm = () => {
@@ -193,7 +175,7 @@ function RegisterForm() {
       <div className="flex flex-col md:flex-row justify-between items-start md:items-center gap-4">
         <div>
           <h1 className="text-3xl font-bold font-headline tracking-tight">{isEditMode ? 'Manage Profile' : 'New Registration'}</h1>
-          <p className="text-muted-foreground italic">Front Desk Management</p>
+          <p className="text-muted-foreground italic">Thrive Fit Management</p>
         </div>
         <div className="flex gap-2">
            <Input 
@@ -214,7 +196,7 @@ function RegisterForm() {
         <Info className="h-4 w-4 text-primary" />
         <AlertTitle className="text-primary font-bold">Cloud Sync Active</AlertTitle>
         <AlertDescription>
-          Member data is automatically synchronized with the Firebase cloud database.
+          Data is saving locally and automatically syncing to your Firebase Console.
         </AlertDescription>
       </Alert>
 
@@ -230,7 +212,7 @@ function RegisterForm() {
             <div className="grid grid-cols-1 md:grid-cols-2 gap-6">
               <div className="space-y-2">
                 <Label>Full Name</Label>
-                <Input value={fullName} onChange={(e) => setFullName(e.target.value)} required placeholder="Full name of member" />
+                <Input value={fullName} onChange={(e) => setFullName(e.target.value)} required placeholder="Full name" />
               </div>
               <div className="space-y-2">
                 <Label>Phone Number (Primary ID)</Label>
@@ -265,23 +247,6 @@ function RegisterForm() {
                   </Label>
               </RadioGroup>
             </div>
-
-            {(durationStatus === 'non-active' || startDate || endDate) && (
-              <div className="grid grid-cols-1 md:grid-cols-3 gap-4 p-4 bg-muted/20 rounded-xl border border-dashed border-border/40 animate-in fade-in slide-in-from-top-2">
-                <div className="space-y-1">
-                  <Label className="text-[10px] uppercase font-bold text-muted-foreground">Start Date</Label>
-                  <Input type="date" value={startDate} onChange={(e) => setStartDate(e.target.value)} required={durationStatus === 'non-active'} />
-                </div>
-                <div className="space-y-1">
-                  <Label className="text-[10px] uppercase font-bold text-muted-foreground">End Date</Label>
-                  <Input type="date" value={endDate} onChange={(e) => setEndDate(e.target.value)} required={durationStatus === 'non-active'} />
-                </div>
-                <div className="space-y-1">
-                  <Label className="text-[10px] uppercase font-bold text-muted-foreground">Sessions/Days</Label>
-                  <Input type="number" placeholder="Total count" value={daysCount} onChange={(e) => setDaysCount(e.target.value)} required={durationStatus === 'non-active'} />
-                </div>
-              </div>
-            )}
 
             <div className="space-y-2 pt-2">
                 <Label className="text-xs uppercase font-bold text-muted-foreground tracking-widest">Fee (INR)</Label>
