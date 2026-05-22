@@ -59,7 +59,7 @@ export default function SmartEntrancePage() {
   const scanLoopRef = useRef<number | null>(null);
   const passiveLoopTimeoutRef = useRef<NodeJS.Timeout | null>(null);
 
-  // Preload all active embeddings into local memory for instant matching
+  // Preload all embeddings into local memory for instant matching, regardless of status
   useEffect(() => {
     if (!db) return;
     setIsSyncing(true);
@@ -68,7 +68,6 @@ export default function SmartEntrancePage() {
       const members = snapshot.docs
         .map(d => ({ id: d.id, ...d.data() }))
         .filter((m: any) => 
-          m.status === 'active' && 
           m.faceEmbedding && 
           Array.isArray(m.faceEmbedding) && 
           m.faceEmbedding.length > 0
@@ -410,7 +409,7 @@ export default function SmartEntrancePage() {
                   <div className="space-y-1">
                     <p className="text-[10px] font-black text-muted-foreground uppercase tracking-[0.4em]">Biometric Status</p>
                     <span className="text-[10px] font-mono text-primary/80 uppercase">
-                        {modelsReady ? (cachedMembers.length > 0 ? `Watching ${cachedMembers.length} Active Profiles` : 'Waiting for biometric data...') : 'Booting Neural Pipeline...'}
+                        {modelsReady ? (cachedMembers.length > 0 ? `Watching ${cachedMembers.length} Enrolled Profiles` : 'Waiting for biometric data...') : 'Booting Neural Pipeline...'}
                     </span>
                   </div>
                   <div className="flex gap-2 w-full sm:w-auto">
