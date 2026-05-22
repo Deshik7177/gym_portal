@@ -115,6 +115,11 @@ export default function SmartEntrancePage() {
     const maxFrames = 50; // Timeout after ~2 seconds of frames
 
     const processFrame = async () => {
+      if (!videoRef.current || !isCameraActive) {
+        setIsProcessing(false);
+        return;
+      }
+
       if (framesAttempted >= maxFrames || collectedResults.length >= requiredSamples) {
         finalizeScan(collectedResults);
         return;
@@ -122,25 +127,33 @@ export default function SmartEntrancePage() {
 
       framesAttempted++;
       
-      const detection = await faceapi.detectSingleFace(videoRef.current!, ssdOptions)
-        .withFaceLandmarks()
-        .withFaceDescriptor();
+      try {
+        // Ensure video is ready to be processed by face-api
+        if (videoRef.current.readyState >= 2 && videoRef.current.videoWidth > 0) {
+          const detection = await faceapi.detectSingleFace(videoRef.current, ssdOptions)
+            .withFaceLandmarks()
+            .withFaceDescriptor();
 
-      if (detection) {
-        const quality = await checkFrameQuality(detection);
-        if (quality.isValid) {
-          const { bestMatch, confidence } = findBestMatch(Array.from(detection.descriptor), cachedMembers);
-          if (bestMatch) {
-            collectedResults.push({ member: bestMatch, similarity: confidence });
-            setFeedback(`Analyzing... ${Math.round((collectedResults.length / requiredSamples) * 100)}%`);
+          if (detection) {
+            const quality = await checkFrameQuality(detection);
+            if (quality.isValid) {
+              const { bestMatch, confidence } = findBestMatch(Array.from(detection.descriptor), cachedMembers);
+              if (bestMatch) {
+                collectedResults.push({ member: bestMatch, similarity: confidence });
+                setFeedback(`Analyzing... ${Math.round((collectedResults.length / requiredSamples) * 100)}%`);
+              } else {
+                setFeedback('Hold still...');
+              }
+            } else {
+              setFeedback(quality.reason || 'Scanning...');
+            }
           } else {
-            setFeedback('Hold still...');
+            setFeedback('Face not detected');
           }
-        } else {
-          setFeedback(quality.reason || 'Scanning...');
         }
-      } else {
-        setFeedback('Face not detected');
+      } catch (err) {
+        // Suppress individual frame errors to prevent app crash
+        console.warn("Face detection frame skip:", err);
       }
 
       scanLoopRef.current = requestAnimationFrame(processFrame);
@@ -230,6 +243,11 @@ export default function SmartEntrancePage() {
     const ssdOptions = new faceapi.SsdMobilenetv1Options({ minConfidence: 0.5 });
 
     const enrollLoop = async () => {
+      if (!videoRef.current || !isCameraActive) {
+        setIsProcessing(false);
+        return;
+      }
+
       if (samples.length >= maxSamples) {
         // Average the embeddings for stability
         const averaged = samples[0].map((_, i) => 
@@ -237,9 +255,9 @@ export default function SmartEntrancePage() {
         );
 
         const canvas = document.createElement('canvas');
-        canvas.width = videoRef.current!.videoWidth;
-        canvas.height = videoRef.current!.videoHeight;
-        canvas.getContext('2d')?.drawImage(videoRef.current!, 0, 0);
+        canvas.width = videoRef.current.videoWidth;
+        canvas.height = videoRef.current.videoHeight;
+        canvas.getContext('2d')?.drawImage(videoRef.current, 0, 0);
         const dataUri = canvas.toDataURL('image/jpeg', 0.8);
 
         const memberRef = doc(db, 'members', pendingMember.id);
@@ -258,16 +276,22 @@ export default function SmartEntrancePage() {
         return;
       }
 
-      const detection = await faceapi.detectSingleFace(videoRef.current!, ssdOptions)
-        .withFaceLandmarks()
-        .withFaceDescriptor();
+      try {
+        if (videoRef.current.readyState >= 2 && videoRef.current.videoWidth > 0) {
+          const detection = await faceapi.detectSingleFace(videoRef.current, ssdOptions)
+            .withFaceLandmarks()
+            .withFaceDescriptor();
 
-      if (detection) {
-        const quality = await checkFrameQuality(detection);
-        if (quality.isValid) {
-          samples.push(Array.from(detection.descriptor));
-          setEnrollProgress(samples.length / maxSamples);
+          if (detection) {
+            const quality = await checkFrameQuality(detection);
+            if (quality.isValid) {
+              samples.push(Array.from(detection.descriptor));
+              setEnrollProgress(samples.length / maxSamples);
+            }
+          }
         }
+      } catch (err) {
+        console.warn("Face detection enroll skip:", err);
       }
 
       requestAnimationFrame(enrollLoop);
