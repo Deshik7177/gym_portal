@@ -16,7 +16,7 @@ import {
   Calendar as CalendarIcon,
   CreditCard
 } from 'lucide-react';
-import { collection, query, doc, deleteDoc, updateDoc, serverTimestamp } from 'firebase/firestore';
+import { collection, query, doc, deleteDoc, updateDoc, serverTimestamp, addDoc } from 'firebase/firestore';
 import { useFirestore, useCollection } from '@/firebase';
 import Link from 'next/link';
 import { useRouter } from 'next/navigation';
@@ -68,7 +68,7 @@ import {
 import { Label } from '@/components/ui/label';
 import { useToast } from '@/hooks/use-toast';
 import { errorEmitter } from '@/firebase/error-emitter';
-import { FirestorePermissionError } from '@/firebase/errors';
+import { FirestorePermissionError, type SecurityRuleContext } from '@/firebase/errors';
 
 export default function MembersListPage() {
   const db = useFirestore();
@@ -141,6 +141,25 @@ export default function MembersListPage() {
 
     updateDoc(docRef, updateData)
       .then(() => {
+        // Record the PT Sale
+        const saleData = {
+          memberId: memberForPT.phone,
+          memberName: memberForPT.fullName,
+          amount: parseFloat(ptPrice) || 0,
+          date: new Date().toISOString().split('T')[0],
+          category: 'personal training',
+          description: `PT Package: ${ptStartDate || 'Today'} to ${ptEndDate || 'End'}`,
+          createdAt: serverTimestamp()
+        };
+        
+        addDoc(collection(db, 'sales'), saleData).catch(async (err) => {
+          errorEmitter.emit('permission-error', new FirestorePermissionError({
+            path: 'sales',
+            operation: 'create',
+            requestResourceData: saleData,
+          }));
+        });
+
         toast({ 
           title: "PT Membership Added", 
           description: `${memberForPT.fullName} is now enrolled in Personal Training.` 
@@ -155,7 +174,7 @@ export default function MembersListPage() {
           path: docRef.path,
           operation: 'update',
           requestResourceData: updateData,
-        });
+        } satisfies SecurityRuleContext);
         errorEmitter.emit('permission-error', permissionError);
       })
       .finally(() => setIsUpdatingPT(false));
