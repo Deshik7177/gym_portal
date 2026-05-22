@@ -5,8 +5,7 @@ import * as faceapi from 'face-api.js';
 let modelsLoadedPromise: Promise<void> | null = null;
 
 /**
- * Loads face-api.js models for local on-device recognition.
- * Upgraded to SsdMobilenetv1 for professional-grade accuracy.
+ * Loads high-precision and lightweight models for biometric pipeline.
  */
 export function loadFaceModels() {
   if (typeof window === 'undefined') return Promise.resolve();
@@ -16,9 +15,9 @@ export function loadFaceModels() {
   
   modelsLoadedPromise = (async () => {
     try {
-      // Using SsdMobilenetv1 instead of TinyFaceDetector for significantly higher accuracy
       await Promise.all([
         faceapi.nets.ssdMobilenetv1.loadFromUri(MODEL_URL),
+        faceapi.nets.tinyFaceDetector.loadFromUri(MODEL_URL),
         faceapi.nets.faceLandmark68Net.loadFromUri(MODEL_URL),
         faceapi.nets.faceRecognitionNet.loadFromUri(MODEL_URL),
       ]);
@@ -33,23 +32,30 @@ export function loadFaceModels() {
 }
 
 /**
- * Check for face presence using high-accuracy SSD Mobilenet.
+ * Quality check for face frame.
  */
-export async function isFaceInFrame(input: HTMLVideoElement | HTMLCanvasElement | HTMLImageElement) {
-  if (input instanceof HTMLVideoElement) {
-    if (input.readyState < 2) return false;
-    if (input.videoWidth === 0) return false;
-  }
+export async function checkFrameQuality(detection: faceapi.WithFaceDescriptor<faceapi.WithFaceLandmarks<{ detection: faceapi.FaceDetection }>>) {
+  if (!detection) return { isValid: false, reason: "No face detected" };
   
-  await loadFaceModels();
+  const { detection: d, landmarks } = detection;
   
-  // SsdMobilenetv1 is much more robust for registration
-  const options = new faceapi.SsdMobilenetv1Options({ 
-    minConfidence: 0.3 // More permissive for detection to ensure we find the face
-  });
+  // 1. Confidence threshold
+  if (d.score < 0.7) return { isValid: false, reason: "Low confidence scan" };
+
+  // 2. Simple Pose Estimation (Face angle) via landmarks
+  const nose = landmarks.getNose();
+  const jaw = landmarks.getJawOutline();
+  const leftEye = landmarks.getLeftEye();
+  const rightEye = landmarks.getRightEye();
+
+  // Basic check: is the nose roughly centered between eyes horizontally?
+  const eyeCenterX = (leftEye[0].x + rightEye[3].x) / 2;
+  const noseX = nose[0].x;
+  const horizontalOffset = Math.abs(noseX - eyeCenterX);
   
-  const detection = await faceapi.detectSingleFace(input, options);
-  return !!detection;
+  if (horizontalOffset > 40) return { isValid: false, reason: "Face angle too extreme" };
+
+  return { isValid: true };
 }
 
 /**
@@ -64,30 +70,45 @@ export function cosineSimilarity(vecA: number[], vecB: number[]) {
 }
 
 /**
- * Generates 128D face descriptor using high-accuracy SSD Mobilenet.
+ * Capture high-quality embeddings for enrollment by averaging multiple samples.
  */
-export async function generateEmbedding(input: HTMLVideoElement | HTMLCanvasElement | HTMLImageElement) {
-  if (input instanceof HTMLVideoElement && input.readyState < 2) return null;
-  
+export async function captureStableEnrollment(video: HTMLVideoElement, onProgress?: (p: number) => void) {
   await loadFaceModels();
-  
-  const options = new faceapi.SsdMobilenetv1Options({ 
-    minConfidence: 0.3 
+  const samples: number[][] = [];
+  const maxSamples = 10;
+  const options = new faceapi.SsdMobilenetv1Options({ minConfidence: 0.5 });
+
+  return new Promise<number[] | null>(async (resolve) => {
+    const poll = async () => {
+      if (samples.length >= maxSamples) {
+        // Average all successful embeddings
+        const averaged = samples[0].map((_, i) => 
+          samples.reduce((acc, sample) => acc + sample[i], 0) / samples.length
+        );
+        resolve(averaged);
+        return;
+      }
+
+      const detection = await faceapi.detectSingleFace(video, options)
+        .withFaceLandmarks()
+        .withFaceDescriptor();
+
+      if (detection) {
+        const quality = await checkFrameQuality(detection);
+        if (quality.isValid) {
+          samples.push(Array.from(detection.descriptor));
+          onProgress?.(samples.length / maxSamples);
+        }
+      }
+
+      requestAnimationFrame(poll);
+    };
+    poll();
   });
-  
-  try {
-    const detection = await faceapi.detectSingleFace(input, options)
-      .withFaceLandmarks()
-      .withFaceDescriptor();
-      
-    return detection ? Array.from(detection.descriptor) : null;
-  } catch (err) {
-    return null;
-  }
 }
 
 /**
- * 1:N local search.
+ * Performs local similarity comparison against cached members.
  */
 export function findBestMatch(liveDescriptor: number[], members: any[]) {
   let bestMatch = null;
@@ -105,4 +126,13 @@ export function findBestMatch(liveDescriptor: number[], members: any[]) {
   }
 
   return { bestMatch, confidence: maxSimilarity };
+}
+
+/**
+ * Lightweight passive detection using TinyFaceDetector.
+ */
+export async function detectFacePassive(input: HTMLVideoElement | HTMLCanvasElement) {
+  await loadFaceModels();
+  const options = new faceapi.TinyFaceDetectorOptions({ inputSize: 160, scoreThreshold: 0.5 });
+  return await faceapi.detectSingleFace(input, options);
 }
