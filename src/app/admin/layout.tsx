@@ -100,7 +100,7 @@ export default function ReceptionLayout({ children }: { children: React.ReactNod
              )}
            </Badge>
            <Button asChild variant="ghost" size="sm" className="w-full justify-start text-[10px] text-muted-foreground hover:text-primary">
-              <a href="https://console.firebase.google.com/" target="_blank" rel="noopener noreferrer">
+              <a href="https://console.firebase.google.com/project/studio-1536246552-55579/firestore/data" target="_blank" rel="noopener noreferrer">
                 <ExternalLink className="mr-2 h-3 w-3" /> Firebase Console
               </a>
            </Button>
