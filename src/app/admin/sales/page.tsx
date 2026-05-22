@@ -9,18 +9,16 @@ import {
   Loader2,
   X,
   CalendarDays,
-  TrendingUp,
   CreditCard
 } from 'lucide-react';
 import { collection, query, orderBy } from 'firebase/firestore';
 import { useFirestore, useCollection } from '@/firebase';
-import { format, startOfDay, endOfDay, isWithinInterval, parseISO } from 'date-fns';
+import { format, startOfDay, endOfDay, parseISO } from 'date-fns';
 
 import { Button } from '@/components/ui/button';
 import {
   Card,
   CardContent,
-  CardDescription,
   CardHeader,
   CardTitle,
 } from '@/components/ui/card';
@@ -79,7 +77,7 @@ export default function SalesReportPage() {
         if (dateFrom && saleDate < startOfDay(dateFrom)) matchesDate = false;
         if (dateTo && saleDate > endOfDay(dateTo)) matchesDate = false;
       } else if (dateFrom || dateTo) {
-        matchesDate = false; // If filtering by date but sale has no date
+        matchesDate = false; 
       }
       
       return matchesSearch && matchesCategory && matchesDate;
@@ -106,66 +104,43 @@ export default function SalesReportPage() {
   }
 
   return (
-    <div className="flex flex-col gap-8 max-w-7xl mx-auto">
+    <div className="flex flex-col gap-6 max-w-7xl mx-auto">
       <div className="flex flex-col sm:flex-row justify-between items-start sm:items-end gap-4">
         <div className="space-y-1">
-          <h1 className="text-4xl font-bold font-headline tracking-tight text-primary">Sales Report</h1>
-          <p className="text-muted-foreground">Gym revenue and transaction history overview.</p>
+          <h1 className="text-3xl font-bold font-headline tracking-tight text-primary">Sales Report</h1>
+          <p className="text-muted-foreground text-sm">Review transaction history and financial performance.</p>
         </div>
-        <div className="flex gap-3">
+        <div className="flex gap-2">
           {(searchTerm || filter !== 'all' || dateFrom || dateTo) && (
-            <Button variant="ghost" onClick={resetFilters} className="text-xs h-10 px-4 hover:bg-destructive/10 hover:text-destructive transition-colors">
-              <X className="mr-2 h-4 w-4" /> Reset Filters
+            <Button variant="ghost" onClick={resetFilters} className="text-xs h-9 px-3">
+              <X className="mr-2 h-3.5 w-3.5" /> Reset
             </Button>
           )}
-          <Button variant="outline" className="h-10 px-4 border-primary/20 hover:border-primary/50">
-            <Download className="mr-2 h-4 w-4" /> Export CSV
+          <Button variant="outline" className="h-9 px-3 text-xs border-primary/20">
+            <Download className="mr-2 h-3.5 w-3.5" /> Export
           </Button>
         </div>
       </div>
 
-      <div className="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-4 gap-6">
-        <Card className="bg-primary/5 border-primary/10 shadow-sm">
-          <CardHeader className="flex flex-row items-center justify-between pb-2">
-            <CardTitle className="text-xs font-bold uppercase tracking-widest text-muted-foreground">Filtered Revenue</CardTitle>
-            <TrendingUp className="h-4 w-4 text-primary" />
-          </CardHeader>
-          <CardContent>
-            <div className="text-3xl font-bold text-primary">₹{totalRevenue.toLocaleString()}</div>
-            <p className="text-[10px] text-muted-foreground mt-1 font-medium">Total value of results</p>
-          </CardContent>
-        </Card>
-        <Card className="border-border/40 shadow-sm">
-          <CardHeader className="flex flex-row items-center justify-between pb-2">
-            <CardTitle className="text-xs font-bold uppercase tracking-widest text-muted-foreground">Transactions</CardTitle>
-            <CreditCard className="h-4 w-4 text-muted-foreground" />
-          </CardHeader>
-          <CardContent>
-            <div className="text-3xl font-bold">{filteredSales.length}</div>
-            <p className="text-[10px] text-muted-foreground mt-1 font-medium">Total count of entries</p>
-          </CardContent>
-        </Card>
-      </div>
-
       <Card className="border-border/40 shadow-md overflow-hidden bg-card/30 backdrop-blur-sm">
         <CardHeader className="border-b bg-muted/20 pb-6">
-          <div className="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-12 gap-4">
-            <div className="lg:col-span-4 relative">
+          <div className="flex flex-col lg:flex-row gap-4">
+            <div className="flex-1 relative">
               <Search className="absolute left-3 top-1/2 -translate-y-1/2 h-4 w-4 text-muted-foreground" />
               <Input
-                placeholder="Search by member name..."
-                className="pl-10 h-11 bg-background/50"
+                placeholder="Search member name..."
+                className="pl-10 h-10 bg-background/50"
                 value={searchTerm}
                 onChange={(e) => setSearchTerm(e.target.value)}
               />
             </div>
             
-            <div className="lg:col-span-3">
+            <div className="w-full lg:w-48">
               <Select value={filter} onValueChange={setFilter}>
-                <SelectTrigger className="h-11 bg-background/50">
+                <SelectTrigger className="h-10 bg-background/50">
                   <div className="flex items-center">
                     <Filter className="mr-2 h-4 w-4 text-muted-foreground" />
-                    <SelectValue placeholder="All Categories" />
+                    <SelectValue placeholder="Category" />
                   </div>
                 </SelectTrigger>
                 <SelectContent>
@@ -176,18 +151,18 @@ export default function SalesReportPage() {
               </Select>
             </div>
 
-            <div className="lg:col-span-5 grid grid-cols-2 gap-3">
+            <div className="flex gap-2 w-full lg:w-auto">
               <Popover open={isFromOpen} onOpenChange={setIsFromOpen}>
                 <PopoverTrigger asChild>
                   <Button
                     variant={"outline"}
                     className={cn(
-                      "h-11 justify-start text-left font-normal bg-background/50 border-input",
+                      "h-10 flex-1 lg:w-40 justify-start text-left font-normal bg-background/50 border-input text-xs",
                       !dateFrom && "text-muted-foreground"
                     )}
                   >
                     <CalendarDays className="mr-2 h-4 w-4 text-primary/60" />
-                    {dateFrom ? format(dateFrom, "MMM dd, yyyy") : <span>From Date</span>}
+                    {dateFrom ? format(dateFrom, "MMM dd, yyyy") : <span>From</span>}
                   </Button>
                 </PopoverTrigger>
                 <PopoverContent className="w-auto p-0" align="start">
@@ -208,12 +183,12 @@ export default function SalesReportPage() {
                   <Button
                     variant={"outline"}
                     className={cn(
-                      "h-11 justify-start text-left font-normal bg-background/50 border-input",
+                      "h-10 flex-1 lg:w-40 justify-start text-left font-normal bg-background/50 border-input text-xs",
                       !dateTo && "text-muted-foreground"
                     )}
                   >
                     <CalendarDays className="mr-2 h-4 w-4 text-primary/60" />
-                    {dateTo ? format(dateTo, "MMM dd, yyyy") : <span>To Date</span>}
+                    {dateTo ? format(dateTo, "MMM dd, yyyy") : <span>To</span>}
                   </Button>
                 </PopoverTrigger>
                 <PopoverContent className="w-auto p-0" align="start">
@@ -236,10 +211,10 @@ export default function SalesReportPage() {
           <Table>
             <TableHeader className="bg-muted/10">
               <TableRow>
-                <TableHead className="w-[150px] font-bold uppercase text-[10px] tracking-widest pl-6">Date</TableHead>
+                <TableHead className="w-[140px] font-bold uppercase text-[10px] tracking-widest pl-6">Date</TableHead>
                 <TableHead className="font-bold uppercase text-[10px] tracking-widest">Member</TableHead>
                 <TableHead className="font-bold uppercase text-[10px] tracking-widest">Category</TableHead>
-                <TableHead className="font-bold uppercase text-[10px] tracking-widest">Description</TableHead>
+                <TableHead className="font-bold uppercase text-[10px] tracking-widest hidden md:table-cell">Description</TableHead>
                 <TableHead className="text-right font-bold uppercase text-[10px] tracking-widest pr-6">Amount</TableHead>
               </TableRow>
             </TableHeader>
@@ -259,7 +234,9 @@ export default function SalesReportPage() {
                         {sale.category}
                       </Badge>
                     </TableCell>
-                    <TableCell className="text-xs text-muted-foreground max-w-xs truncate">{sale.description}</TableCell>
+                    <TableCell className="text-xs text-muted-foreground max-w-xs truncate hidden md:table-cell">
+                      {sale.description}
+                    </TableCell>
                     <TableCell className="text-right font-bold text-primary pr-6">₹{sale.amount.toLocaleString()}</TableCell>
                   </TableRow>
                 ))
@@ -268,13 +245,20 @@ export default function SalesReportPage() {
                   <TableCell colSpan={5} className="h-48 text-center text-muted-foreground italic">
                     <div className="flex flex-col items-center gap-2 opacity-40">
                       <CreditCard className="h-10 w-10 mb-2" />
-                      <p>No transactions found for the selected filters.</p>
+                      <p>No transactions found.</p>
                     </div>
                   </TableCell>
                 </TableRow>
               )}
             </TableBody>
           </Table>
+          
+          <div className="p-4 border-t bg-muted/5 flex justify-end">
+            <div className="flex items-center gap-4">
+              <span className="text-xs font-bold uppercase tracking-widest text-muted-foreground">Total Filtered Revenue</span>
+              <span className="text-lg font-black text-primary">₹{totalRevenue.toLocaleString()}</span>
+            </div>
+          </div>
         </CardContent>
       </Card>
     </div>
