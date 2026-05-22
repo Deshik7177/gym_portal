@@ -265,6 +265,7 @@ function RegisterForm() {
                     <Popover open={isStartDateOpen} onOpenChange={setIsStartDateOpen}>
                       <PopoverTrigger asChild>
                         <Button
+                          type="button"
                           variant={"outline"}
                           className={cn(
                             "w-full justify-start text-left font-normal h-10",
@@ -297,6 +298,7 @@ function RegisterForm() {
                     <Popover open={isEndDateOpen} onOpenChange={setIsEndDateOpen}>
                       <PopoverTrigger asChild>
                         <Button
+                          type="button"
                           variant={"outline"}
                           className={cn(
                             "w-full justify-start text-left font-normal h-10",

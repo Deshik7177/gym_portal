@@ -5,8 +5,6 @@ import {
   Search, 
   UserCircle, 
   MoreHorizontal, 
-  Mail, 
-  Phone, 
   Users, 
   User, 
   ArrowUpRight, 
@@ -415,13 +413,15 @@ export default function MembersListPage() {
                       {ptStartDate ? format(ptStartDate, "PPP") : <span>Pick a date</span>}
                     </Button>
                   </PopoverTrigger>
-                  <PopoverContent className="w-auto p-0" align="start">
+                  <PopoverContent className="w-auto p-0" align="start" onFocusOutside={(e) => e.preventDefault()}>
                     <Calendar
                       mode="single"
                       selected={ptStartDate}
                       onSelect={(date) => {
-                        setPtStartDate(date);
-                        setIsPtStartDateOpen(false);
+                        if (date) {
+                          setPtStartDate(date);
+                          setIsPtStartDateOpen(false);
+                        }
                       }}
                       initialFocus
                     />
@@ -444,13 +444,15 @@ export default function MembersListPage() {
                       {ptEndDate ? format(ptEndDate, "PPP") : <span>Pick a date</span>}
                     </Button>
                   </PopoverTrigger>
-                  <PopoverContent className="w-auto p-0" align="start">
+                  <PopoverContent className="w-auto p-0" align="start" onFocusOutside={(e) => e.preventDefault()}>
                     <Calendar
                       mode="single"
                       selected={ptEndDate}
                       onSelect={(date) => {
-                        setPtEndDate(date);
-                        setIsPtEndDateOpen(false);
+                        if (date) {
+                          setPtEndDate(date);
+                          setIsPtEndDateOpen(false);
+                        }
                       }}
                       initialFocus
                     />
