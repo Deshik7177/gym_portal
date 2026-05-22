@@ -129,10 +129,8 @@ function RegisterForm() {
     const docRef = doc(db, 'members', phone);
     
     try {
-      // We await the setDoc to ensure it clears the client-side validation
       await setDoc(docRef, memberData, { merge: true });
 
-      // Log sale
       const saleData = {
         memberId: phone,
         memberName: fullName,
@@ -145,8 +143,8 @@ function RegisterForm() {
       await addDoc(collection(db, 'sales'), saleData);
 
       toast({ 
-        title: "Saved Successfully", 
-        description: isEditMode ? "Profile updated in cloud." : "Member registered and cloud synced." 
+        title: "Saved Locally", 
+        description: "Member registered. Syncing to cloud." 
       });
       
       if (!isEditMode) {
