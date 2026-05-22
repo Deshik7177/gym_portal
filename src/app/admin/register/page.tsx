@@ -1,14 +1,14 @@
 'use client';
 
-import { useState, useEffect, Suspense } from 'react';
+import { useState, useEffect, Suspense, useMemo } from 'react';
 import { useSearchParams, useRouter } from 'next/navigation';
-import { Search, CheckCircle2, Loader2, Info, Calendar as CalendarIcon } from 'lucide-react';
+import { Search, CheckCircle2, Loader2, Info, Calendar as CalendarIcon, Clock } from 'lucide-react';
 import { doc, setDoc, getDoc, serverTimestamp, collection, addDoc } from 'firebase/firestore';
 import { useFirestore } from '@/firebase';
 import { errorEmitter } from '@/firebase/error-emitter';
 import { FirestorePermissionError, type SecurityRuleContext } from '@/firebase/errors';
 import { cn } from '@/lib/utils';
-import { format } from 'date-fns';
+import { format, differenceInDays } from 'date-fns';
 
 import { Button } from '@/components/ui/button';
 import {
@@ -51,6 +51,14 @@ function RegisterForm() {
   
   const [loading, setLoading] = useState(false);
   const [isEnrolled, setIsEnrolled] = useState(false);
+
+  const totalDays = useMemo(() => {
+    if (startDate && endDate) {
+      const days = differenceInDays(endDate, startDate);
+      return days >= 0 ? days : 0;
+    }
+    return 0;
+  }, [startDate, endDate]);
 
   useEffect(() => {
     if (editId && db) {
@@ -119,6 +127,7 @@ function RegisterForm() {
       description: description || '',
       startDate: startDate ? format(startDate, 'yyyy-MM-dd') : null,
       endDate: endDate ? format(endDate, 'yyyy-MM-dd') : null,
+      countOfDays: durationStatus === 'non-active' ? totalDays : null,
       updatedAt: serverTimestamp(),
     };
 
@@ -240,61 +249,76 @@ function RegisterForm() {
             </div>
 
             {durationStatus === 'non-active' && (
-              <div className="grid grid-cols-1 md:grid-cols-2 gap-6 pt-2 animate-in fade-in slide-in-from-top-2">
-                <div className="space-y-2 flex flex-col">
-                  <Label className="flex items-center gap-2 mb-1.5">
-                    <CalendarIcon className="h-4 w-4 text-primary" />
-                    Start Date
-                  </Label>
-                  <Popover>
-                    <PopoverTrigger asChild>
-                      <Button
-                        variant={"outline"}
-                        className={cn(
-                          "w-full justify-start text-left font-normal h-10",
-                          !startDate && "text-muted-foreground"
-                        )}
-                      >
-                        {startDate ? format(startDate, "PPP") : <span>Pick a date</span>}
-                      </Button>
-                    </PopoverTrigger>
-                    <PopoverContent className="w-auto p-0" align="start">
-                      <Calendar
-                        mode="single"
-                        selected={startDate}
-                        onSelect={setStartDate}
-                        initialFocus
-                      />
-                    </PopoverContent>
-                  </Popover>
+              <div className="space-y-4 pt-2 animate-in fade-in slide-in-from-top-2">
+                <div className="grid grid-cols-1 md:grid-cols-2 gap-6">
+                  <div className="space-y-2 flex flex-col">
+                    <Label className="flex items-center gap-2 mb-1.5">
+                      <CalendarIcon className="h-4 w-4 text-primary" />
+                      Start Date
+                    </Label>
+                    <Popover>
+                      <PopoverTrigger asChild>
+                        <Button
+                          variant={"outline"}
+                          className={cn(
+                            "w-full justify-start text-left font-normal h-10",
+                            !startDate && "text-muted-foreground"
+                          )}
+                        >
+                          {startDate ? format(startDate, "PPP") : <span>Pick a date</span>}
+                        </Button>
+                      </PopoverTrigger>
+                      <PopoverContent className="w-auto p-0" align="start">
+                        <Calendar
+                          mode="single"
+                          selected={startDate}
+                          onSelect={setStartDate}
+                          initialFocus
+                        />
+                      </PopoverContent>
+                    </Popover>
+                  </div>
+                  <div className="space-y-2 flex flex-col">
+                    <Label className="flex items-center gap-2 mb-1.5">
+                      <CalendarIcon className="h-4 w-4 text-primary" />
+                      End Date
+                    </Label>
+                    <Popover>
+                      <PopoverTrigger asChild>
+                        <Button
+                          variant={"outline"}
+                          className={cn(
+                            "w-full justify-start text-left font-normal h-10",
+                            !endDate && "text-muted-foreground"
+                          )}
+                        >
+                          {endDate ? format(endDate, "PPP") : <span>Pick a date</span>}
+                        </Button>
+                      </PopoverTrigger>
+                      <PopoverContent className="w-auto p-0" align="start">
+                        <Calendar
+                          mode="single"
+                          selected={endDate}
+                          onSelect={setEndDate}
+                          initialFocus
+                        />
+                      </PopoverContent>
+                    </Popover>
+                  </div>
                 </div>
-                <div className="space-y-2 flex flex-col">
-                  <Label className="flex items-center gap-2 mb-1.5">
-                    <CalendarIcon className="h-4 w-4 text-primary" />
-                    End Date
-                  </Label>
-                  <Popover>
-                    <PopoverTrigger asChild>
-                      <Button
-                        variant={"outline"}
-                        className={cn(
-                          "w-full justify-start text-left font-normal h-10",
-                          !endDate && "text-muted-foreground"
-                        )}
-                      >
-                        {endDate ? format(endDate, "PPP") : <span>Pick a date</span>}
-                      </Button>
-                    </PopoverTrigger>
-                    <PopoverContent className="w-auto p-0" align="start">
-                      <Calendar
-                        mode="single"
-                        selected={endDate}
-                        onSelect={setEndDate}
-                        initialFocus
-                      />
-                    </PopoverContent>
-                  </Popover>
-                </div>
+                
+                {startDate && endDate && (
+                  <div className="bg-primary/10 border border-primary/20 p-4 rounded-xl flex items-center justify-between">
+                    <div className="flex items-center gap-3">
+                      <Clock className="h-5 w-5 text-primary" />
+                      <div>
+                        <p className="text-[10px] uppercase font-bold text-muted-foreground">Membership Duration</p>
+                        <p className="text-lg font-bold text-primary">{totalDays} Total Days</p>
+                      </div>
+                    </div>
+                    <Badge variant="outline" className="h-6">Fixed Term</Badge>
+                  </div>
+                )}
               </div>
             )}
 
