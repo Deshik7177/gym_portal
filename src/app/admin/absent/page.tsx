@@ -1,6 +1,10 @@
 'use client';
 
-import { Clock, AlertTriangle, UserMinus, Phone, Calendar } from 'lucide-react';
+import { useMemo } from 'react';
+import { Clock, AlertTriangle, UserMinus, Phone, Calendar, Loader2 } from 'lucide-react';
+import { collection, query } from 'firebase/firestore';
+import { useFirestore, useCollection } from '@/firebase';
+import { differenceInDays, format } from 'date-fns';
 
 import { Button } from '@/components/ui/button';
 import {
@@ -20,17 +24,40 @@ import {
 } from '@/components/ui/table';
 import { Badge } from '@/components/ui/badge';
 
-const MOCK_ABSENTS = [
-  { id: '1', name: 'Alice Green', phone: '1234567890', days: 5, lastSeen: '2024-05-16', type: 'group' },
-  { id: '2', name: 'Bob White', phone: '0987654321', days: 3, lastSeen: '2024-05-18', type: 'personal' },
-  { id: '3', name: 'Charlie Black', phone: '5551234567', days: 7, lastSeen: '2024-05-14', type: 'group' },
-  { id: '4', name: 'Diana Prince', phone: '4449876543', days: 12, lastSeen: '2024-05-09', type: 'personal' },
-  { id: '5', name: 'Frank Castle', phone: '7776665555', days: 2, lastSeen: '2024-05-19', type: 'group' },
-];
-
 export default function FrequentAbsentPage() {
-  const severeAbsents = MOCK_ABSENTS.filter(a => a.days > 5).length;
-  const recentAbsents = MOCK_ABSENTS.filter(a => a.days >= 2 && a.days <= 5).length;
+  const db = useFirestore();
+  const membersRef = useMemo(() => db ? query(collection(db, 'members')) : null, [db]);
+  const { data: members, loading } = useCollection<any>(membersRef);
+
+  const absentMembers = useMemo(() => {
+    if (!members) return [];
+    
+    const now = new Date();
+    return members
+      .map((m: any) => {
+        // Use lastCheckIn or fallback to createdAt
+        const lastSeenTimestamp = m.lastCheckIn || m.createdAt;
+        const lastSeenDate = lastSeenTimestamp?.seconds 
+          ? new Date(lastSeenTimestamp.seconds * 1000) 
+          : null;
+        
+        const days = lastSeenDate ? differenceInDays(now, lastSeenDate) : 99;
+        return { ...m, daysAbsent: days, lastSeenDate };
+      })
+      .filter(m => m.daysAbsent >= 2 && m.status === 'active')
+      .sort((a, b) => b.daysAbsent - a.daysAbsent);
+  }, [members]);
+
+  const severeAbsents = absentMembers.filter(a => a.daysAbsent > 5).length;
+  const recentAbsents = absentMembers.filter(a => a.daysAbsent >= 2 && a.daysAbsent <= 5).length;
+
+  if (loading) {
+    return (
+      <div className="flex h-60 w-full items-center justify-center">
+        <Loader2 className="h-8 w-8 animate-spin text-primary" />
+      </div>
+    );
+  }
 
   return (
     <div className="flex flex-col gap-6">
@@ -65,12 +92,14 @@ export default function FrequentAbsentPage() {
         <Card className="shadow-none">
           <CardHeader className="pb-2">
             <CardTitle className="flex items-center gap-2 text-sm uppercase tracking-wider text-muted-foreground">
-                <UserMinus className="h-4 w-4" /> Weekly Trend
+                <UserMinus className="h-4 w-4" /> System Health
             </CardTitle>
           </CardHeader>
           <CardContent>
-            <div className="text-3xl font-bold text-orange-500">+4%</div>
-            <p className="text-xs text-muted-foreground">Vs. previous week</p>
+            <div className="text-3xl font-bold text-orange-500">
+                {members ? ((absentMembers.length / members.length) * 100).toFixed(0) : 0}%
+            </div>
+            <p className="text-xs text-muted-foreground">Churn Probability</p>
           </CardContent>
         </Card>
       </div>
@@ -78,7 +107,7 @@ export default function FrequentAbsentPage() {
       <Card>
         <CardHeader>
           <CardTitle>Absent Members List</CardTitle>
-          <CardDescription>Daily report for front-desk follow-ups.</CardDescription>
+          <CardDescription>Follow up with members who are losing consistency.</CardDescription>
         </CardHeader>
         <CardContent>
           <Table>
@@ -92,11 +121,11 @@ export default function FrequentAbsentPage() {
               </TableRow>
             </TableHeader>
             <TableBody>
-              {MOCK_ABSENTS.map((member) => (
-                <TableRow key={member.id} className={member.days > 5 ? 'bg-destructive/5' : ''}>
+              {absentMembers.length > 0 ? absentMembers.map((member) => (
+                <TableRow key={member.phone} className={member.daysAbsent > 5 ? 'bg-destructive/5' : ''}>
                   <TableCell>
                     <div className="flex flex-col">
-                      <span className="font-bold">{member.name}</span>
+                      <span className="font-bold">{member.fullName}</span>
                       <span className="text-[10px] text-muted-foreground flex items-center gap-1">
                         <Phone className="h-2 w-2" /> {member.phone}
                       </span>
@@ -108,29 +137,35 @@ export default function FrequentAbsentPage() {
                   <TableCell>
                     <div className="flex items-center gap-1.5 text-xs">
                       <Calendar className="h-3 w-3 text-muted-foreground" />
-                      {member.lastSeen}
+                      {member.lastSeenDate ? format(member.lastSeenDate, 'MMM dd, yyyy') : 'Never'}
                     </div>
                   </TableCell>
                   <TableCell>
                     <div className="flex flex-col gap-1">
-                      <span className={`font-bold text-sm ${member.days > 5 ? 'text-destructive' : 'text-orange-500'}`}>
-                          {member.days} days
+                      <span className={`font-bold text-sm ${member.daysAbsent > 5 ? 'text-destructive' : 'text-orange-500'}`}>
+                          {member.daysAbsent} days
                       </span>
                       <div className="w-24 h-1 bg-muted rounded-full overflow-hidden">
                         <div 
-                          className={`h-full ${member.days > 5 ? 'bg-destructive' : 'bg-orange-500'}`} 
-                          style={{ width: `${Math.min(member.days * 10, 100)}%` }}
+                          className={`h-full ${member.daysAbsent > 5 ? 'bg-destructive' : 'bg-orange-500'}`} 
+                          style={{ width: `${Math.min(member.daysAbsent * 10, 100)}%` }}
                         />
                       </div>
                     </div>
                   </TableCell>
                   <TableCell className="text-right">
-                    <Button size="sm" variant={member.days > 5 ? 'destructive' : 'outline'} className="h-8">
-                      {member.days > 5 ? 'Urgent Call' : 'Send Reminder'}
+                    <Button size="sm" variant={member.daysAbsent > 5 ? 'destructive' : 'outline'} className="h-8">
+                      {member.daysAbsent > 5 ? 'Urgent Call' : 'Send Reminder'}
                     </Button>
                   </TableCell>
                 </TableRow>
-              ))}
+              )) : (
+                <TableRow>
+                    <TableCell colSpan={5} className="h-24 text-center text-muted-foreground">
+                        Excellent! No members are currently flagged as absent.
+                    </TableCell>
+                </TableRow>
+              )}
             </TableBody>
           </Table>
         </CardContent>

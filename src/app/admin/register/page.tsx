@@ -3,7 +3,7 @@
 import { useState, useEffect, Suspense } from 'react';
 import { useSearchParams, useRouter } from 'next/navigation';
 import { Search, Save, CheckCircle2, Loader2, Info } from 'lucide-react';
-import { doc, setDoc, getDoc, serverTimestamp } from 'firebase/firestore';
+import { doc, setDoc, getDoc, serverTimestamp, collection, addDoc } from 'firebase/firestore';
 import { useFirestore } from '@/firebase';
 import { errorEmitter } from '@/firebase/error-emitter';
 import { FirestorePermissionError, type SecurityRuleContext } from '@/firebase/errors';
@@ -108,8 +108,7 @@ function RegisterForm() {
 
     setLoading(true);
 
-    const docRef = doc(db, 'members', phone);
-    const data = {
+    const memberData = {
       fullName,
       phone,
       status: durationStatus,
@@ -123,20 +122,37 @@ function RegisterForm() {
       createdAt: isEditMode ? undefined : serverTimestamp(),
     };
 
-    setDoc(docRef, data, { merge: true })
+    const docRef = doc(db, 'members', phone);
+    
+    // Save Member
+    setDoc(docRef, memberData, { merge: true })
       .catch(async () => {
         const permissionError = new FirestorePermissionError({
           path: docRef.path,
           operation: 'write',
-          requestResourceData: data,
+          requestResourceData: memberData,
         } satisfies SecurityRuleContext);
         errorEmitter.emit('permission-error', permissionError);
       });
 
+    // Automatically create a Sale record
+    const saleData = {
+      memberId: phone,
+      memberName: fullName,
+      amount: parseFloat(price) || 0,
+      date: new Date().toISOString().split('T')[0],
+      category: membershipType === 'personal' ? 'personal training' : 'membership',
+      description: isEditMode ? `Plan Update: ${membershipType}` : `New Enrollment: ${membershipType}`,
+    };
+
+    addDoc(collection(db, 'sales'), saleData).catch(async (e) => {
+        console.error("Failed to log sale", e);
+    });
+
     setLoading(false);
     toast({ 
       title: "Member Data Saved", 
-      description: isEditMode ? "Profile updated successfully." : "Member details registered. Proceed to Kiosk for face enrollment." 
+      description: isEditMode ? "Profile updated and transaction logged." : "Member details registered. Proceed to Kiosk for face enrollment." 
     });
     
     if (!isEditMode) {
@@ -266,7 +282,7 @@ function RegisterForm() {
           </CardContent>
           <CardFooter className="bg-muted/5 border-t p-6">
             <Button type="submit" className="w-full h-14 text-lg font-bold shadow-xl" disabled={loading}>
-              {loading ? <Loader2 className="h-5 w-5 animate-spin" /> : (isEditMode ? 'Update Member Profile' : 'Register & Proceed to Kiosk')}
+              {loading ? <Loader2 className="h-5 w-5 animate-spin" /> : (isEditMode ? 'Update & Record Payment' : 'Register & Record Payment')}
             </Button>
           </CardFooter>
         </Card>
