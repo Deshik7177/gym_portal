@@ -71,7 +71,7 @@ export default function ReceptionDashboard() {
           <Sparkles className="h-5 w-5 text-primary animate-pulse" />
           <h1 className="text-3xl font-bold font-headline tracking-tight">Hello, Deshik</h1>
         </div>
-        <p className="text-muted-foreground">Welcome to your Zenith Gym OS project overview.</p>
+        <p className="text-muted-foreground">Welcome to your Thrive Fit project overview.</p>
       </div>
 
       <div className="grid gap-4 md:grid-cols-2 lg:grid-cols-4">

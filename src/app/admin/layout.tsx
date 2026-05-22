@@ -73,7 +73,7 @@ export default function ReceptionLayout({ children }: { children: React.ReactNod
         <div className="flex h-16 items-center border-b px-6">
           <Link href="/admin" className="flex items-center gap-2 font-semibold">
             <ShieldCheck className="h-6 w-6 text-primary" />
-            <span className="text-lg font-headline text-primary">Zenith Gym OS</span>
+            <span className="text-lg font-headline text-primary">Thrive Fit</span>
           </Link>
         </div>
         <nav className="flex flex-col gap-1 px-4 py-6">
@@ -128,7 +128,7 @@ export default function ReceptionLayout({ children }: { children: React.ReactNod
               <SheetHeader className="px-6 pt-6 pb-2 text-left">
                 <SheetTitle className="flex items-center gap-2">
                   <ShieldCheck className="h-6 w-6 text-primary" />
-                  Zenith Gym OS
+                  Thrive Fit
                 </SheetTitle>
                 <SheetDescription>Staff Management Menu</SheetDescription>
               </SheetHeader>
