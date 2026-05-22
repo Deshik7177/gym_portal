@@ -1,4 +1,3 @@
-
 'use client';
 import { Avatar, AvatarFallback, AvatarImage } from '@/components/ui/avatar';
 import { Button } from '@/components/ui/button';
@@ -20,17 +19,17 @@ export default function UserNav() {
     <DropdownMenu>
       <DropdownMenuTrigger asChild>
         <Button variant="ghost" className="relative h-8 w-8 rounded-full">
-          <Avatar className="h-9 w-9">
-            <AvatarImage src={userAvatar?.imageUrl} alt="@shadcn" data-ai-hint={userAvatar?.imageHint} />
-            <AvatarFallback>SC</AvatarFallback>
+          <Avatar className="h-9 w-9 border-2 border-primary/20">
+            <AvatarImage src={userAvatar?.imageUrl} alt="Deshik" data-ai-hint={userAvatar?.imageHint} />
+            <AvatarFallback>D</AvatarFallback>
           </Avatar>
         </Button>
       </DropdownMenuTrigger>
       <DropdownMenuContent className="w-56" align="end" forceMount>
         <DropdownMenuLabel className="font-normal">
           <div className="flex flex-col space-y-1">
-            <p className="text-sm font-medium leading-none">Admin User</p>
-            <p className="text-xs leading-none text-muted-foreground">admin@zenith.com</p>
+            <p className="text-sm font-medium leading-none">Deshik</p>
+            <p className="text-xs leading-none text-muted-foreground">admin@zenithgymos.com</p>
           </div>
         </DropdownMenuLabel>
         <DropdownMenuSeparator />
@@ -57,5 +56,3 @@ export default function UserNav() {
     </DropdownMenu>
   );
 }
-
-    

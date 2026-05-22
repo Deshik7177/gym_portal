@@ -10,14 +10,13 @@ import {
   UserPlus,
   Clock,
   Settings,
-  Dumbbell,
-  PanelLeft,
   LayoutDashboard,
   Loader2,
   Wifi,
   WifiOff,
   Scan,
-  ExternalLink
+  ExternalLink,
+  ShieldCheck
 } from 'lucide-react';
 
 import { Button } from '@/components/ui/button';
@@ -73,8 +72,8 @@ export default function ReceptionLayout({ children }: { children: React.ReactNod
       <aside className="fixed inset-y-0 left-0 z-10 hidden w-64 flex-col border-r bg-card/50 backdrop-blur-sm sm:flex shadow-xl">
         <div className="flex h-16 items-center border-b px-6">
           <Link href="/admin" className="flex items-center gap-2 font-semibold">
-            <Dumbbell className="h-6 w-6 text-primary" />
-            <span className="text-lg font-headline text-primary">Thrive Fit</span>
+            <ShieldCheck className="h-6 w-6 text-primary" />
+            <span className="text-lg font-headline text-primary">Zenith Gym OS</span>
           </Link>
         </div>
         <nav className="flex flex-col gap-1 px-4 py-6">
@@ -121,15 +120,15 @@ export default function ReceptionLayout({ children }: { children: React.ReactNod
           <Sheet>
             <SheetTrigger asChild>
               <Button size="icon" variant="outline" className="sm:hidden">
-                <PanelLeft className="h-5 w-5" />
+                <LayoutDashboard className="h-5 w-5" />
                 <span className="sr-only">Toggle Menu</span>
               </Button>
             </SheetTrigger>
             <SheetContent side="left" className="w-[280px] p-0">
               <SheetHeader className="px-6 pt-6 pb-2 text-left">
                 <SheetTitle className="flex items-center gap-2">
-                  <Dumbbell className="h-6 w-6 text-primary" />
-                  Thrive Fit
+                  <ShieldCheck className="h-6 w-6 text-primary" />
+                  Zenith Gym OS
                 </SheetTitle>
                 <SheetDescription>Staff Management Menu</SheetDescription>
               </SheetHeader>

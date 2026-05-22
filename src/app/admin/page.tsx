@@ -9,7 +9,8 @@ import {
   ArrowUpRight,
   Activity,
   Loader2,
-  TrendingUp
+  TrendingUp,
+  Sparkles
 } from 'lucide-react';
 import Link from 'next/link';
 import { collection, query } from 'firebase/firestore';
@@ -66,8 +67,11 @@ export default function ReceptionDashboard() {
   return (
     <div className="flex flex-col gap-6">
       <div className="flex flex-col gap-1">
-        <h1 className="text-3xl font-bold font-headline tracking-tight">Reception Dashboard</h1>
-        <p className="text-muted-foreground">Live data from Thrive Fit Cloud.</p>
+        <div className="flex items-center gap-2 mb-1">
+          <Sparkles className="h-5 w-5 text-primary animate-pulse" />
+          <h1 className="text-3xl font-bold font-headline tracking-tight">Hello, Deshik</h1>
+        </div>
+        <p className="text-muted-foreground">Welcome to your Zenith Gym OS project overview.</p>
       </div>
 
       <div className="grid gap-4 md:grid-cols-2 lg:grid-cols-4">
