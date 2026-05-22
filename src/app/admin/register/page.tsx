@@ -264,7 +264,7 @@ function RegisterForm() {
                       <CalendarIcon className="h-4 w-4 text-primary" />
                       Start Date
                     </Label>
-                    <Popover open={isStartDateOpen} onOpenChange={setIsStartDateOpen} modal={false}>
+                    <Popover open={isStartDateOpen} onValueChange={setIsStartDateOpen}>
                       <PopoverTrigger asChild>
                         <Button
                           type="button"
@@ -277,12 +277,7 @@ function RegisterForm() {
                           {startDate ? format(startDate, "PPP") : <span>Pick a date</span>}
                         </Button>
                       </PopoverTrigger>
-                      <PopoverContent 
-                        className="w-auto p-0 z-[60]" 
-                        align="start"
-                        onOpenAutoFocus={(e) => e.preventDefault()}
-                        onCloseAutoFocus={(e) => e.preventDefault()}
-                      >
+                      <PopoverContent className="w-auto p-0 z-[60]" align="start">
                         <Calendar
                           mode="single"
                           selected={startDate}
@@ -303,7 +298,7 @@ function RegisterForm() {
                       <CalendarIcon className="h-4 w-4 text-primary" />
                       End Date
                     </Label>
-                    <Popover open={isEndDateOpen} onOpenChange={setIsEndDateOpen} modal={false}>
+                    <Popover open={isEndDateOpen} onValueChange={setIsEndDateOpen}>
                       <PopoverTrigger asChild>
                         <Button
                           type="button"
@@ -316,12 +311,7 @@ function RegisterForm() {
                           {endDate ? format(endDate, "PPP") : <span>Pick a date</span>}
                         </Button>
                       </PopoverTrigger>
-                      <PopoverContent 
-                        className="w-auto p-0 z-[60]" 
-                        align="start"
-                        onOpenAutoFocus={(e) => e.preventDefault()}
-                        onCloseAutoFocus={(e) => e.preventDefault()}
-                      >
+                      <PopoverContent className="w-auto p-0 z-[60]" align="start">
                         <Calendar
                           mode="single"
                           selected={endDate}

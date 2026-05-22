@@ -406,10 +406,7 @@ export default function MembersListPage() {
 
       {/* Add PT Dialog */}
       <Dialog open={!!memberForPT} onOpenChange={() => setMemberForPT(null)}>
-        <DialogContent 
-          className="sm:max-w-[425px]"
-          onOpenAutoFocus={(e) => e.preventDefault()}
-        >
+        <DialogContent className="sm:max-w-[425px]" onOpenAutoFocus={(e) => e.preventDefault()}>
           <DialogHeader>
             <DialogTitle>Add Personal Training</DialogTitle>
             <DialogDescription>
@@ -446,7 +443,7 @@ export default function MembersListPage() {
                 <Label className="text-xs uppercase font-bold text-muted-foreground flex items-center gap-1 mb-1.5">
                   <CalendarIcon className="h-3 w-3" /> Start
                 </Label>
-                <Popover open={isPtStartDateOpen} onOpenChange={setIsPtStartDateOpen} modal={false}>
+                <Popover open={isPtStartDateOpen} onValueChange={setIsPtStartDateOpen}>
                   <PopoverTrigger asChild>
                     <Button
                       variant={"outline"}
@@ -458,11 +455,7 @@ export default function MembersListPage() {
                       {ptStartDate ? format(ptStartDate, "PPP") : <span>Pick a date</span>}
                     </Button>
                   </PopoverTrigger>
-                  <PopoverContent 
-                    className="w-auto p-0 z-[60]" 
-                    align="start" 
-                    onOpenAutoFocus={(e) => e.preventDefault()}
-                  >
+                  <PopoverContent className="w-auto p-0 z-[60]" align="start">
                     <Calendar
                       mode="single"
                       selected={ptStartDate}
@@ -482,7 +475,7 @@ export default function MembersListPage() {
                 <Label className="text-xs uppercase font-bold text-muted-foreground flex items-center gap-1 mb-1.5">
                   <CalendarIcon className="h-3 w-3" /> End
                 </Label>
-                <Popover open={isPtEndDateOpen} onOpenChange={setIsPtEndDateOpen} modal={false}>
+                <Popover open={isPtEndDateOpen} onValueChange={setIsPtEndDateOpen}>
                   <PopoverTrigger asChild>
                     <Button
                       variant={"outline"}
@@ -494,11 +487,7 @@ export default function MembersListPage() {
                       {ptEndDate ? format(ptEndDate, "PPP") : <span>Pick a date</span>}
                     </Button>
                   </PopoverTrigger>
-                  <PopoverContent 
-                    className="w-auto p-0 z-[60]" 
-                    align="start"
-                    onOpenAutoFocus={(e) => e.preventDefault()}
-                  >
+                  <PopoverContent className="w-auto p-0 z-[60]" align="start">
                     <Calendar
                       mode="single"
                       selected={ptEndDate}
