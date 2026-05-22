@@ -9,7 +9,10 @@ import {
   Loader2,
   X,
   CalendarDays,
-  CreditCard
+  CreditCard,
+  ChevronRight,
+  TrendingUp,
+  History
 } from 'lucide-react';
 import { collection, query, orderBy } from 'firebase/firestore';
 import { useFirestore, useCollection } from '@/firebase';
@@ -21,6 +24,7 @@ import {
   CardContent,
   CardHeader,
   CardTitle,
+  CardDescription,
 } from '@/components/ui/card';
 import { Input } from '@/components/ui/input';
 import {
@@ -105,48 +109,52 @@ export default function SalesReportPage() {
 
   return (
     <div className="flex flex-col gap-6 max-w-7xl mx-auto">
-      <div className="flex flex-col sm:flex-row justify-between items-start sm:items-end gap-4">
+      {/* Header Section */}
+      <div className="flex flex-col md:flex-row justify-between items-start md:items-center gap-4">
         <div className="space-y-1">
-          <h1 className="text-3xl font-bold font-headline tracking-tight text-primary">Sales Report</h1>
-          <p className="text-muted-foreground text-sm">Review transaction history and financial performance.</p>
+          <h1 className="text-4xl font-black font-headline tracking-tighter text-primary flex items-center gap-3">
+            <History className="h-8 w-8" />
+            LEDGER
+          </h1>
+          <p className="text-muted-foreground text-xs uppercase tracking-[0.2em] font-bold opacity-60">Financial Performance & Audit</p>
         </div>
-        <div className="flex gap-2">
-          {(searchTerm || filter !== 'all' || dateFrom || dateTo) && (
-            <Button variant="ghost" onClick={resetFilters} className="text-xs h-9 px-3">
-              <X className="mr-2 h-3.5 w-3.5" /> Reset
-            </Button>
-          )}
-          <Button variant="outline" className="h-9 px-3 text-xs border-primary/20">
-            <Download className="mr-2 h-3.5 w-3.5" /> Export
+        <div className="flex items-center gap-3">
+          <div className="flex flex-col items-end mr-4">
+            <span className="text-[10px] font-bold text-muted-foreground uppercase tracking-widest">Settled Revenue</span>
+            <span className="text-2xl font-black text-white">₹{totalRevenue.toLocaleString()}</span>
+          </div>
+          <Button variant="outline" size="sm" className="h-10 border-primary/20 bg-primary/5 hover:bg-primary/10">
+            <Download className="mr-2 h-4 w-4" /> EXPORT
           </Button>
         </div>
       </div>
 
-      <Card className="border-border/40 shadow-md overflow-hidden bg-card/30 backdrop-blur-sm">
-        <CardHeader className="border-b bg-muted/20 pb-6">
-          <div className="flex flex-col lg:flex-row gap-4">
-            <div className="flex-1 relative">
-              <Search className="absolute left-3 top-1/2 -translate-y-1/2 h-4 w-4 text-muted-foreground" />
+      {/* Filter Architecture */}
+      <Card className="border-none bg-card/40 backdrop-blur-xl shadow-2xl overflow-hidden">
+        <CardHeader className="border-b border-white/5 py-4 px-6 bg-white/[0.02]">
+          <div className="flex flex-col lg:flex-row items-center gap-4">
+            <div className="w-full lg:flex-1 relative group">
+              <Search className="absolute left-3 top-1/2 -translate-y-1/2 h-4 w-4 text-muted-foreground group-focus-within:text-primary transition-colors" />
               <Input
-                placeholder="Search member name..."
-                className="pl-10 h-10 bg-background/50"
+                placeholder="Search ledger by member name..."
+                className="pl-10 h-11 bg-black/40 border-white/10 focus:border-primary/50 transition-all text-sm"
                 value={searchTerm}
                 onChange={(e) => setSearchTerm(e.target.value)}
               />
             </div>
             
-            <div className="w-full lg:w-48">
+            <div className="w-full lg:w-56">
               <Select value={filter} onValueChange={setFilter}>
-                <SelectTrigger className="h-10 bg-background/50">
-                  <div className="flex items-center">
-                    <Filter className="mr-2 h-4 w-4 text-muted-foreground" />
-                    <SelectValue placeholder="Category" />
+                <SelectTrigger className="h-11 bg-black/40 border-white/10">
+                  <div className="flex items-center gap-2">
+                    <Filter className="h-4 w-4 text-primary/70" />
+                    <SelectValue placeholder="All Streams" />
                   </div>
                 </SelectTrigger>
                 <SelectContent>
-                  <SelectItem value="all">All Categories</SelectItem>
-                  <SelectItem value="membership">Membership</SelectItem>
-                  <SelectItem value="personal training">Personal Training</SelectItem>
+                  <SelectItem value="all">All Revenue Streams</SelectItem>
+                  <SelectItem value="membership">Member Subscriptions</SelectItem>
+                  <SelectItem value="personal training">PT Packages</SelectItem>
                 </SelectContent>
               </Select>
             </div>
@@ -157,15 +165,15 @@ export default function SalesReportPage() {
                   <Button
                     variant={"outline"}
                     className={cn(
-                      "h-10 flex-1 lg:w-40 justify-start text-left font-normal bg-background/50 border-input text-xs",
+                      "h-11 flex-1 lg:w-40 justify-start text-left font-normal bg-black/40 border-white/10 text-xs",
                       !dateFrom && "text-muted-foreground"
                     )}
                   >
                     <CalendarDays className="mr-2 h-4 w-4 text-primary/60" />
-                    {dateFrom ? format(dateFrom, "MMM dd, yyyy") : <span>From</span>}
+                    {dateFrom ? format(dateFrom, "MMM dd, yyyy") : <span>Start Date</span>}
                   </Button>
                 </PopoverTrigger>
-                <PopoverContent className="w-auto p-0" align="start">
+                <PopoverContent className="w-auto p-0 border-white/10" align="start">
                   <Calendar
                     mode="single"
                     selected={dateFrom}
@@ -183,15 +191,15 @@ export default function SalesReportPage() {
                   <Button
                     variant={"outline"}
                     className={cn(
-                      "h-10 flex-1 lg:w-40 justify-start text-left font-normal bg-background/50 border-input text-xs",
+                      "h-11 flex-1 lg:w-40 justify-start text-left font-normal bg-black/40 border-white/10 text-xs",
                       !dateTo && "text-muted-foreground"
                     )}
                   >
                     <CalendarDays className="mr-2 h-4 w-4 text-primary/60" />
-                    {dateTo ? format(dateTo, "MMM dd, yyyy") : <span>To</span>}
+                    {dateTo ? format(dateTo, "MMM dd, yyyy") : <span>End Date</span>}
                   </Button>
                 </PopoverTrigger>
-                <PopoverContent className="w-auto p-0" align="start">
+                <PopoverContent className="w-auto p-0 border-white/10" align="start">
                   <Calendar
                     mode="single"
                     selected={dateTo}
@@ -204,59 +212,85 @@ export default function SalesReportPage() {
                   />
                 </PopoverContent>
               </Popover>
+              
+              {(searchTerm || filter !== 'all' || dateFrom || dateTo) && (
+                <Button variant="ghost" size="icon" onClick={resetFilters} className="h-11 w-11 hover:bg-destructive/10 hover:text-destructive">
+                  <X className="h-5 w-5" />
+                </Button>
+              )}
             </div>
           </div>
         </CardHeader>
+
         <CardContent className="p-0">
-          <Table>
-            <TableHeader className="bg-muted/10">
-              <TableRow>
-                <TableHead className="w-[140px] font-bold uppercase text-[10px] tracking-widest pl-6">Date</TableHead>
-                <TableHead className="font-bold uppercase text-[10px] tracking-widest">Member</TableHead>
-                <TableHead className="font-bold uppercase text-[10px] tracking-widest">Category</TableHead>
-                <TableHead className="font-bold uppercase text-[10px] tracking-widest hidden md:table-cell">Description</TableHead>
-                <TableHead className="text-right font-bold uppercase text-[10px] tracking-widest pr-6">Amount</TableHead>
-              </TableRow>
-            </TableHeader>
-            <TableBody>
-              {filteredSales.length > 0 ? (
-                filteredSales.map((sale) => (
-                  <TableRow key={sale.id} className="hover:bg-primary/[0.02] transition-colors">
-                    <TableCell className="text-xs font-mono text-muted-foreground pl-6">
-                      {sale.date ? format(parseISO(sale.date), 'MMM dd, yyyy') : 'N/A'}
-                    </TableCell>
-                    <TableCell className="font-semibold">{sale.memberName}</TableCell>
-                    <TableCell>
-                      <Badge variant="outline" className={cn(
-                        "capitalize text-[10px] py-0 px-2 font-bold",
-                        sale.category === 'membership' ? "border-primary/20 text-primary bg-primary/5" : "border-accent/20 text-accent bg-accent/5"
-                      )}>
-                        {sale.category}
-                      </Badge>
-                    </TableCell>
-                    <TableCell className="text-xs text-muted-foreground max-w-xs truncate hidden md:table-cell">
-                      {sale.description}
-                    </TableCell>
-                    <TableCell className="text-right font-bold text-primary pr-6">₹{sale.amount.toLocaleString()}</TableCell>
-                  </TableRow>
-                ))
-              ) : (
-                <TableRow>
-                  <TableCell colSpan={5} className="h-48 text-center text-muted-foreground italic">
-                    <div className="flex flex-col items-center gap-2 opacity-40">
-                      <CreditCard className="h-10 w-10 mb-2" />
-                      <p>No transactions found.</p>
-                    </div>
-                  </TableCell>
+          <div className="overflow-x-auto">
+            <Table>
+              <TableHeader className="bg-white/[0.01]">
+                <TableRow className="border-white/5 hover:bg-transparent">
+                  <TableHead className="w-[140px] font-bold uppercase text-[10px] tracking-[0.2em] pl-8">Transaction Date</TableHead>
+                  <TableHead className="font-bold uppercase text-[10px] tracking-[0.2em]">Member Identity</TableHead>
+                  <TableHead className="font-bold uppercase text-[10px] tracking-[0.2em]">Stream</TableHead>
+                  <TableHead className="font-bold uppercase text-[10px] tracking-[0.2em] hidden md:table-cell">Memo</TableHead>
+                  <TableHead className="text-right font-bold uppercase text-[10px] tracking-[0.2em] pr-8">Value</TableHead>
                 </TableRow>
-              )}
-            </TableBody>
-          </Table>
+              </TableHeader>
+              <TableBody>
+                {filteredSales.length > 0 ? (
+                  filteredSales.map((sale) => (
+                    <TableRow key={sale.id} className="border-white/5 hover:bg-white/[0.02] transition-colors group">
+                      <TableCell className="text-xs font-mono text-muted-foreground/80 pl-8">
+                        {sale.date ? format(parseISO(sale.date), 'MMM dd, yyyy') : 'NO DATE'}
+                      </TableCell>
+                      <TableCell>
+                        <div className="flex items-center gap-2">
+                          <span className="font-bold text-white group-hover:text-primary transition-colors">{sale.memberName}</span>
+                          <ChevronRight className="h-3 w-3 opacity-0 group-hover:opacity-40 transition-all -translate-x-1 group-hover:translate-x-0" />
+                        </div>
+                      </TableCell>
+                      <TableCell>
+                        <Badge variant="outline" className={cn(
+                          "capitalize text-[9px] py-0 px-2 font-black tracking-widest border-none rounded-sm",
+                          sale.category === 'membership' ? "bg-primary/10 text-primary" : "bg-accent/10 text-accent"
+                        )}>
+                          {sale.category}
+                        </Badge>
+                      </TableCell>
+                      <TableCell className="text-xs text-muted-foreground/60 max-w-[240px] truncate hidden md:table-cell italic">
+                        {sale.description}
+                      </TableCell>
+                      <TableCell className="text-right font-black text-white pr-8">
+                        ₹{sale.amount.toLocaleString()}
+                      </TableCell>
+                    </TableRow>
+                  ))
+                ) : (
+                  <TableRow>
+                    <TableCell colSpan={5} className="h-72 text-center text-muted-foreground">
+                      <div className="flex flex-col items-center gap-4 opacity-20">
+                        <CreditCard className="h-16 w-16" />
+                        <div className="space-y-1">
+                          <p className="text-xl font-headline font-bold">NO TRANSACTIONS RECORDED</p>
+                          <p className="text-xs font-mono">ADJUST FILTERS OR SEARCH PARAMETERS</p>
+                        </div>
+                      </div>
+                    </TableCell>
+                  </TableRow>
+                )}
+              </TableBody>
+            </Table>
+          </div>
           
-          <div className="p-4 border-t bg-muted/5 flex justify-end">
-            <div className="flex items-center gap-4">
-              <span className="text-xs font-bold uppercase tracking-widest text-muted-foreground">Total Filtered Revenue</span>
-              <span className="text-lg font-black text-primary">₹{totalRevenue.toLocaleString()}</span>
+          {/* Footer Summary Bar */}
+          <div className="p-6 border-t border-white/5 bg-primary/[0.02] flex flex-col sm:flex-row justify-between items-center gap-4">
+            <div className="flex items-center gap-4 text-xs font-bold uppercase tracking-widest opacity-40">
+              <TrendingUp className="h-4 w-4" />
+              Showing {filteredSales.length} Transactions
+            </div>
+            <div className="flex items-center gap-6">
+              <div className="flex flex-col items-end">
+                <span className="text-[9px] font-black text-muted-foreground uppercase tracking-[0.3em]">Filtered Gross</span>
+                <span className="text-3xl font-black text-primary drop-shadow-[0_0_15px_rgba(var(--primary),0.3)]">₹{totalRevenue.toLocaleString()}</span>
+              </div>
             </div>
           </div>
         </CardContent>
