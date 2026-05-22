@@ -12,7 +12,6 @@ import {
   UserPlus,
   Search,
   UserCheck,
-  UserRound,
   History,
   AlertCircle,
   Fingerprint
@@ -39,7 +38,6 @@ export default function SmartEntrancePage() {
   const [activeMode, setActiveMode] = useState<'kiosk' | 'enroll'>('kiosk');
   const [isCameraActive, setIsCameraActive] = useState(false);
   const [isProcessing, setIsProcessing] = useState(false);
-  const [facePresent, setFacePresent] = useState(false);
   const [modelsReady, setModelsReady] = useState(false);
   const [facingMode, setFacingMode] = useState<'user' | 'environment'>('user');
   const [identifiedMember, setIdentifiedMember] = useState<any>(null);
@@ -52,7 +50,6 @@ export default function SmartEntrancePage() {
 
   const videoRef = useRef<HTMLVideoElement>(null);
 
-  // Sync member cache locally for ultra-fast matching
   useEffect(() => {
     if (!db) return;
     const q = query(collection(db, 'members'), where('status', '==', 'active'));
@@ -98,19 +95,16 @@ export default function SmartEntrancePage() {
     setIsProcessing(true);
     
     try {
-      // First check if face is in frame
       const isPresent = await isFaceInFrame(videoRef.current);
-      setFacePresent(isPresent);
-      
       if (!isPresent) {
-        toast({ variant: "destructive", title: "No Face Detected", description: "Please look into the camera and try again." });
+        toast({ variant: "destructive", title: "No Face Detected", description: "Please look into the camera." });
         setIsProcessing(false);
         return;
       }
 
       const liveEmbedding = await generateEmbedding(videoRef.current);
       if (!liveEmbedding) {
-        toast({ variant: "destructive", title: "Scan Error", description: "Could not generate biometric signature. Try again." });
+        toast({ variant: "destructive", title: "Scan Error", description: "Could not generate biometric ID." });
         setIsProcessing(false);
         return;
       }
@@ -161,7 +155,7 @@ export default function SmartEntrancePage() {
     try {
       const snap = await getDoc(doc(db, 'members', searchPhone));
       if (snap.exists()) setPendingMember({ id: snap.id, ...snap.data() });
-      else toast({ variant: "destructive", title: "Not Found", description: "Member not registered. Please visit reception." });
+      else toast({ variant: "destructive", title: "Not Found", description: "Check registration." });
     } finally {
       setIsProcessing(false);
     }
@@ -188,11 +182,11 @@ export default function SmartEntrancePage() {
         };
 
         await updateDoc(memberRef, updateData);
-        toast({ title: "Face Enrolled!", description: `${pendingMember.fullName} is now registered for biometric entry.` });
+        toast({ title: "Face Enrolled!", description: `${pendingMember.fullName} is ready.` });
         setPendingMember(null);
         setSearchPhone('');
       } else {
-        toast({ variant: "destructive", title: "Face Not Found", description: "Please look directly at the camera." });
+        toast({ variant: "destructive", title: "Face Not Found", description: "Look at camera." });
       }
     } finally {
       setIsCapturing(false);
@@ -203,24 +197,24 @@ export default function SmartEntrancePage() {
     <div className="max-w-7xl mx-auto space-y-6 pb-20">
       <div className="flex flex-col gap-2">
          <h1 className="text-3xl font-bold font-headline">Entrance Kiosk</h1>
-         <p className="text-muted-foreground">Manual biometric check-in and enrollment portal.</p>
+         <p className="text-muted-foreground italic">Biometric Verification Portal</p>
       </div>
 
       <Tabs value={activeMode} onValueChange={(v: any) => { setActiveMode(v); setScanResult(null); setIsProcessing(false); }} className="w-full">
         <TabsList className="grid w-full grid-cols-2 h-14 bg-muted/50 p-1">
           <TabsTrigger value="kiosk" className="text-lg font-bold"><Fingerprint className="mr-2 h-5 w-5" /> MANUAL SCAN</TabsTrigger>
-          <TabsTrigger value="enroll" className="text-lg font-bold"><UserPlus className="mr-2 h-5 w-5" /> FACE ENROLLMENT</TabsTrigger>
+          <TabsTrigger value="enroll" className="text-lg font-bold"><UserPlus className="mr-2 h-5 w-5" /> FACE ENROLL</TabsTrigger>
         </TabsList>
 
         <div className="grid grid-cols-1 lg:grid-cols-12 gap-6 mt-6">
           <Card className="lg:col-span-8 overflow-hidden flex flex-col relative bg-black border-none shadow-2xl rounded-2xl min-h-[500px]">
             <div className="absolute top-4 left-4 z-20 flex flex-wrap gap-2">
-              <Badge variant="outline" className="bg-background/80 backdrop-blur-sm text-primary font-mono"><Cpu className="h-3 w-3 mr-1" /> LOCAL AI ENGINE</Badge>
-              {isCameraActive && <Badge className="bg-green-500 animate-pulse">CAMERA LIVE</Badge>}
+              <Badge variant="outline" className="bg-background/80 backdrop-blur-sm text-primary font-mono"><Cpu className="h-3 w-3 mr-1" /> CLOUD SYNCED</Badge>
+              {isCameraActive && <Badge className="bg-green-500 animate-pulse">LIVE</Badge>}
             </div>
 
             <div className="absolute top-4 right-4 z-20 flex gap-2">
-              <Button size="icon" variant="outline" className="bg-background/50 rounded-full" onClick={() => setFacingMode(f => f === 'user' ? 'environment' : 'user')}><RefreshCw className="h-4 w-4" /></Button>
+              <Button size="icon" variant="outline" className="bg-background/50 rounded-full border-white/10" onClick={() => setFacingMode(f => f === 'user' ? 'environment' : 'user')}><RefreshCw className="h-4 w-4" /></Button>
             </div>
 
             <div className="relative flex-1 bg-black flex items-center justify-center">
@@ -235,14 +229,14 @@ export default function SmartEntrancePage() {
               ) : (
                 <div className="flex flex-col items-center gap-4 text-muted-foreground/30">
                   <Camera className="h-20 w-20" />
-                  <p className="font-headline text-xl">Camera is inactive</p>
+                  <p className="font-headline text-xl">Camera Off</p>
                 </div>
               )}
               
               {isProcessing && !scanResult && (
                 <div className="absolute inset-0 flex flex-col items-center justify-center z-10 bg-black/40 backdrop-blur-sm">
                     <Loader2 className="h-20 w-20 animate-spin text-primary mb-4" />
-                    <p className="text-white font-headline text-3xl tracking-widest animate-pulse">IDENTIFYING...</p>
+                    <p className="text-white font-headline text-3xl tracking-widest animate-pulse">VERIFYING...</p>
                 </div>
               )}
 
@@ -251,15 +245,15 @@ export default function SmartEntrancePage() {
                   <CheckCircle2 className="h-48 w-48 text-green-500 mb-6 drop-shadow-xl" />
                   <h2 className="text-7xl font-headline font-bold text-white mb-2 tracking-tighter">WELCOME</h2>
                   <p className="text-4xl text-green-300 font-black uppercase tracking-tight">{identifiedMember.fullName}</p>
-                  <div className="mt-8 bg-black/40 px-6 py-2 rounded-full border border-green-500/30 text-xs text-green-500 uppercase font-bold tracking-widest">Attendance Logged</div>
+                  <div className="mt-8 bg-black/40 px-6 py-2 rounded-full border border-green-500/30 text-xs text-green-500 uppercase font-bold tracking-widest">Entry Recorded</div>
                 </div>
               )}
 
               {scanResult === 'failure' && (
                 <div className="absolute inset-0 flex flex-col items-center justify-center z-10 bg-destructive/30 backdrop-blur-sm">
                   <XCircle className="h-32 w-32 text-destructive mb-4" />
-                  <p className="text-white font-headline text-2xl font-bold">UNRECOGNIZED MEMBER</p>
-                  <p className="text-white/60 text-sm mt-2">Please try again or visit reception.</p>
+                  <p className="text-white font-headline text-2xl font-bold">REJECTED</p>
+                  <p className="text-white/60 text-sm mt-2">Member not recognized.</p>
                 </div>
               )}
             </div>
@@ -268,13 +262,13 @@ export default function SmartEntrancePage() {
               <TabsContent value="kiosk" className="m-0">
                 <div className="flex flex-col sm:flex-row items-center justify-between gap-4">
                   <div className="space-y-1">
-                    <p className="text-[10px] font-bold text-muted-foreground uppercase tracking-widest">Front Desk Entry Portal</p>
-                    <span className="text-[10px] opacity-60 font-mono">Status: Ready for Capture</span>
+                    <p className="text-[10px] font-bold text-muted-foreground uppercase tracking-widest">Biometric Check-In</p>
+                    <span className="text-[10px] opacity-60 font-mono">Status: Ready</span>
                   </div>
                   <div className="flex gap-2 w-full sm:w-auto">
                     {!isCameraActive ? (
                       <Button size="lg" onClick={() => setIsCameraActive(true)} className="w-full sm:px-12 font-bold h-14 text-lg rounded-xl">
-                          <Camera className="mr-2 h-5 w-5" /> ACTIVATE CAMERA
+                          <Camera className="mr-2 h-5 w-5" /> ACTIVATE
                       </Button>
                     ) : (
                       <Button 
@@ -282,10 +276,10 @@ export default function SmartEntrancePage() {
                         variant="default" 
                         onClick={triggerManualVerification} 
                         disabled={isProcessing || scanResult !== null}
-                        className="flex-1 sm:px-12 font-bold h-14 text-lg rounded-xl bg-primary shadow-xl hover:shadow-primary/20"
+                        className="flex-1 sm:px-12 font-bold h-14 text-lg rounded-xl bg-primary"
                       >
                          {isProcessing ? <Loader2 className="mr-2 h-5 w-5 animate-spin" /> : <Scan className="mr-2 h-5 w-5" />}
-                         VERIFY & CHECK-IN
+                         VERIFY NOW
                       </Button>
                     )}
                   </div>
@@ -297,7 +291,7 @@ export default function SmartEntrancePage() {
                   {!pendingMember ? (
                     <div className="flex-1 flex gap-2 w-full">
                        <Input 
-                        placeholder="Enter phone to enroll face..." 
+                        placeholder="Member phone..." 
                         className="h-12 text-lg" 
                         value={searchPhone} 
                         onChange={(e) => setSearchPhone(e.target.value)} 
@@ -313,7 +307,7 @@ export default function SmartEntrancePage() {
                           </div>
                           <div>
                             <p className="font-bold text-lg leading-tight">{pendingMember.fullName}</p>
-                            <p className="text-xs text-muted-foreground">Registered Member</p>
+                            <p className="text-xs text-muted-foreground italic">Enrollment Pending</p>
                           </div>
                        </div>
                        <div className="flex gap-2 w-full sm:w-auto">
@@ -324,7 +318,7 @@ export default function SmartEntrancePage() {
                             onClick={handleCaptureEnrollment} 
                             disabled={isCapturing || !isCameraActive}
                           >
-                            <Camera className="h-5 w-5 mr-2" /> CAPTURE & ENROLL
+                            <Camera className="h-5 w-5 mr-2" /> ENROLL FACE
                           </Button>
                        </div>
                     </div>
@@ -337,7 +331,7 @@ export default function SmartEntrancePage() {
           <div className="lg:col-span-4 flex flex-col gap-6">
             <Card className="flex-1 overflow-hidden border-none shadow-xl bg-card/30 backdrop-blur-sm">
               <CardHeader className="bg-muted/10 border-b py-4 px-6">
-                <CardTitle className="text-[10px] uppercase tracking-widest font-bold flex items-center gap-2"><History className="h-4 w-4 text-primary" /> TODAY'S LOGS</CardTitle>
+                <CardTitle className="text-[10px] uppercase tracking-widest font-bold flex items-center gap-2 text-muted-foreground"><History className="h-4 w-4" /> LIVE ACTIVITY</CardTitle>
               </CardHeader>
               <CardContent className="p-0 flex-1 overflow-auto max-h-[400px]">
                 <Table>
@@ -351,7 +345,7 @@ export default function SmartEntrancePage() {
                       )) : (
                         <TableRow>
                           <TableCell colSpan={3} className="h-40 text-center italic text-muted-foreground opacity-30 text-xs p-10 leading-relaxed">
-                            No entries recorded yet. <br/> Use manual check-in to start.
+                            No entries yet.
                           </TableCell>
                         </TableRow>
                       )}
@@ -362,13 +356,13 @@ export default function SmartEntrancePage() {
 
             <Card className="bg-primary/5 border-primary/10">
               <CardHeader className="py-4 px-6 border-b border-primary/5">
-                  <CardTitle className="text-[10px] uppercase font-bold text-muted-foreground flex items-center gap-2"><AlertCircle className="h-3 w-3" /> SECURITY INFO</CardTitle>
+                  <CardTitle className="text-[10px] uppercase font-bold text-muted-foreground flex items-center gap-2"><AlertCircle className="h-3 w-3" /> SYSTEM HEALTH</CardTitle>
               </CardHeader>
               <CardContent className="p-6 space-y-4 text-xs">
-                  <div className="flex justify-between"><span className="opacity-60">Engine</span><span className="font-bold text-primary">Biometric V2</span></div>
-                  <div className="flex justify-between"><span className="opacity-60">Profiles Cached</span><span className="font-bold text-primary">{cachedMembers.length} Active</span></div>
-                  <div className="flex justify-between"><span className="opacity-60">Location</span><span className="font-bold text-primary">Entrance 1</span></div>
-                  <p className="leading-relaxed opacity-70 border-t pt-4 italic">Biometric signatures are processed entirely in browser memory. No face data is uploaded.</p>
+                  <div className="flex justify-between"><span className="opacity-60">Status</span><span className="font-bold text-green-500">Live</span></div>
+                  <div className="flex justify-between"><span className="opacity-60">Database</span><span className="font-bold text-primary">Connected</span></div>
+                  <div className="flex justify-between"><span className="opacity-60">Profiles</span><span className="font-bold text-primary">{cachedMembers.length} Cached</span></div>
+                  <p className="leading-relaxed opacity-70 border-t pt-4 italic">Attendance is synced to cloud in real-time.</p>
               </CardContent>
             </Card>
           </div>

@@ -129,6 +129,30 @@ function RegisterForm() {
     const docRef = doc(db, 'members', phone);
     
     setDoc(docRef, memberData, { merge: true })
+      .then(() => {
+        // Log sale only after successful member save
+        const saleData = {
+          memberId: phone,
+          memberName: fullName,
+          amount: parseFloat(price) || 0,
+          date: new Date().toISOString().split('T')[0],
+          category: membershipType === 'personal' ? 'personal training' : 'membership',
+          description: isEditMode ? `Plan Update: ${membershipType}` : `New Enrollment: ${membershipType}`,
+        };
+
+        addDoc(collection(db, 'sales'), saleData).catch(async (e) => {
+            console.error("Failed to log sale", e);
+        });
+
+        toast({ 
+          title: "Saved Successfully", 
+          description: isEditMode ? "Profile updated." : "Member registered and payment logged." 
+        });
+        
+        if (!isEditMode) {
+          resetForm();
+        }
+      })
       .catch(async () => {
         const permissionError = new FirestorePermissionError({
           path: docRef.path,
@@ -136,30 +160,8 @@ function RegisterForm() {
           requestResourceData: memberData,
         } satisfies SecurityRuleContext);
         errorEmitter.emit('permission-error', permissionError);
-      });
-
-    const saleData = {
-      memberId: phone,
-      memberName: fullName,
-      amount: parseFloat(price) || 0,
-      date: new Date().toISOString().split('T')[0],
-      category: membershipType === 'personal' ? 'personal training' : 'membership',
-      description: isEditMode ? `Plan Update: ${membershipType}` : `New Enrollment: ${membershipType}`,
-    };
-
-    addDoc(collection(db, 'sales'), saleData).catch(async (e) => {
-        console.error("Failed to log sale in background", e);
-    });
-
-    toast({ 
-      title: "Saved Locally", 
-      description: isEditMode ? "Profile updated." : "Member registered. Syncing to cloud." 
-    });
-    
-    setLoading(false);
-    if (!isEditMode) {
-      resetForm();
-    }
+      })
+      .finally(() => setLoading(false));
   };
 
   const resetForm = () => {
@@ -181,7 +183,7 @@ function RegisterForm() {
       <div className="flex flex-col md:flex-row justify-between items-start md:items-center gap-4">
         <div>
           <h1 className="text-3xl font-bold font-headline tracking-tight">{isEditMode ? 'Manage Profile' : 'New Registration'}</h1>
-          <p className="text-muted-foreground italic">Staff Portal: Manual Entry</p>
+          <p className="text-muted-foreground italic">Front Desk Management</p>
         </div>
         <div className="flex gap-2">
            <Input 
@@ -200,9 +202,9 @@ function RegisterForm() {
 
       <Alert className="bg-primary/5 border-primary/20">
         <Info className="h-4 w-4 text-primary" />
-        <AlertTitle className="text-primary font-bold">Registration Step</AlertTitle>
+        <AlertTitle className="text-primary font-bold">Biometric Note</AlertTitle>
         <AlertDescription>
-          Enter member data here. Face enrollment is completed at the <b>Entrance Kiosk</b> using a mobile device.
+          Data entered here is saved to the cloud. Face enrollment should be done at the <b>Entrance Kiosk</b>.
         </AlertDescription>
       </Alert>
 
@@ -211,7 +213,7 @@ function RegisterForm() {
           <CardHeader>
             <div className="flex items-center justify-between">
               <CardTitle>Member Details</CardTitle>
-              {isEnrolled && <Badge className="bg-green-500">Biometrics Enrolled</Badge>}
+              {isEnrolled && <Badge className="bg-green-500">Biometrics Active</Badge>}
             </div>
           </CardHeader>
           <CardContent className="space-y-6">
@@ -221,7 +223,7 @@ function RegisterForm() {
                 <Input value={fullName} onChange={(e) => setFullName(e.target.value)} required placeholder="Full name of member" />
               </div>
               <div className="space-y-2">
-                <Label>Phone Number (Document ID)</Label>
+                <Label>Phone Number (Primary ID)</Label>
                 <Input value={phone} onChange={(e) => setPhone(e.target.value)} required readOnly={isEditMode} placeholder="10-digit mobile" />
               </div>
             </div>
@@ -272,7 +274,7 @@ function RegisterForm() {
             )}
 
             <div className="space-y-2 pt-2">
-                <Label className="text-xs uppercase font-bold text-muted-foreground tracking-widest">Enrollment Fee (INR)</Label>
+                <Label className="text-xs uppercase font-bold text-muted-foreground tracking-widest">Fee (INR)</Label>
                 <div className="relative">
                   <span className="absolute left-4 top-1/2 -translate-y-1/2 text-muted-foreground font-bold">₹</span>
                   <Input type="number" className="pl-8 h-12 text-xl font-bold" value={price} onChange={(e) => setPrice(e.target.value)} required placeholder="0.00" />
@@ -281,7 +283,7 @@ function RegisterForm() {
           </CardContent>
           <CardFooter className="bg-muted/10 border-t p-6">
             <Button type="submit" className="w-full h-14 text-lg font-bold shadow-lg" disabled={loading}>
-              {loading ? <Loader2 className="h-5 w-5 animate-spin mr-2" /> : (isEditMode ? 'Update Member Profile' : 'Complete Registration')}
+              {loading ? <Loader2 className="h-5 w-5 animate-spin mr-2" /> : (isEditMode ? 'Update Profile' : 'Register Member')}
             </Button>
           </CardFooter>
         </Card>
