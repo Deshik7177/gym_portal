@@ -8,7 +8,7 @@ import { useFirestore } from '@/firebase';
 import { errorEmitter } from '@/firebase/error-emitter';
 import { FirestorePermissionError, type SecurityRuleContext } from '@/firebase/errors';
 import { cn } from '@/lib/utils';
-import { format, differenceInDays } from 'date-fns';
+import { format, differenceInDays, startOfDay } from 'date-fns';
 
 import { Button } from '@/components/ui/button';
 import {
@@ -57,6 +57,8 @@ function RegisterForm() {
   
   const [loading, setLoading] = useState(false);
   const [isEnrolled, setIsEnrolled] = useState(false);
+
+  const today = useMemo(() => startOfDay(new Date()), []);
 
   const totalDays = useMemo(() => {
     if (startDate && endDate) {
@@ -290,6 +292,7 @@ function RegisterForm() {
                               setIsStartDateOpen(false);
                             }
                           }}
+                          disabled={(date) => date < today}
                           initialFocus
                         />
                       </PopoverContent>
@@ -328,6 +331,7 @@ function RegisterForm() {
                               setIsEndDateOpen(false);
                             }
                           }}
+                          disabled={(date) => date < (startDate || today)}
                           initialFocus
                         />
                       </PopoverContent>

@@ -96,6 +96,8 @@ export default function MembersListPage() {
   const [isPtStartDateOpen, setIsPtStartDateOpen] = useState(false);
   const [isPtEndDateOpen, setIsPtEndDateOpen] = useState(false);
 
+  const today = useMemo(() => startOfDay(new Date()), []);
+
   const membersRef = useMemo(() => db ? query(collection(db, 'members')) : null, [db]);
   const { data: members, loading } = useCollection<any>(membersRef);
 
@@ -138,6 +140,9 @@ export default function MembersListPage() {
 
   // Helper to check if a date is within member's subscription
   const isDateDisabled = (date: Date) => {
+    // Always disable past dates
+    if (startOfDay(date) < today) return true;
+
     if (!memberForPT || memberForPT.status !== 'non-active') return false;
     
     try {
