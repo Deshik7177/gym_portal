@@ -2,7 +2,7 @@
 
 import { useState, useEffect, Suspense } from 'react';
 import { useSearchParams, useRouter } from 'next/navigation';
-import { Search, CheckCircle2, Loader2, Info } from 'lucide-react';
+import { Search, CheckCircle2, Loader2, Info, AlertTriangle } from 'lucide-react';
 import { doc, setDoc, getDoc, serverTimestamp, collection, addDoc } from 'firebase/firestore';
 import { useFirestore } from '@/firebase';
 import { errorEmitter } from '@/firebase/error-emitter';
@@ -129,8 +129,10 @@ function RegisterForm() {
     const docRef = doc(db, 'members', phone);
     
     try {
+      // Create/Update the member document. Firestore creates collections automatically.
       await setDoc(docRef, memberData, { merge: true });
 
+      // Log the transaction
       const saleData = {
         memberId: phone,
         memberName: fullName,
@@ -138,13 +140,14 @@ function RegisterForm() {
         date: new Date().toISOString().split('T')[0],
         category: membershipType === 'personal' ? 'personal training' : 'membership',
         description: isEditMode ? `Plan Update: ${membershipType}` : `New Enrollment: ${membershipType}`,
+        createdAt: serverTimestamp()
       };
 
       await addDoc(collection(db, 'sales'), saleData);
 
       toast({ 
-        title: "Saved Locally", 
-        description: "Member registered. Syncing to cloud." 
+        title: "Registration Success", 
+        description: isEditMode ? "Profile updated successfully." : "New member registered and syncing to cloud." 
       });
       
       if (!isEditMode) {
@@ -160,7 +163,11 @@ function RegisterForm() {
         } satisfies SecurityRuleContext);
         errorEmitter.emit('permission-error', permissionError);
       } else {
-        toast({ variant: "destructive", title: "Cloud Sync Failed", description: "Check your internet connection or Firebase Console rules." });
+        toast({ 
+          variant: "destructive", 
+          title: "Save Failed", 
+          description: "Could not save to Firebase. Please check your internet connection." 
+        });
       }
     } finally {
       setLoading(false);
@@ -205,9 +212,9 @@ function RegisterForm() {
 
       <Alert className="bg-primary/5 border-primary/20">
         <Info className="h-4 w-4 text-primary" />
-        <AlertTitle className="text-primary font-bold">Biometric Note</AlertTitle>
+        <AlertTitle className="text-primary font-bold">Cloud Sync Active</AlertTitle>
         <AlertDescription>
-          Data entered here is saved to the cloud. Face enrollment should be done at the <b>Entrance Kiosk</b>.
+          Member data is automatically synchronized with the Firebase cloud database.
         </AlertDescription>
       </Alert>
 

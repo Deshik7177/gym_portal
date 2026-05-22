@@ -14,28 +14,28 @@ import { firebaseConfig } from './config';
 
 /**
  * Initializes Firebase with local persistence for offline-first gym operation.
- * Ensures the connection to the cloud is active.
+ * Ensures the connection to the cloud is active and robust.
  */
 export function initializeFirebase() {
   const firebaseApp = getApps().length === 0 ? initializeApp(firebaseConfig) : getApp();
   
   let firestore: Firestore;
   
-  // Prevent "Firestore has already been initialized" errors during Next.js Hot Module Replacement
   try {
+    // We use initializeFirestore to configure persistence settings
     firestore = initializeFirestore(firebaseApp, {
       localCache: persistentLocalCache({
         tabManager: persistentMultipleTabManager(),
       }),
     });
   } catch (e) {
-    // If already initialized, just get the existing instance
+    // If already initialized (common during HMR), get the existing instance
     firestore = getFirestore(firebaseApp);
   }
 
-  // Ensure network is enabled (cloud sync active)
+  // Force the network connection to be active to prioritize cloud sync
   enableNetwork(firestore).catch(() => {
-    // Fail silently if network is already enabled or unavailable
+    // Fail silently if network is already enabled
   });
 
   const auth = getAuth(firebaseApp);
