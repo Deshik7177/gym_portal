@@ -25,7 +25,6 @@ import {
   CardTitle,
 } from '@/components/ui/card';
 
-// Lazy load the heavy chart component to improve TBT and FCP
 const Overview = dynamic(() => import('./components/overview').then(mod => mod.Overview), {
   loading: () => <div className="h-[350px] w-full bg-muted/20 animate-pulse rounded-xl" />,
   ssr: false
@@ -69,7 +68,7 @@ export default function ReceptionDashboard() {
       <div className="flex flex-col gap-1">
         <div className="flex items-center gap-2 mb-1">
           <Sparkles className="h-5 w-5 text-primary animate-pulse" />
-          <h1 className="text-3xl font-bold font-headline tracking-tight">Hello, Deshik</h1>
+          <h1 className="text-3xl font-bold font-headline tracking-tight">Hello, Staff</h1>
         </div>
         <p className="text-muted-foreground">Welcome to your Thrive Fit project overview.</p>
       </div>

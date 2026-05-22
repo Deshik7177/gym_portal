@@ -20,15 +20,15 @@ export default function UserNav() {
       <DropdownMenuTrigger asChild>
         <Button variant="ghost" className="relative h-8 w-8 rounded-full">
           <Avatar className="h-9 w-9 border-2 border-primary/20">
-            <AvatarImage src={userAvatar?.imageUrl} alt="Deshik" data-ai-hint={userAvatar?.imageHint} />
-            <AvatarFallback>D</AvatarFallback>
+            <AvatarImage src={userAvatar?.imageUrl} alt="Staff" data-ai-hint={userAvatar?.imageHint} />
+            <AvatarFallback>S</AvatarFallback>
           </Avatar>
         </Button>
       </DropdownMenuTrigger>
       <DropdownMenuContent className="w-56" align="end" forceMount>
         <DropdownMenuLabel className="font-normal">
           <div className="flex flex-col space-y-1">
-            <p className="text-sm font-medium leading-none">Deshik</p>
+            <p className="text-sm font-medium leading-none">Staff Member</p>
             <p className="text-xs leading-none text-muted-foreground">admin@thrivefit.com</p>
           </div>
         </DropdownMenuLabel>
