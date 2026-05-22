@@ -2,7 +2,7 @@
 
 import { useState, useEffect, Suspense } from 'react';
 import { useSearchParams, useRouter } from 'next/navigation';
-import { Search, CheckCircle2, Loader2, Info } from 'lucide-react';
+import { Search, CheckCircle2, Loader2, Info, Calendar as CalendarIcon } from 'lucide-react';
 import { doc, setDoc, getDoc, serverTimestamp, collection, addDoc } from 'firebase/firestore';
 import { useFirestore } from '@/firebase';
 import { errorEmitter } from '@/firebase/error-emitter';
@@ -37,12 +37,10 @@ function RegisterForm() {
   const [fullName, setFullName] = useState('');
   const [searchQuery, setSearchQuery] = useState('');
   const [durationStatus, setDurationStatus] = useState<'active' | 'non-active'>('active');
-  const [membershipType, setMembershipType] = useState<'group' | 'personal'>('group');
   const [price, setPrice] = useState('');
   const [description, setDescription] = useState('');
   const [startDate, setStartDate] = useState('');
   const [endDate, setEndDate] = useState('');
-  const [daysCount, setDaysCount] = useState('');
   
   const [loading, setLoading] = useState(false);
   const [isEnrolled, setIsEnrolled] = useState(false);
@@ -55,13 +53,11 @@ function RegisterForm() {
           const data = snap.data();
           setPhone(data.phone || '');
           setFullName(data.fullName || '');
-          setMembershipType(data.type || 'group');
           setDurationStatus(data.status || 'active');
           setPrice(data.price?.toString() || '');
           setDescription(data.description || '');
           setStartDate(data.startDate || '');
           setEndDate(data.endDate || '');
-          setDaysCount(data.countOfDays?.toString() || '');
           setIsEnrolled(!!data.faceEmbedding);
           setIsEditMode(true);
         }
@@ -79,13 +75,11 @@ function RegisterForm() {
         const data = docSnap.data();
         setPhone(data.phone);
         setFullName(data.fullName);
-        setMembershipType(data.type);
         setDurationStatus(data.status);
         setPrice(data.price?.toString() || '');
         setDescription(data.description || '');
         setStartDate(data.startDate || '');
         setEndDate(data.endDate || '');
-        setDaysCount(data.countOfDays?.toString() || '');
         setIsEnrolled(!!data.faceEmbedding);
         setIsEditMode(true);
       } else {
@@ -102,18 +96,22 @@ function RegisterForm() {
     e.preventDefault();
     if (!db) return;
 
+    if (durationStatus === 'non-active' && (!startDate || !endDate)) {
+      toast({ variant: "destructive", title: "Dates Required", description: "Please provide start and end dates for fixed-term membership." });
+      return;
+    }
+
     setLoading(true);
 
     const memberData: any = {
       fullName,
       phone,
       status: durationStatus,
-      type: membershipType,
+      type: 'group', // Default training type for new registrations
       price: parseFloat(price) || 0,
       description: description || '',
       startDate: startDate || null,
       endDate: endDate || null,
-      countOfDays: parseInt(daysCount) || null,
       updatedAt: serverTimestamp(),
     };
 
@@ -130,8 +128,8 @@ function RegisterForm() {
           memberName: fullName,
           amount: parseFloat(price) || 0,
           date: new Date().toISOString().split('T')[0],
-          category: membershipType === 'personal' ? 'personal training' : 'membership',
-          description: isEditMode ? `Update: ${membershipType}` : `New: ${membershipType}`,
+          category: 'membership',
+          description: isEditMode ? `Update: Group Membership` : `New: Group Membership`,
           createdAt: serverTimestamp()
         };
         addDoc(collection(db, 'sales'), saleData);
@@ -164,7 +162,6 @@ function RegisterForm() {
     setSearchQuery('');
     setStartDate('');
     setEndDate('');
-    setDaysCount('');
     setIsEnrolled(false);
     router.replace('/admin/register');
   };
@@ -220,32 +217,39 @@ function RegisterForm() {
             </div>
 
             <div className="space-y-3 pt-2">
-              <Label className="text-xs uppercase font-bold text-muted-foreground tracking-widest">Training Category</Label>
-              <RadioGroup value={membershipType} onValueChange={(v: any) => setMembershipType(v)} className="flex gap-8">
-                <div className="flex items-center space-x-2">
-                  <RadioGroupItem value="group" id="g" /><Label htmlFor="g" className="cursor-pointer font-bold">Group Training</Label>
-                </div>
-                <div className="flex items-center space-x-2">
-                  <RadioGroupItem value="personal" id="p" /><Label htmlFor="p" className="cursor-pointer font-bold">Personal Training</Label>
-                </div>
-              </RadioGroup>
-            </div>
-
-            <div className="space-y-3 pt-2">
-              <Label className="text-xs uppercase font-bold text-muted-foreground tracking-widest">Membership Status</Label>
+              <Label className="text-xs uppercase font-bold text-muted-foreground tracking-widest">Membership Type</Label>
               <RadioGroup value={durationStatus} onValueChange={(v: any) => setDurationStatus(v)} className="grid grid-cols-1 md:grid-cols-2 gap-4">
                   <Label htmlFor="am" className={cn("border p-4 rounded-xl cursor-pointer transition-all flex items-center justify-between", durationStatus === 'active' ? "border-primary bg-primary/5 ring-1 ring-primary" : "hover:bg-muted/50")}>
-                      <span className="font-bold">Active (Ongoing)</span>
+                      <span className="font-bold">Active (Subscription)</span>
                       <RadioGroupItem value="active" id="am" className="sr-only" />
                       {durationStatus === 'active' && <CheckCircle2 className="h-4 w-4 text-primary" />}
                   </Label>
                   <Label htmlFor="nm" className={cn("border p-4 rounded-xl cursor-pointer transition-all flex items-center justify-between", durationStatus === 'non-active' ? "border-primary bg-primary/5 ring-1 ring-primary" : "hover:bg-muted/50")}>
-                      <span className="font-bold">Non-Active (Fixed Term)</span>
+                      <span className="font-bold">Fixed Term (Non-Active)</span>
                       <RadioGroupItem value="non-active" id="nm" className="sr-only" />
                       {durationStatus === 'non-active' && <CheckCircle2 className="h-4 w-4 text-primary" />}
                   </Label>
               </RadioGroup>
             </div>
+
+            {durationStatus === 'non-active' && (
+              <div className="grid grid-cols-1 md:grid-cols-2 gap-6 pt-2 animate-in fade-in slide-in-from-top-2">
+                <div className="space-y-2">
+                  <Label className="flex items-center gap-2">
+                    <CalendarIcon className="h-4 w-4 text-primary" />
+                    Start Date
+                  </Label>
+                  <Input type="date" value={startDate} onChange={(e) => setStartDate(e.target.value)} required />
+                </div>
+                <div className="space-y-2">
+                  <Label className="flex items-center gap-2">
+                    <CalendarIcon className="h-4 w-4 text-primary" />
+                    End Date
+                  </Label>
+                  <Input type="date" value={endDate} onChange={(e) => setEndDate(e.target.value)} required />
+                </div>
+              </div>
+            )}
 
             <div className="space-y-2 pt-2">
                 <Label className="text-xs uppercase font-bold text-muted-foreground tracking-widest">Fee (INR)</Label>
