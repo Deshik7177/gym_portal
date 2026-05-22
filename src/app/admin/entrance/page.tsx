@@ -58,14 +58,25 @@ export default function SmartEntrancePage() {
   const passiveLoopTimeoutRef = useRef<NodeJS.Timeout | null>(null);
 
   // Preload all active embeddings into local memory for instant matching
+  // Removed strict server-side 'where' clause to avoid potential indexing lag or string mismatches
   useEffect(() => {
     if (!db) return;
-    const q = query(collection(db, 'members'), where('status', '==', 'active'));
+    const q = query(collection(db, 'members'));
     const unsubscribe = onSnapshot(q, (snapshot) => {
       const members = snapshot.docs
         .map(d => ({ id: d.id, ...d.data() }))
-        .filter((m: any) => m.faceEmbedding && Array.isArray(m.faceEmbedding));
+        .filter((m: any) => 
+          m.status === 'active' && 
+          m.faceEmbedding && 
+          Array.isArray(m.faceEmbedding) && 
+          m.faceEmbedding.length > 0
+        );
       setCachedMembers(members);
+    }, (error) => {
+      errorEmitter.emit('permission-error', new FirestorePermissionError({
+        path: 'members',
+        operation: 'list',
+      }));
     });
     return () => unsubscribe();
   }, [db]);
@@ -511,8 +522,8 @@ export default function SmartEntrancePage() {
                   <CardTitle className="text-[10px] uppercase font-black text-primary/60 flex items-center gap-2"><AlertCircle className="h-3.5 w-3.5" /> SYSTEM TELEMETRY</CardTitle>
               </CardHeader>
               <CardContent className="p-6 space-y-4 text-[10px] font-bold uppercase tracking-widest">
-                  <div className="flex justify-between"><span className="opacity-40">Precision Level</span><span className="text-primary">High (SSD MobileV1)</span></div>
-                  <div className="flex justify-between"><span className="opacity-40">Auto-Detect</span><span className="text-green-500">Enabled (Passive Tiny)</span></div>
+                  <div className="flex justify-between"><span className="opacity-40">Precision Level</span><span className="text-primary">High (SSD)</span></div>
+                  <div className="flex justify-between"><span className="opacity-40">Auto-Detect</span><span className="text-green-500">Active</span></div>
                   <div className="flex justify-between"><span className="opacity-40">Vector Space</span><span className="text-primary">128-D Euclidean</span></div>
                   <div className="flex justify-between"><span className="opacity-40">Threshold</span><span className="text-primary">0.84 Stable</span></div>
                   <div className="flex justify-between"><span className="opacity-40">Preloaded Cache</span><span className="text-primary">{cachedMembers.length} Profiles</span></div>
