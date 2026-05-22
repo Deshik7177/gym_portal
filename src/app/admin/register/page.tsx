@@ -7,6 +7,7 @@ import { doc, setDoc, getDoc, serverTimestamp, collection, addDoc } from 'fireba
 import { useFirestore } from '@/firebase';
 import { errorEmitter } from '@/firebase/error-emitter';
 import { FirestorePermissionError, type SecurityRuleContext } from '@/firebase/errors';
+import { cn } from '@/lib/utils';
 
 import { Button } from '@/components/ui/button';
 import {
@@ -127,7 +128,6 @@ function RegisterForm() {
 
     const docRef = doc(db, 'members', phone);
     
-    // Save Member (Optimistic UI handled by Firestore background queue)
     setDoc(docRef, memberData, { merge: true })
       .catch(async () => {
         const permissionError = new FirestorePermissionError({
@@ -138,7 +138,6 @@ function RegisterForm() {
         errorEmitter.emit('permission-error', permissionError);
       });
 
-    // Automatically create a Sale record
     const saleData = {
       memberId: phone,
       memberName: fullName,
