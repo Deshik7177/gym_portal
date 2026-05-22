@@ -16,7 +16,8 @@ import {
   Loader2,
   Wifi,
   WifiOff,
-  Scan
+  Scan,
+  ExternalLink
 } from 'lucide-react';
 
 import { Button } from '@/components/ui/button';
@@ -91,14 +92,19 @@ export default function ReceptionLayout({ children }: { children: React.ReactNod
             </Link>
           ))}
         </nav>
-        <div className="mt-auto px-6 py-4">
-           <Badge variant={isOnline ? "outline" : "destructive"} className="w-full justify-center gap-2 py-1">
+        <div className="mt-auto px-4 py-4 space-y-2">
+           <Badge variant={isOnline ? "outline" : "destructive"} className="w-full justify-center gap-2 py-1 text-[10px] uppercase tracking-wider">
              {isOnline ? (
-               <> <Wifi className="h-3 w-3 text-green-500" /> Cloud Synced </>
+               <> <Wifi className="h-3 w-3 text-green-500" /> Cloud Sync Active </>
              ) : (
-               <> <WifiOff className="h-3 w-3" /> Offline Mode </>
+               <> <WifiOff className="h-3 w-3" /> Offline (Saving Locally) </>
              )}
            </Badge>
+           <Button asChild variant="ghost" size="sm" className="w-full justify-start text-[10px] text-muted-foreground hover:text-primary">
+              <a href="https://console.firebase.google.com/" target="_blank" rel="noopener noreferrer">
+                <ExternalLink className="mr-2 h-3 w-3" /> Firebase Console
+              </a>
+           </Button>
         </div>
         <nav className="flex flex-col gap-1 px-4 pb-6">
           <Link

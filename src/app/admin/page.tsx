@@ -1,4 +1,3 @@
-
 'use client';
 
 import { useMemo } from 'react';
@@ -9,7 +8,8 @@ import {
   Users,
   ArrowUpRight,
   Activity,
-  Loader2
+  Loader2,
+  TrendingUp
 } from 'lucide-react';
 import Link from 'next/link';
 import { collection, query } from 'firebase/firestore';
@@ -67,7 +67,7 @@ export default function ReceptionDashboard() {
     <div className="flex flex-col gap-6">
       <div className="flex flex-col gap-1">
         <h1 className="text-3xl font-bold font-headline tracking-tight">Reception Dashboard</h1>
-        <p className="text-muted-foreground">Thrive Fit Management.</p>
+        <p className="text-muted-foreground">Live data from Thrive Fit Cloud.</p>
       </div>
 
       <div className="grid gap-4 md:grid-cols-2 lg:grid-cols-4">
@@ -75,11 +75,11 @@ export default function ReceptionDashboard() {
           <Link href="/admin/sales" aria-label="View Sales Report">
             <CardHeader className="flex flex-row items-center justify-between space-y-0 pb-2">
               <CardTitle className="text-sm font-medium">Revenue</CardTitle>
-              <span className="text-xl font-bold" aria-hidden="true">₹</span>
+              <TrendingUp className="h-4 w-4 text-green-500" />
             </CardHeader>
             <CardContent>
               <div className="text-2xl font-bold">₹{totalRevenue.toLocaleString()}</div>
-              <p className="text-xs text-muted-foreground">Total collections</p>
+              <p className="text-xs text-muted-foreground">Total collections synced</p>
             </CardContent>
           </Link>
         </Card>
@@ -91,31 +91,31 @@ export default function ReceptionDashboard() {
             </CardHeader>
             <CardContent>
               <div className="text-2xl font-bold">{stats.total}</div>
-              <p className="text-xs text-muted-foreground">Registered users</p>
+              <p className="text-xs text-muted-foreground">Cloud database count</p>
             </CardContent>
           </Link>
         </Card>
         <Card className="hover:border-primary transition-all cursor-pointer group shadow-md border-border/40">
           <Link href="/admin/absent" aria-label="View Retention Alerts">
             <CardHeader className="flex flex-row items-center justify-between space-y-0 pb-2">
-              <CardTitle className="text-sm font-medium">Retention</CardTitle>
-              <Clock className="h-4 w-4 text-muted-foreground group-hover:text-primary" />
+              <CardTitle className="text-sm font-medium">At Risk</CardTitle>
+              <Clock className="h-4 w-4 text-destructive" />
             </CardHeader>
             <CardContent>
               <div className="text-2xl font-bold">{stats.nonActive}</div>
-              <p className="text-xs text-muted-foreground">Non-active members</p>
+              <p className="text-xs text-muted-foreground">Members with lapsed subs</p>
             </CardContent>
           </Link>
         </Card>
         <Card className="bg-primary text-primary-foreground hover:bg-primary/90 transition-all cursor-pointer group shadow-lg border-none">
           <Link href="/admin/register" aria-label="Register New Member">
             <CardHeader className="flex flex-row items-center justify-between space-y-0 pb-2">
-              <CardTitle className="text-sm font-medium">Registration</CardTitle>
+              <CardTitle className="text-sm font-medium">Enrollment</CardTitle>
               <UserPlus className="h-4 w-4" />
             </CardHeader>
             <CardContent>
               <div className="text-2xl font-bold">Add Member</div>
-              <p className="text-xs opacity-80">Quick enrollment</p>
+              <p className="text-xs opacity-80">Quick registration</p>
             </CardContent>
           </Link>
         </Card>
@@ -131,7 +131,7 @@ export default function ReceptionDashboard() {
               <Activity className="h-5 w-5 text-primary" />
               Membership Breakdown
             </CardTitle>
-            <CardDescription>Category distribution</CardDescription>
+            <CardDescription>Real-time category distribution</CardDescription>
           </CardHeader>
           <CardContent className="space-y-6">
             <div className="space-y-2">
@@ -168,8 +168,8 @@ export default function ReceptionDashboard() {
 
             <div className="pt-6 border-t border-border/50">
               <div className="flex items-center justify-between">
-                <span className="text-sm font-medium">Status Check</span>
-                <span className="text-sm text-green-500 font-bold flex items-center gap-1">
+                <span className="text-sm font-medium">System Status</span>
+                <span className="text-sm text-green-500 font-bold flex items-center gap-1 uppercase tracking-tighter">
                   Active: {stats.active}
                 </span>
               </div>
