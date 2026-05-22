@@ -46,8 +46,14 @@ function RegisterForm() {
   const [durationStatus, setDurationStatus] = useState<'active' | 'non-active'>('active');
   const [price, setPrice] = useState('');
   const [description, setDescription] = useState('');
+  
+  // Date states
   const [startDate, setStartDate] = useState<Date | undefined>(undefined);
   const [endDate, setEndDate] = useState<Date | undefined>(undefined);
+  
+  // Popover open states
+  const [isStartDateOpen, setIsStartDateOpen] = useState(false);
+  const [isEndDateOpen, setIsEndDateOpen] = useState(false);
   
   const [loading, setLoading] = useState(false);
   const [isEnrolled, setIsEnrolled] = useState(false);
@@ -256,7 +262,7 @@ function RegisterForm() {
                       <CalendarIcon className="h-4 w-4 text-primary" />
                       Start Date
                     </Label>
-                    <Popover>
+                    <Popover open={isStartDateOpen} onOpenChange={setIsStartDateOpen}>
                       <PopoverTrigger asChild>
                         <Button
                           variant={"outline"}
@@ -272,7 +278,10 @@ function RegisterForm() {
                         <Calendar
                           mode="single"
                           selected={startDate}
-                          onSelect={setStartDate}
+                          onSelect={(date) => {
+                            setStartDate(date);
+                            setIsStartDateOpen(false);
+                          }}
                           initialFocus
                         />
                       </PopoverContent>
@@ -283,7 +292,7 @@ function RegisterForm() {
                       <CalendarIcon className="h-4 w-4 text-primary" />
                       End Date
                     </Label>
-                    <Popover>
+                    <Popover open={isEndDateOpen} onOpenChange={setIsEndDateOpen}>
                       <PopoverTrigger asChild>
                         <Button
                           variant={"outline"}
@@ -299,7 +308,10 @@ function RegisterForm() {
                         <Calendar
                           mode="single"
                           selected={endDate}
-                          onSelect={setEndDate}
+                          onSelect={(date) => {
+                            setEndDate(date);
+                            setIsEndDateOpen(false);
+                          }}
                           initialFocus
                         />
                       </PopoverContent>

@@ -93,6 +93,8 @@ export default function MembersListPage() {
   const [ptPrice, setPtPrice] = useState('');
   const [ptStartDate, setPtStartDate] = useState<Date | undefined>(undefined);
   const [ptEndDate, setPtEndDate] = useState<Date | undefined>(undefined);
+  const [isPtStartDateOpen, setIsPtStartDateOpen] = useState(false);
+  const [isPtEndDateOpen, setIsPtEndDateOpen] = useState(false);
 
   const membersRef = useMemo(() => db ? query(collection(db, 'members')) : null, [db]);
   const { data: members, loading } = useCollection<any>(membersRef);
@@ -401,7 +403,7 @@ export default function MembersListPage() {
                 <Label className="text-xs uppercase font-bold text-muted-foreground flex items-center gap-1 mb-1.5">
                   <CalendarIcon className="h-3 w-3" /> Start
                 </Label>
-                <Popover>
+                <Popover open={isPtStartDateOpen} onOpenChange={setIsPtStartDateOpen}>
                   <PopoverTrigger asChild>
                     <Button
                       variant={"outline"}
@@ -417,7 +419,10 @@ export default function MembersListPage() {
                     <Calendar
                       mode="single"
                       selected={ptStartDate}
-                      onSelect={setPtStartDate}
+                      onSelect={(date) => {
+                        setPtStartDate(date);
+                        setIsPtStartDateOpen(false);
+                      }}
                       initialFocus
                     />
                   </PopoverContent>
@@ -427,7 +432,7 @@ export default function MembersListPage() {
                 <Label className="text-xs uppercase font-bold text-muted-foreground flex items-center gap-1 mb-1.5">
                   <CalendarIcon className="h-3 w-3" /> End
                 </Label>
-                <Popover>
+                <Popover open={isPtEndDateOpen} onOpenChange={setIsPtEndDateOpen}>
                   <PopoverTrigger asChild>
                     <Button
                       variant={"outline"}
@@ -443,7 +448,10 @@ export default function MembersListPage() {
                     <Calendar
                       mode="single"
                       selected={ptEndDate}
-                      onSelect={setPtEndDate}
+                      onSelect={(date) => {
+                        setPtEndDate(date);
+                        setIsPtEndDateOpen(false);
+                      }}
                       initialFocus
                     />
                   </PopoverContent>
