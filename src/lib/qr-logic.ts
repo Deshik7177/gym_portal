@@ -4,10 +4,10 @@
  * QR Logic Service - Dynamic Security Edition
  * 
  * This service handles the generation and validation of secure entry tokens.
- * It uses a timestamp-based rolling window to ensure tokens expire.
+ * It uses a timestamp-based rolling window to ensure tokens are fresh.
  */
 
-const TOKEN_EXPIRY_MS = 3600000; // 1 Hour TTL for the token
+const TOKEN_EXPIRY_MS = 86400000; // 24 Hours TTL (Daily Passport)
 
 /**
  * Generates a secure, time-stamped QR payload for a member.
@@ -18,7 +18,7 @@ export function generateMemberQrPayload(memberId: string) {
   const payload = {
     mid: memberId,
     iat: Date.now(), // Issued At
-    v: '1.1'         // Security Version 1.1
+    v: '1.2'         // Security Version 1.2
   };
   
   // Encoding the JSON payload to Base64

@@ -175,7 +175,7 @@ export default function MembersListPage() {
       link.click();
       toast({
         title: "Export Success",
-        description: "Member QR Passport saved to your device."
+        description: "Member Daily Passport saved to your device."
       });
     }
   };
@@ -407,8 +407,8 @@ export default function MembersListPage() {
             <div className="h-16 w-16 bg-primary/10 rounded-2xl flex items-center justify-center mb-4">
               <QrCode className="h-8 w-8 text-primary" />
             </div>
-            <DialogTitle className="text-2xl font-black font-headline tracking-tighter">MEMBER PASSPORT</DialogTitle>
-            <DialogDescription className="text-xs font-bold uppercase tracking-widest opacity-60">Digital Key for {memberQrToShow?.fullName}</DialogDescription>
+            <DialogTitle className="text-2xl font-black font-headline tracking-tighter">DAILY PASSPORT</DialogTitle>
+            <DialogDescription className="text-xs font-bold uppercase tracking-widest opacity-60">Expires in 24 hours • Valid for {memberQrToShow?.fullName}</DialogDescription>
           </DialogHeader>
           <div className="flex flex-col items-center justify-center py-8 gap-8">
              <div ref={qrRef} className="bg-white p-6 rounded-3xl shadow-[0_0_50px_-12px_rgba(255,255,255,0.3)]">
@@ -422,7 +422,7 @@ export default function MembersListPage() {
              </div>
              <div className="text-center space-y-4">
                 <div className="flex items-center justify-center gap-2 text-[10px] font-black text-primary uppercase tracking-[0.4em] animate-pulse">
-                  <RefreshCw className="h-3 w-3 animate-spin" /> Rolling Security Token
+                  <RefreshCw className="h-3 w-3 animate-spin" /> Anti-Fraud Rotation Active
                 </div>
                 <p className="text-xs font-mono opacity-40">{memberQrToShow?.phone}</p>
              </div>
