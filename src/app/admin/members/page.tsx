@@ -373,30 +373,30 @@ export default function MembersListPage() {
 
       {/* Permanent Member Passport Dialog */}
       <Dialog open={!!memberQrToShow} onOpenChange={(open) => !open && setMemberQrToShow(null)}>
-        <DialogContent className="sm:max-w-md bg-zinc-900 border-white/10 rounded-3xl p-8">
+        <DialogContent className="sm:max-w-md bg-zinc-900 border-white/10 rounded-3xl p-6">
           <div className="flex flex-col items-center text-center gap-4">
-            <div className="h-16 w-16 bg-primary/10 rounded-2xl flex items-center justify-center">
-              <QrCode className="h-8 w-8 text-primary" />
+            <div className="h-12 w-12 bg-primary/10 rounded-xl flex items-center justify-center">
+              <QrCode className="h-6 w-6 text-primary" />
             </div>
             <DialogTitle className="text-2xl font-black font-headline tracking-tighter uppercase">Member Passport</DialogTitle>
-            <DialogDescription className="text-xs font-bold uppercase tracking-widest opacity-60">Permanent Entry ID: {memberQrToShow?.fullName}</DialogDescription>
+            <DialogDescription className="text-[10px] font-bold uppercase tracking-widest opacity-60">Permanent Entry ID: {memberQrToShow?.fullName}</DialogDescription>
           </div>
-          <div className="flex flex-col items-center justify-center py-8 gap-8">
-             <div ref={qrRef} className="bg-white p-6 rounded-3xl shadow-[0_0_50px_-12px_rgba(255,255,255,0.3)]">
+          <div className="flex flex-col items-center justify-center py-6 gap-6">
+             <div ref={qrRef} className="bg-white p-4 rounded-2xl shadow-2xl border-4 border-white/10">
                 {memberQrToShow && (
                   <QRCodeCanvas 
                     value={generateMemberQrPayload(memberQrToShow.phone)} 
-                    size={512}
+                    size={256}
                     level="M"
                     includeMargin={true}
                   />
                 )}
              </div>
-             <p className="text-xs font-mono opacity-40 tracking-widest uppercase">Valid Passport ID: {memberQrToShow?.phone}</p>
+             <p className="text-[9px] font-mono opacity-40 tracking-widest uppercase">Valid Passport ID: {memberQrToShow?.phone}</p>
           </div>
           <DialogFooter className="sm:justify-center">
-            <Button className="w-full h-14 rounded-2xl font-black text-lg shadow-xl shadow-primary/20 uppercase" onClick={handleExportQr}>
-               <Download className="mr-2 h-5 w-5" /> Export ID
+            <Button className="w-full h-12 rounded-2xl font-black text-sm shadow-xl shadow-primary/20 uppercase tracking-widest" onClick={handleExportQr}>
+               <Download className="mr-2 h-4 w-4" /> Export Passport
             </Button>
           </DialogFooter>
         </DialogContent>
