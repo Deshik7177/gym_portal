@@ -1,4 +1,3 @@
-
 'use client';
 
 import { useState, useRef, useEffect, useCallback } from 'react';
@@ -12,7 +11,8 @@ import {
   Zap,
   History,
   Cloud,
-  ShieldCheck
+  ShieldCheck,
+  AlertCircle
 } from 'lucide-react';
 import { collection, query, updateDoc, doc, serverTimestamp, onSnapshot, addDoc } from 'firebase/firestore';
 import { useFirestore } from '@/firebase';
@@ -198,7 +198,8 @@ export default function SmartEntrancePage() {
           if (code && isComponentMounted.current) {
             setFeedback('QR TOKEN RECOGNIZED');
             const validated = validateQrPayload(code.data);
-            if (validated) {
+            
+            if (validated.valid) {
               const member = cachedMembers.find(m => m.phone === validated.memberId || m.id === validated.memberId);
               if (member) {
                 triggerAccess(member, 'qr');
@@ -207,7 +208,7 @@ export default function SmartEntrancePage() {
                 setFeedback('INVALID QR TOKEN');
               }
             } else {
-              setFeedback('INVALID QR FORMAT');
+              setFeedback(validated.reason === 'EXPIRED' ? 'QR EXPIRED - PLEASE REFRESH' : 'INVALID QR FORMAT');
             }
           } else if (isComponentMounted.current) {
             setFeedback('PRESENT QR TO SCANNER');

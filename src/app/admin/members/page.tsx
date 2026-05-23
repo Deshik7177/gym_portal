@@ -1,6 +1,6 @@
 'use client';
 
-import { useState, useMemo, useRef } from 'react';
+import { useState, useMemo, useRef, useEffect } from 'react';
 import { 
   Search, 
   User, 
@@ -14,7 +14,8 @@ import {
   QrCode,
   Download,
   Filter,
-  X
+  X,
+  RefreshCw
 } from 'lucide-react';
 import { collection, query, doc, deleteDoc, updateDoc, serverTimestamp, addDoc } from 'firebase/firestore';
 import { useFirestore, useCollection } from '@/firebase';
@@ -101,6 +102,7 @@ export default function MembersListPage() {
   const [memberForPT, setMemberForPT] = useState<any>(null);
   const [memberQrToShow, setMemberQrToShow] = useState<any>(null);
   const [isUpdatingPT, setIsUpdatingPT] = useState(false);
+  const [dynamicQrPayload, setDynamicQrPayload] = useState('');
   
   // PT Dialog States
   const [ptPrice, setPtPrice] = useState('');
@@ -114,6 +116,23 @@ export default function MembersListPage() {
 
   const membersRef = useMemo(() => db ? query(collection(db, 'members')) : null, [db]);
   const { data: members, loading } = useCollection<any>(membersRef);
+
+  // Effect to handle dynamic QR rotation
+  useEffect(() => {
+    if (!memberQrToShow) {
+      setDynamicQrPayload('');
+      return;
+    }
+
+    const refreshQr = () => {
+      setDynamicQrPayload(generateMemberQrPayload(memberQrToShow.phone));
+    };
+
+    refreshQr(); // Initial set
+    const interval = setInterval(refreshQr, 30000); // Rotate every 30 seconds
+
+    return () => clearInterval(interval);
+  }, [memberQrToShow]);
 
   const filteredMembers = useMemo(() => {
     if (!members) return [];
@@ -393,16 +412,18 @@ export default function MembersListPage() {
           </DialogHeader>
           <div className="flex flex-col items-center justify-center py-8 gap-8">
              <div ref={qrRef} className="bg-white p-6 rounded-3xl shadow-[0_0_50px_-12px_rgba(255,255,255,0.3)]">
-                {memberQrToShow && (
+                {dynamicQrPayload && (
                   <QRCodeCanvas 
-                    value={generateMemberQrPayload(memberQrToShow.phone)} 
+                    value={dynamicQrPayload} 
                     size={256}
                     level="H"
                   />
                 )}
              </div>
-             <div className="text-center space-y-2">
-                <p className="text-[10px] font-black text-muted-foreground uppercase tracking-[0.4em]">Secure Dynamic Token</p>
+             <div className="text-center space-y-4">
+                <div className="flex items-center justify-center gap-2 text-[10px] font-black text-primary uppercase tracking-[0.4em] animate-pulse">
+                  <RefreshCw className="h-3 w-3 animate-spin" /> Rolling Security Token
+                </div>
                 <p className="text-xs font-mono opacity-40">{memberQrToShow?.phone}</p>
              </div>
           </div>
