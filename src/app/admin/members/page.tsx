@@ -12,7 +12,9 @@ import {
   Calendar as CalendarIcon,
   CreditCard,
   QrCode,
-  Download
+  Download,
+  Filter,
+  X
 } from 'lucide-react';
 import { collection, query, doc, deleteDoc, updateDoc, serverTimestamp, addDoc } from 'firebase/firestore';
 import { useFirestore, useCollection } from '@/firebase';
@@ -75,13 +77,24 @@ import {
   PopoverContent,
   PopoverTrigger,
 } from "@/components/ui/popover";
+import {
+  Select,
+  SelectContent,
+  SelectItem,
+  SelectTrigger,
+  SelectValue,
+} from "@/components/ui/select";
 import { cn } from '@/lib/utils';
 
 export default function MembersListPage() {
   const db = useFirestore();
   const { toast } = useToast();
   const router = useRouter();
+  
+  // State for search and filters
   const [searchTerm, setSearchTerm] = useState('');
+  const [filterStatus, setFilterStatus] = useState('all');
+  const [filterType, setFilterType] = useState('all');
   
   // Action States
   const [memberToDelete, setMemberToDelete] = useState<any>(null);
@@ -97,7 +110,6 @@ export default function MembersListPage() {
   const [isPtEndDateOpen, setIsPtEndDateOpen] = useState(false);
 
   const qrRef = useRef<HTMLDivElement>(null);
-
   const today = useMemo(() => startOfDay(new Date()), []);
 
   const membersRef = useMemo(() => db ? query(collection(db, 'members')) : null, [db]);
@@ -105,11 +117,15 @@ export default function MembersListPage() {
 
   const filteredMembers = useMemo(() => {
     if (!members) return [];
-    return members.filter(m => 
-      m.fullName?.toLowerCase().includes(searchTerm.toLowerCase()) || 
-      m.phone?.includes(searchTerm)
-    );
-  }, [members, searchTerm]);
+    return members.filter(m => {
+      const matchesSearch = (m.fullName?.toLowerCase().includes(searchTerm.toLowerCase()) || 
+                             m.phone?.includes(searchTerm));
+      const matchesStatus = filterStatus === 'all' || m.status === filterStatus;
+      const matchesType = filterType === 'all' || m.type === filterType;
+      
+      return matchesSearch && matchesStatus && matchesType;
+    });
+  }, [members, searchTerm, filterStatus, filterType]);
 
   const stats = useMemo(() => {
     if (!members) return { total: 0, active: 0, personal: 0 };
@@ -188,6 +204,12 @@ export default function MembersListPage() {
     }
   };
 
+  const resetFilters = () => {
+    setSearchTerm('');
+    setFilterStatus('all');
+    setFilterType('all');
+  };
+
   if (loading) return <div className="flex h-60 w-full items-center justify-center"><Loader2 className="h-8 w-8 animate-spin text-primary" /></div>;
 
   return (
@@ -231,14 +253,51 @@ export default function MembersListPage() {
 
       <Card className="border-none bg-card/40 backdrop-blur-xl shadow-2xl rounded-2xl overflow-hidden">
         <CardHeader className="border-b border-white/5 py-6">
-          <div className="relative max-w-md">
-            <Search className="absolute left-3.5 top-1/2 -translate-y-1/2 h-4 w-4 text-muted-foreground" />
-            <Input
-              placeholder="Search member ID or name..."
-              className="pl-10 h-11 bg-black/20 border-white/5 focus:border-primary/50 rounded-xl"
-              value={searchTerm}
-              onChange={(e) => setSearchTerm(e.target.value)}
-            />
+          <div className="flex flex-col lg:flex-row items-center gap-4">
+            <div className="relative flex-1 w-full">
+              <Search className="absolute left-3.5 top-1/2 -translate-y-1/2 h-4 w-4 text-muted-foreground" />
+              <Input
+                placeholder="Search member ID or name..."
+                className="pl-10 h-11 bg-black/20 border-white/5 focus:border-primary/50 rounded-xl w-full"
+                value={searchTerm}
+                onChange={(e) => setSearchTerm(e.target.value)}
+              />
+            </div>
+            <div className="flex items-center gap-3 w-full lg:w-auto">
+              <Select value={filterStatus} onValueChange={setFilterStatus}>
+                <SelectTrigger className="h-11 bg-black/20 border-white/5 rounded-xl lg:w-40">
+                  <div className="flex items-center gap-2">
+                    <Filter className="h-3.5 w-3.5 opacity-40" />
+                    <SelectValue placeholder="Status" />
+                  </div>
+                </SelectTrigger>
+                <SelectContent>
+                  <SelectItem value="all">All Status</SelectItem>
+                  <SelectItem value="active">Active</SelectItem>
+                  <SelectItem value="non-active">Non-Active</SelectItem>
+                </SelectContent>
+              </Select>
+
+              <Select value={filterType} onValueChange={setFilterType}>
+                <SelectTrigger className="h-11 bg-black/20 border-white/5 rounded-xl lg:w-40">
+                   <div className="flex items-center gap-2">
+                    <Filter className="h-3.5 w-3.5 opacity-40" />
+                    <SelectValue placeholder="Category" />
+                  </div>
+                </SelectTrigger>
+                <SelectContent>
+                  <SelectItem value="all">All Categories</SelectItem>
+                  <SelectItem value="group">Group</SelectItem>
+                  <SelectItem value="personal">Personal Training</SelectItem>
+                </SelectContent>
+              </Select>
+
+              {(searchTerm || filterStatus !== 'all' || filterType !== 'all') && (
+                <Button variant="ghost" size="icon" onClick={resetFilters} className="h-11 w-11 hover:bg-destructive/10 hover:text-destructive rounded-xl">
+                  <X className="h-5 w-5" />
+                </Button>
+              )}
+            </div>
           </div>
         </CardHeader>
         <CardContent className="p-0">
@@ -253,7 +312,7 @@ export default function MembersListPage() {
               </TableRow>
             </TableHeader>
             <TableBody>
-              {filteredMembers.map((member) => (
+              {filteredMembers.length > 0 ? filteredMembers.map((member) => (
                 <TableRow key={member.phone} className="border-white/5 hover:bg-white/[0.02] transition-colors">
                   <TableCell className="pl-8">
                     <div className="flex items-center gap-4 py-2">
@@ -310,7 +369,13 @@ export default function MembersListPage() {
                     </DropdownMenu>
                   </TableCell>
                 </TableRow>
-              ))}
+              )) : (
+                <TableRow>
+                  <TableCell colSpan={5} className="h-64 text-center text-muted-foreground opacity-30 italic font-medium uppercase tracking-[0.2em]">
+                    No members match these filters
+                  </TableCell>
+                </TableRow>
+              )}
             </TableBody>
           </Table>
         </CardContent>
