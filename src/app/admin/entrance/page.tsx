@@ -1,4 +1,3 @@
-
 'use client';
 
 import { useState, useRef, useEffect, useCallback } from 'react';
@@ -19,7 +18,7 @@ import {
 } from 'lucide-react';
 import { collection, query, updateDoc, doc, serverTimestamp, onSnapshot, addDoc } from 'firebase/firestore';
 import { useFirestore } from '@/firebase';
-import { loadFaceModels, detectFacePassive, findBestMatch, checkFrameQuality, averageEmbeddings } from '@/lib/face-logic';
+import { loadFaceModels, findBestMatch } from '@/lib/face-logic';
 import * as faceapi from 'face-api.js';
 import jsQR from 'jsqr';
 import { cn } from '@/lib/utils';
@@ -39,7 +38,7 @@ export default function SmartEntrancePage() {
   const [authMode, setAuthMode] = useState<'face' | 'qr'>('face');
   const [isCameraActive, setIsCameraActive] = useState(false);
   const [isProcessing, setIsProcessing] = useState(false);
-  const [feedback, setFeedback] = useState<string>('');
+  const [feedback, setFeedback] = useState<string>('INITIALIZING...');
   const [modelsReady, setModelsReady] = useState(false);
   const [facingMode, setFacingMode] = useState<'user' | 'environment'>('user');
   const [identifiedMember, setIdentifiedMember] = useState<any>(null);
@@ -47,7 +46,6 @@ export default function SmartEntrancePage() {
   const [recentLogs, setRecentLogs] = useState<any[]>([]);
   const [cachedMembers, setCachedMembers] = useState<any[]>([]);
   const [isSyncing, setIsSyncing] = useState(false);
-  const [faceAttemptCount, setFaceAttemptCount] = useState(0);
 
   const videoRef = useRef<HTMLVideoElement>(null);
   const canvasRef = useRef<HTMLCanvasElement>(null);
@@ -67,7 +65,10 @@ export default function SmartEntrancePage() {
   }, [db]);
 
   useEffect(() => {
-    loadFaceModels().then(() => setModelsReady(true));
+    loadFaceModels().then(() => {
+      setModelsReady(true);
+      setFeedback('SYSTEM READY');
+    });
     if (isCameraActive) startCamera();
     else stopCamera();
     return () => stopCamera();
@@ -76,7 +77,7 @@ export default function SmartEntrancePage() {
   const startCamera = async () => {
     try {
       const stream = await navigator.mediaDevices.getUserMedia({ 
-        video: { facingMode: facingMode, width: 640, height: 480 } 
+        video: { facingMode: facingMode, width: { ideal: 640 }, height: { ideal: 480 } } 
       });
       if (videoRef.current) videoRef.current.srcObject = stream;
     } catch (err) {
@@ -94,8 +95,9 @@ export default function SmartEntrancePage() {
   };
 
   const triggerAccess = useCallback(async (member: any, method: 'face' | 'qr', score: number = 1) => {
-    if (!db || !member) return;
+    if (!db || !member || isProcessing) return;
     
+    setIsProcessing(true);
     setScanResult('success');
     setIdentifiedMember(member);
 
@@ -130,11 +132,10 @@ export default function SmartEntrancePage() {
     setTimeout(() => {
       setScanResult(null);
       setIdentifiedMember(null);
-      setAuthMode('face');
-      setFaceAttemptCount(0);
       setIsProcessing(false);
+      setFeedback('WAITING FOR NEXT ENTRY');
     }, 4000);
-  }, [db]);
+  }, [db, isProcessing]);
 
   const runHybridLoop = useCallback(async () => {
     if (!videoRef.current || !isCameraActive || scanResult || isProcessing) {
@@ -149,66 +150,66 @@ export default function SmartEntrancePage() {
     }
 
     if (authMode === 'face' && modelsReady) {
-      // 1. Face Recognition Attempt
       try {
         const detection = await faceapi.detectSingleFace(video, new faceapi.SsdMobilenetv1Options({ minConfidence: 0.6 }))
           .withFaceLandmarks()
           .withFaceDescriptor();
 
         if (detection) {
-          setFeedback('FACE DETECTED...');
+          setFeedback('FACE DETECTED - ANALYZING...');
           const { bestMatch, distance } = findBestMatch(Array.from(detection.descriptor), cachedMembers);
           
           if (bestMatch && distance < 0.55) {
-            setIsProcessing(true);
             triggerAccess(bestMatch, 'face', 1 - distance);
             return;
           } else {
-            setFaceAttemptCount(prev => prev + 1);
-            if (faceAttemptCount > 20) { // Fallback after ~4 seconds of failed faces
-              setAuthMode('qr');
-              setFeedback('SWITCHING TO QR...');
-              setFaceAttemptCount(0);
-            }
+            setFeedback('ID NOT FOUND - TRY QR OR RE-ALIGN');
           }
         } else {
-          setFeedback('WAITING FOR MEMBER...');
+          setFeedback('SEARCHING FOR FACE...');
         }
       } catch (e) {
-        console.warn("Face loop error:", e);
+        console.warn("Biometric loop skip:", e);
       }
     } else if (authMode === 'qr') {
-      // 2. QR Recognition Attempt
       if (canvasRef.current) {
         const canvas = canvasRef.current;
         const context = canvas.getContext('2d', { willReadFrequently: true });
         if (context) {
-          canvas.width = video.videoWidth;
-          canvas.height = video.videoHeight;
+          // Optimized scanning resolution for zero latency
+          const scale = 0.7; 
+          canvas.width = video.videoWidth * scale;
+          canvas.height = video.videoHeight * scale;
           context.drawImage(video, 0, 0, canvas.width, canvas.height);
+          
           const imageData = context.getImageData(0, 0, canvas.width, canvas.height);
-          const code = jsQR(imageData.data, imageData.width, imageData.height);
+          const code = jsQR(imageData.data, imageData.width, imageData.height, {
+            inversionAttempts: "dontInvert",
+          });
           
           if (code) {
-            setFeedback('QR DETECTED!');
+            setFeedback('QR TOKEN RECOGNIZED');
             const validated = validateQrPayload(code.data);
             if (validated) {
               const member = cachedMembers.find(m => m.phone === validated.memberId || m.id === validated.memberId);
               if (member) {
-                setIsProcessing(true);
                 triggerAccess(member, 'qr');
                 return;
+              } else {
+                setFeedback('INVALID QR TOKEN');
               }
+            } else {
+              setFeedback('INVALID QR FORMAT');
             }
           } else {
-            setFeedback('SHOW QR CODE TO CAMERA');
+            setFeedback('PRESENT QR TO SCANNER');
           }
         }
       }
     }
 
     scanLoopRef.current = requestAnimationFrame(runHybridLoop);
-  }, [authMode, isCameraActive, scanResult, isProcessing, modelsReady, cachedMembers, faceAttemptCount, triggerAccess]);
+  }, [authMode, isCameraActive, scanResult, isProcessing, modelsReady, cachedMembers, triggerAccess]);
 
   useEffect(() => {
     if (isCameraActive) {
@@ -274,8 +275,10 @@ export default function SmartEntrancePage() {
                      <p className="text-[10px] font-black uppercase tracking-[0.4em] text-primary">{authMode === 'face' ? 'AI Biometric' : 'Optical QR'}</p>
                      <Loader2 className="h-3 w-3 text-primary animate-spin" />
                   </div>
-                  <h3 className="text-xl font-headline font-bold text-white mb-4 uppercase tracking-tight">{feedback}</h3>
-                  <Progress value={authMode === 'face' ? (faceAttemptCount / 20) * 100 : 100} className="h-1 bg-white/5" />
+                  <h3 className="text-xl font-headline font-bold text-white mb-2 uppercase tracking-tight min-h-[1.5em]">{feedback}</h3>
+                  <div className="h-1 w-full bg-white/5 rounded-full overflow-hidden">
+                    <div className={cn("h-full transition-all duration-500", authMode === 'face' ? "bg-primary w-1/3" : "bg-blue-500 w-full")} />
+                  </div>
                 </div>
               </div>
             )}
@@ -296,7 +299,7 @@ export default function SmartEntrancePage() {
             {isCameraActive && !scanResult && authMode === 'qr' && (
               <div className="absolute inset-0 border-[40px] border-black/60 pointer-events-none">
                  <div className="absolute top-1/2 left-1/2 -translate-x-1/2 -translate-y-1/2 w-64 h-64 border-2 border-dashed border-blue-500/50 rounded-3xl" />
-                 <div className="absolute top-1/2 left-0 w-full h-0.5 bg-blue-500/30 animate-pulse" />
+                 <div className="absolute top-1/2 left-0 w-full h-0.5 bg-blue-500/30 animate-scan-line" />
               </div>
             )}
           </div>
@@ -304,23 +307,26 @@ export default function SmartEntrancePage() {
           <CardContent className="p-8 border-t border-white/5 bg-card/80 backdrop-blur-3xl">
              <div className="flex flex-col sm:flex-row items-center justify-between gap-6">
                 <div>
-                   <p className="text-[10px] font-black text-muted-foreground uppercase tracking-[0.5em] mb-2">Gate Controller Interface</p>
+                   <p className="text-[10px] font-black text-muted-foreground uppercase tracking-[0.5em] mb-2">Manual Control Override</p>
                    <div className="flex items-center gap-4">
                       <div className="h-3 w-3 rounded-full bg-green-500 animate-pulse shadow-[0_0_10px_rgba(34,197,94,1)]" />
-                      <span className="font-mono text-xs text-white/40 uppercase tracking-widest">RELAY-01: READY</span>
+                      <span className="font-mono text-xs text-white/40 uppercase tracking-widest">RELAY-01: ONLINE</span>
                    </div>
                 </div>
                 <div className="flex gap-4 w-full sm:w-auto">
                    {!isCameraActive ? (
                       <Button size="lg" onClick={() => setIsCameraActive(true)} className="w-full sm:px-16 font-black h-16 text-xl rounded-2xl shadow-2xl shadow-primary/20">
-                          <Camera className="mr-3 h-6 w-6" /> INITIALIZE SYSTEM
+                          <Camera className="mr-3 h-6 w-6" /> START SCANNER
                       </Button>
                    ) : (
                       <>
                         <Button 
                           size="lg" 
                           variant="outline" 
-                          onClick={() => setAuthMode(authMode === 'face' ? 'qr' : 'face')}
+                          onClick={() => {
+                            setAuthMode(authMode === 'face' ? 'qr' : 'face');
+                            setFeedback(authMode === 'face' ? 'QR MODE ACTIVE' : 'FACE MODE ACTIVE');
+                          }}
                           className="flex-1 h-16 rounded-2xl border-white/10 hover:bg-white/5 font-bold"
                         >
                            {authMode === 'face' ? <QrCode className="mr-2 h-5 w-5" /> : <Scan className="mr-2 h-5 w-5" />}
@@ -329,10 +335,14 @@ export default function SmartEntrancePage() {
                         <Button 
                           size="lg" 
                           variant="secondary" 
-                          onClick={() => { setScanResult(null); setAuthMode('face'); setFaceAttemptCount(0); }}
+                          onClick={() => { 
+                            setScanResult(null); 
+                            setIsProcessing(false);
+                            setFeedback('SCANNER RESET');
+                          }}
                           className="flex-1 h-16 rounded-2xl font-bold bg-white/5 hover:bg-white/10"
                         >
-                           RESET SCANNER
+                           RESET
                         </Button>
                       </>
                    )}
@@ -362,7 +372,7 @@ export default function SmartEntrancePage() {
                     )) : (
                       <TableRow>
                         <TableCell colSpan={3} className="h-64 text-center italic text-muted-foreground opacity-20 text-xs p-12 leading-relaxed uppercase tracking-[0.3em] font-black">
-                          Gateway Inactive
+                          Gateway Idle
                         </TableCell>
                       </TableRow>
                     )}
@@ -372,27 +382,36 @@ export default function SmartEntrancePage() {
           </Card>
 
           <Card className="bg-primary/5 border border-primary/20 rounded-3xl p-8 space-y-6">
-              <h4 className="text-[10px] font-black uppercase tracking-[0.5em] text-primary/60">System Telemetry</h4>
+              <h4 className="text-[10px] font-black uppercase tracking-[0.5em] text-primary/60">Real-time Telemetry</h4>
               <div className="space-y-4">
                   <div className="flex justify-between items-center">
-                     <span className="text-[10px] font-bold text-muted-foreground uppercase tracking-widest">Active Vault</span>
-                     <span className="text-sm font-black text-white">{cachedMembers.length} Profiles</span>
+                     <span className="text-[10px] font-bold text-muted-foreground uppercase tracking-widest">Cached Profiles</span>
+                     <span className="text-sm font-black text-white">{cachedMembers.length}</span>
                   </div>
                   <div className="flex justify-between items-center">
-                     <span className="text-[10px] font-bold text-muted-foreground uppercase tracking-widest">Gate Relay</span>
-                     <Badge variant="outline" className="text-[10px] border-green-500/20 text-green-500 font-bold">ENCRYPTED</Badge>
+                     <span className="text-[10px] font-bold text-muted-foreground uppercase tracking-widest">QR Engine</span>
+                     <Badge variant="outline" className="text-[10px] border-green-500/20 text-green-500 font-bold">OPTIMIZED</Badge>
                   </div>
                   <div className="flex justify-between items-center">
-                     <span className="text-[10px] font-bold text-muted-foreground uppercase tracking-widest">Latency</span>
-                     <span className="text-sm font-black text-white">~140ms</span>
+                     <span className="text-[10px] font-bold text-muted-foreground uppercase tracking-widest">Face Model</span>
+                     <span className="text-[10px] font-mono text-primary/60">SSD-MOBILENET-V1</span>
                   </div>
               </div>
               <p className="text-[10px] leading-relaxed text-muted-foreground opacity-40 italic pt-4 border-t border-white/5">
-                Biometric data is hashed locally and never leaves the kiosk hardware. QR tokens rotate every entry cycle.
+                Authentication methods are strictly isolated. Manual mode switching ensures maximum reliability in all lighting conditions.
               </p>
           </Card>
         </div>
       </div>
+      <style jsx global>{`
+        @keyframes scan-line {
+          0% { top: 30%; }
+          100% { top: 70%; }
+        }
+        .animate-scan-line {
+          animation: scan-line 2s ease-in-out infinite alternate;
+        }
+      `}</style>
     </div>
   );
 }
