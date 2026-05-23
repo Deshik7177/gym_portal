@@ -1,4 +1,3 @@
-
 'use client';
 
 import { useState, useRef, useEffect, useCallback } from 'react';
@@ -71,29 +70,34 @@ export default function SmartEntrancePage() {
 
     const memberId = member.id || member.phone;
     
-    // Execute all backend sync operations atomically in the background
-    try {
-      await Promise.all([
-        addDoc(collection(db, 'attendance'), {
-          memberId: memberId,
-          memberName: member.fullName,
-          timestamp: serverTimestamp(),
-          method: 'qr',
-          latency: 0
-        }),
-        updateDoc(doc(db, 'members', memberId), {
-          lastCheckIn: serverTimestamp()
-        }),
-        addDoc(collection(db, 'gateControl'), {
-          command: 'OPEN',
-          timestamp: serverTimestamp(),
-          memberId: memberId,
-          method: 'qr'
-        })
-      ]);
-    } catch (err) {
-      console.error("Critical Sync Failure:", err);
-    }
+    // UI Reset Timer - Decoupled from background sync for zero-latency feel
+    setTimeout(() => {
+      if (isComponentMounted.current) {
+        setScanResult(null);
+        setIdentifiedMember(null);
+        isProcessingRef.current = false; // Allow next scan
+      }
+    }, 2500);
+
+    // Background operations - non-blocking for the UI
+    Promise.all([
+      addDoc(collection(db, 'attendance'), {
+        memberId: memberId,
+        memberName: member.fullName,
+        timestamp: serverTimestamp(),
+        method: 'qr',
+        latency: 0
+      }),
+      updateDoc(doc(db, 'members', memberId), {
+        lastCheckIn: serverTimestamp()
+      }),
+      addDoc(collection(db, 'gateControl'), {
+        command: 'OPEN',
+        timestamp: serverTimestamp(),
+        memberId: memberId,
+        method: 'qr'
+      })
+    ]).catch(err => console.error("Background Sync Failure:", err));
 
     setRecentLogs(prev => [{
       name: member.fullName,
@@ -101,13 +105,6 @@ export default function SmartEntrancePage() {
       method: 'QR'
     }, ...prev].slice(0, 10));
 
-    setTimeout(() => {
-      if (isComponentMounted.current) {
-        setScanResult(null);
-        setIdentifiedMember(null);
-        isProcessingRef.current = false;
-      }
-    }, 3000);
   }, [db]);
 
   const startScanner = async () => {
@@ -118,13 +115,11 @@ export default function SmartEntrancePage() {
     try {
       setIsInitializing(true);
       
-      // Production camera enumeration logic
       const devices = await Html5Qrcode.getCameras();
       if (!devices || devices.length === 0) {
-        throw new Error("No camera hardware found on this device.");
+        throw new Error("No camera hardware found.");
       }
 
-      // Priority: Specific "back" label, otherwise default to first available
       const preferredCamera = devices.find(d => 
         d.label.toLowerCase().includes("back") || 
         d.label.toLowerCase().includes("rear") ||
@@ -151,11 +146,17 @@ export default function SmartEntrancePage() {
               triggerAccess(member);
             } else {
               setScanResult('failure');
-              setTimeout(() => isComponentMounted.current && setScanResult(null), 2000);
+              // Clear failure faster
+              setTimeout(() => {
+                if (isComponentMounted.current) {
+                  setScanResult(null);
+                  isProcessingRef.current = false;
+                }
+              }, 1500);
             }
           }
         },
-        () => {} // Frame-level analysis error (ignored for performance)
+        () => {} 
       );
       
       setIsCameraActive(true);
@@ -173,7 +174,6 @@ export default function SmartEntrancePage() {
 
   const stopScanner = async () => {
     try {
-      // Safe cleanup check to prevent race condition errors
       if (scannerRef.current?.isScanning) {
         await scannerRef.current.stop();
       }
@@ -230,7 +230,6 @@ export default function SmartEntrancePage() {
           </div>
 
           <div className="relative flex-1 bg-black flex items-center justify-center overflow-hidden">
-            {/* Resolution-preserved video container (no object-cover to prevent geometry distortion) */}
             <div id="qr-reader" className="w-full h-full" />
             
             {!isCameraActive && !isInitializing && (
