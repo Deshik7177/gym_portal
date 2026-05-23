@@ -9,6 +9,8 @@ import {
   Cloud,
   ShieldCheck,
   RefreshCw,
+  Maximize,
+  AlertCircle,
 } from 'lucide-react';
 import { collection, query, updateDoc, doc, serverTimestamp, onSnapshot, addDoc } from 'firebase/firestore';
 import { useFirestore } from '@/firebase';
@@ -73,7 +75,10 @@ export default function SmartEntrancePage() {
       if (videoRef.current) {
         videoRef.current.srcObject = stream;
         videoRef.current.setAttribute("playsinline", "true");
-        await videoRef.current.play();
+        // Wait for metadata to ensure videoWidth/videoHeight are populated
+        videoRef.current.onloadedmetadata = () => {
+          videoRef.current?.play().catch(console.error);
+        };
       }
     } catch (err) {
       toast({ variant: "destructive", title: "Camera Error", description: "Webcam access required." });
@@ -98,17 +103,13 @@ export default function SmartEntrancePage() {
   const triggerAccess = useCallback((member: any, startTime: number) => {
     if (!db || !member || isProcessingRef.current) return;
     
-    // Calculate total verification time (usually < 50ms)
     const latency = performance.now() - startTime;
-    
-    // Instant UI Feedback
     isProcessingRef.current = true;
     setIsProcessing(true);
     setScanResult('success');
     setIdentifiedMember(member);
     setLastLatency(Math.round(latency));
 
-    // Background Database Sync (Non-blocking)
     const memberId = member.id || member.phone;
     
     addDoc(collection(db, 'attendance'), {
@@ -136,7 +137,6 @@ export default function SmartEntrancePage() {
       method: 'QR'
     }, ...prev].slice(0, 10));
 
-    // Auto-reset Kiosk for next person
     setTimeout(() => {
       if (isComponentMounted.current) {
         setScanResult(null);
@@ -145,7 +145,7 @@ export default function SmartEntrancePage() {
         isProcessingRef.current = false;
         setFeedback('READY');
       }
-    }, 2000);
+    }, 2500);
   }, [db]);
 
   const runScanLoop = useCallback(async () => {
@@ -155,7 +155,7 @@ export default function SmartEntrancePage() {
     }
 
     const video = videoRef.current;
-    if (video.readyState < 2) {
+    if (video.readyState < 2 || video.videoWidth === 0) {
       scanLoopRef.current = requestAnimationFrame(runScanLoop);
       return;
     }
@@ -167,24 +167,22 @@ export default function SmartEntrancePage() {
       if (context) {
         const startTime = performance.now();
 
-        // High-Speed Optimization: Crop to a 400x400 center square
-        // This significantly reduces the area the QR engine needs to process.
-        const scanArea = Math.min(video.videoWidth, video.videoHeight) * 0.7;
-        const sx = (video.videoWidth - scanArea) / 2;
-        const sy = (video.videoHeight - scanArea) / 2;
+        // High-fidelity full-frame scan with optimized scaling
+        // We use a fixed width of 640 to maintain detail while reducing computation
+        const scale = 640 / video.videoWidth;
+        canvas.width = 640;
+        canvas.height = video.videoHeight * scale;
         
-        canvas.width = 400;
-        canvas.height = 400;
-        
+        // Disable smoothing to keep QR edges sharp
         context.imageSmoothingEnabled = false;
-        context.drawImage(video, sx, sy, scanArea, scanArea, 0, 0, 400, 400);
+        context.drawImage(video, 0, 0, canvas.width, canvas.height);
         
-        const imageData = context.getImageData(0, 0, 400, 400);
+        const imageData = context.getImageData(0, 0, canvas.width, canvas.height);
         const code = jsQR(imageData.data, imageData.width, imageData.height, {
           inversionAttempts: "attemptBoth",
         });
         
-        if (code && isComponentMounted.current) {
+        if (code && code.data && isComponentMounted.current) {
           const validated = validateQrPayload(code.data);
           
           if (validated.valid) {
@@ -200,7 +198,7 @@ export default function SmartEntrancePage() {
             }
           }
         } else {
-          setFeedback('SCANNING PASSPORT');
+          setFeedback('WAITING FOR PASSPORT');
         }
       }
     }
@@ -225,15 +223,17 @@ export default function SmartEntrancePage() {
             Entry Portal
          </h1>
          <div className="flex items-center gap-2">
-            <p className="text-muted-foreground italic text-xs uppercase tracking-widest font-bold opacity-60">Zero-Latency Optical Engine Active</p>
-            {isSyncing && <Badge variant="outline" className="h-5 text-[9px] animate-pulse border-primary/20 bg-primary/5 text-primary"><Cloud className="h-2 w-2 mr-1" /> CACHE SYNC</Badge>}
+            <p className="text-muted-foreground italic text-xs uppercase tracking-widest font-bold opacity-60">High-Fidelity Optical Engine Active</p>
+            {isSyncing && <Badge variant="outline" className="h-5 text-[9px] animate-pulse border-primary/20 bg-primary/5 text-primary"><Cloud className="h-2 w-2 mr-1" /> SYNCING CACHE</Badge>}
          </div>
       </div>
 
       <div className="grid grid-cols-1 lg:grid-cols-12 gap-8">
         <Card className="lg:col-span-8 overflow-hidden flex flex-col relative bg-black border-none shadow-[0_0_50px_-12px_rgba(var(--primary),0.3)] rounded-3xl min-h-[600px]">
-          <div className="absolute top-6 right-6 z-20">
-            <Button size="icon" variant="outline" className="bg-black/50 backdrop-blur-md rounded-full border-white/10" onClick={() => setFacingMode(f => f === 'user' ? 'environment' : 'user')}><RefreshCw className="h-4 w-4" /></Button>
+          <div className="absolute top-6 right-6 z-20 flex gap-2">
+            <Button size="icon" variant="outline" className="bg-black/50 backdrop-blur-md rounded-full border-white/10" onClick={() => setFacingMode(f => f === 'user' ? 'environment' : 'user')}>
+                <RefreshCw className="h-4 w-4" />
+            </Button>
           </div>
 
           <div className="relative flex-1 bg-black flex items-center justify-center overflow-hidden">
@@ -280,11 +280,12 @@ export default function SmartEntrancePage() {
 
             {isCameraActive && !scanResult && (
               <div className="absolute inset-0 pointer-events-none flex items-center justify-center">
-                 <div className="w-64 h-64 border-2 border-primary/40 rounded-3xl relative">
-                    <div className="absolute -top-1 -left-1 w-8 h-8 border-t-4 border-l-4 border-primary rounded-tl-xl" />
-                    <div className="absolute -top-1 -right-1 w-8 h-8 border-t-4 border-r-4 border-primary rounded-tr-xl" />
-                    <div className="absolute -bottom-1 -left-1 w-8 h-8 border-b-4 border-l-4 border-primary rounded-bl-xl" />
-                    <div className="absolute -bottom-1 -right-1 w-8 h-8 border-b-4 border-r-4 border-primary rounded-br-xl" />
+                 <div className="w-80 h-80 border-2 border-primary/20 rounded-3xl relative">
+                    <div className="absolute -top-1 -left-1 w-12 h-12 border-t-4 border-l-4 border-primary rounded-tl-xl" />
+                    <div className="absolute -top-1 -right-1 w-12 h-12 border-t-4 border-r-4 border-primary rounded-tr-xl" />
+                    <div className="absolute -bottom-1 -left-1 w-12 h-12 border-b-4 border-l-4 border-primary rounded-bl-xl" />
+                    <div className="absolute -bottom-1 -right-1 w-12 h-12 border-b-4 border-r-4 border-primary rounded-br-xl" />
+                    <div className="absolute top-1/2 left-0 right-0 h-0.5 bg-primary/30 animate-pulse shadow-[0_0_15px_rgba(var(--primary),0.5)]" />
                  </div>
               </div>
             )}
@@ -292,11 +293,20 @@ export default function SmartEntrancePage() {
 
           <CardContent className="p-8 border-t border-white/5 bg-card/80 backdrop-blur-3xl">
              <div className="flex flex-col sm:flex-row items-center justify-between gap-6">
-                <div>
-                   <p className="text-[10px] font-black text-muted-foreground uppercase tracking-[0.5em] mb-2">System Health</p>
-                   <div className="flex items-center gap-4">
-                      <div className="h-3 w-3 rounded-full bg-green-500 animate-pulse shadow-[0_0_10px_rgba(34,197,94,1)]" />
-                      <span className="font-mono text-xs text-white/40 uppercase tracking-widest">GATEWAY LINK ACTIVE</span>
+                <div className="flex items-center gap-6">
+                   <div>
+                      <p className="text-[10px] font-black text-muted-foreground uppercase tracking-[0.5em] mb-2">Scanner Status</p>
+                      <div className="flex items-center gap-4">
+                         <div className="h-3 w-3 rounded-full bg-green-500 animate-pulse shadow-[0_0_10px_rgba(34,197,94,1)]" />
+                         <span className="font-mono text-xs text-white/40 uppercase tracking-widest">OPTICAL ENGINE ONLINE</span>
+                      </div>
+                   </div>
+                   <div className="h-10 w-px bg-white/5 hidden sm:block" />
+                   <div className="hidden sm:block">
+                      <p className="text-[10px] font-black text-muted-foreground uppercase tracking-[0.5em] mb-2">Gate Status</p>
+                      <div className="flex items-center gap-2">
+                         <span className="font-mono text-xs text-primary uppercase tracking-widest">READY FOR TRIGGER</span>
+                      </div>
                    </div>
                 </div>
                 {!isCameraActive && (
@@ -310,20 +320,21 @@ export default function SmartEntrancePage() {
 
         <div className="lg:col-span-4 flex flex-col gap-6">
           <Card className="flex-1 overflow-auto border-none shadow-2xl bg-black/40 backdrop-blur-xl rounded-3xl">
-            <div className="bg-white/[0.02] border-b border-white/5 py-6 px-8">
+            <div className="bg-white/[0.02] border-b border-white/5 py-6 px-8 flex items-center justify-between">
               <h2 className="text-[10px] uppercase tracking-[0.5em] font-black flex items-center gap-3 text-primary">
-                  <History className="h-4 w-4" /> RECENT TRAFFIC
+                  <History className="h-4 w-4" /> LIVE TRAFFIC
               </h2>
+              <Badge variant="outline" className="h-5 text-[8px] border-white/10 opacity-40 uppercase">REAL-TIME</Badge>
             </div>
             <CardContent className="p-0">
               <Table>
                   <TableBody>
                     {recentLogs.length > 0 ? recentLogs.map((log, i) => (
-                      <TableRow key={i} className="border-b border-white/5 hover:bg-white/[0.02]">
+                      <TableRow key={i} className="border-b border-white/5 hover:bg-white/[0.02] animate-in slide-in-from-left-2">
                           <TableCell className="text-[10px] font-mono opacity-30 pl-8">{log.time}</TableCell>
                           <TableCell className="font-bold text-sm text-white/80">{log.name}</TableCell>
                           <TableCell className="text-right pr-8">
-                             <Badge variant="outline" className="text-[9px] font-black px-2 py-0 border-none text-primary uppercase">QR</Badge>
+                             <Badge variant="outline" className="text-[9px] font-black px-2 py-0 border-none text-primary uppercase tracking-tighter">QR OK</Badge>
                           </TableCell>
                       </TableRow>
                     )) : (
@@ -337,6 +348,14 @@ export default function SmartEntrancePage() {
               </Table>
             </CardContent>
           </Card>
+          
+          <div className="bg-primary/5 border border-primary/10 rounded-2xl p-4 flex items-start gap-3">
+             <AlertCircle className="h-5 w-5 text-primary mt-0.5" />
+             <div className="space-y-1">
+                <p className="text-[10px] font-black uppercase tracking-widest text-primary">Scanning Tip</p>
+                <p className="text-[11px] text-muted-foreground leading-relaxed">Hold your phone steady about 6-10 inches from the camera lens for optimal detection.</p>
+             </div>
+          </div>
         </div>
       </div>
     </div>
