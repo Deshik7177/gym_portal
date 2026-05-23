@@ -93,20 +93,16 @@ export default function MembersListPage() {
   const { toast } = useToast();
   const router = useRouter();
   
-  // State for search and filters
   const [searchTerm, setSearchTerm] = useState('');
   const [filterStatus, setFilterStatus] = useState('all');
   const [filterType, setFilterType] = useState('all');
   
-  // Action States
   const [memberToDelete, setMemberToDelete] = useState<any>(null);
   const [memberForPT, setMemberForPT] = useState<any>(null);
   const [memberQrToShow, setMemberQrToShow] = useState<any>(null);
   const [isUpdatingPT, setIsUpdatingPT] = useState(false);
-  const [dynamicQrPayload, setDynamicQrPayload] = useState('');
   const [isProcessingCheckIn, setIsProcessingCheckIn] = useState<string | null>(null);
   
-  // PT Dialog States
   const [ptPrice, setPtPrice] = useState('');
   const [ptStartDate, setPtStartDate] = useState<Date | undefined>(undefined);
   const [ptEndDate, setPtEndDate] = useState<Date | undefined>(undefined);
@@ -118,23 +114,6 @@ export default function MembersListPage() {
 
   const membersRef = useMemo(() => db ? query(collection(db, 'members')) : null, [db]);
   const { data: members, loading } = useCollection<any>(membersRef);
-
-  // Effect to handle dynamic QR rotation
-  useEffect(() => {
-    if (!memberQrToShow) {
-      setDynamicQrPayload('');
-      return;
-    }
-
-    const refreshQr = () => {
-      setDynamicQrPayload(generateMemberQrPayload(memberQrToShow.phone));
-    };
-
-    refreshQr(); // Initial set
-    const interval = setInterval(refreshQr, 30000); // Rotate every 30 seconds
-
-    return () => clearInterval(interval);
-  }, [memberQrToShow]);
 
   const filteredMembers = useMemo(() => {
     if (!members) return [];
@@ -168,19 +147,13 @@ export default function MembersListPage() {
 
   const handleManualCheckIn = async (member: any) => {
     if (!db || isProcessingCheckIn) return;
-    
     setIsProcessingCheckIn(member.phone);
-    
     try {
       const timestamp = serverTimestamp();
-      
-      // 1. Update Member
       updateDoc(doc(db, 'members', member.phone), {
         lastCheckIn: timestamp,
         updatedAt: timestamp
       });
-
-      // 2. Log Attendance
       addDoc(collection(db, 'attendance'), {
         memberId: member.phone,
         memberName: member.fullName,
@@ -189,17 +162,9 @@ export default function MembersListPage() {
         score: 1.0,
         staffAction: true
       });
-
-      toast({
-        title: "Check-In Recorded",
-        description: `Manual attendance logged for ${member.fullName}.`
-      });
+      toast({ title: "Check-In Recorded", description: `Attendance logged for ${member.fullName}.` });
     } catch (e: any) {
-      toast({
-        variant: "destructive",
-        title: "Check-In Failed",
-        description: "Could not record attendance."
-      });
+      toast({ variant: "destructive", title: "Check-In Failed" });
     } finally {
       setIsProcessingCheckIn(null);
     }
@@ -214,51 +179,39 @@ export default function MembersListPage() {
       link.download = `ThriveFit_QR_${memberQrToShow.fullName.replace(/\s+/g, '_')}.png`;
       link.href = url;
       link.click();
-      toast({
-        title: "Export Success",
-        description: "Member Daily Passport saved to your device."
-      });
+      toast({ title: "Export Success", description: "Member Passport saved." });
     }
   };
 
   const handleSavePT = async () => {
     if (!db || !memberForPT) return;
     if (!ptPrice || !ptStartDate || !ptEndDate) {
-      toast({ variant: "destructive", title: "Missing Data", description: "Please fill all PT session details." });
+      toast({ variant: "destructive", title: "Missing Data" });
       return;
     }
-
     setIsUpdatingPT(true);
-
     const saleData = {
       memberId: memberForPT.phone,
       memberName: memberForPT.fullName,
       amount: parseFloat(ptPrice) || 0,
       date: new Date().toISOString().split('T')[0],
       category: 'personal training',
-      description: `PT Package: ${format(ptStartDate, 'MMM dd')} to ${format(ptEndDate, 'MMM dd')}`,
+      description: `PT: ${format(ptStartDate, 'MMM dd')} to ${format(ptEndDate, 'MMM dd')}`,
       createdAt: serverTimestamp()
     };
-
     try {
       await addDoc(collection(db, 'sales'), saleData);
       await updateDoc(doc(db, 'members', memberForPT.phone), {
         type: 'personal',
         updatedAt: serverTimestamp()
       });
-
-      toast({ title: "PT Session Added", description: "Transaction and profile updated." });
+      toast({ title: "PT Session Added" });
       setMemberForPT(null);
       setPtPrice('');
       setPtStartDate(undefined);
       setPtEndDate(undefined);
     } catch (e: any) {
-      const permissionError = new FirestorePermissionError({
-        path: `sales/new`,
-        operation: 'create',
-        requestResourceData: saleData,
-      } satisfies SecurityRuleContext);
-      errorEmitter.emit('permission-error', permissionError);
+      errorEmitter.emit('permission-error', new FirestorePermissionError({ path: `sales/new`, operation: 'create', requestResourceData: saleData }));
     } finally {
       setIsUpdatingPT(false);
     }
@@ -400,46 +353,19 @@ export default function MembersListPage() {
                       </DropdownMenuTrigger>
                       <DropdownMenuContent align="end" className="w-56 bg-zinc-900 border-white/10 rounded-xl shadow-2xl">
                         <DropdownMenuLabel className="text-[10px] uppercase font-black tracking-widest opacity-40 p-4">Member Control</DropdownMenuLabel>
-                        <DropdownMenuItem 
-                          onSelect={() => handleManualCheckIn(member)}
-                          className="p-3 gap-3 rounded-lg mx-1 cursor-pointer text-green-500"
-                        >
-                          <UserCheck className="h-4 w-4" /> Manual Check-In
-                        </DropdownMenuItem>
-                        <DropdownMenuItem 
-                          onSelect={(e) => { e.preventDefault(); setTimeout(() => setMemberQrToShow(member), 10); }} 
-                          className="p-3 gap-3 rounded-lg mx-1 cursor-pointer"
-                        >
-                          <QrCode className="h-4 w-4 text-primary" /> View Entry QR
-                        </DropdownMenuItem>
-                        <DropdownMenuItem 
-                          onSelect={() => router.push(`/admin/register?edit=${member.phone}`)} 
-                          className="p-3 gap-3 rounded-lg mx-1 cursor-pointer"
-                        >
-                          <ArrowUpRight className="h-4 w-4" /> Edit Profile
-                        </DropdownMenuItem>
-                        <DropdownMenuItem 
-                          onSelect={(e) => { e.preventDefault(); setTimeout(() => setMemberForPT(member), 10); }} 
-                          className="p-3 gap-3 rounded-lg mx-1 cursor-pointer"
-                        >
-                          <CreditCard className="h-4 w-4" /> Add PT Session
-                        </DropdownMenuItem>
+                        <DropdownMenuItem onSelect={() => handleManualCheckIn(member)} className="p-3 gap-3 rounded-lg mx-1 cursor-pointer text-green-500"><UserCheck className="h-4 w-4" /> Manual Check-In</DropdownMenuItem>
+                        <DropdownMenuItem onSelect={() => setMemberQrToShow(member)} className="p-3 gap-3 rounded-lg mx-1 cursor-pointer"><QrCode className="h-4 w-4 text-primary" /> View Entry QR</DropdownMenuItem>
+                        <DropdownMenuItem onSelect={() => router.push(`/admin/register?edit=${member.phone}`)} className="p-3 gap-3 rounded-lg mx-1 cursor-pointer"><ArrowUpRight className="h-4 w-4" /> Edit Profile</DropdownMenuItem>
+                        <DropdownMenuItem onSelect={() => setMemberForPT(member)} className="p-3 gap-3 rounded-lg mx-1 cursor-pointer"><CreditCard className="h-4 w-4" /> Add PT Session</DropdownMenuItem>
                         <DropdownMenuSeparator className="bg-white/5" />
-                        <DropdownMenuItem 
-                          className="p-3 gap-3 rounded-lg mx-1 text-destructive cursor-pointer" 
-                          onSelect={(e) => { e.preventDefault(); setTimeout(() => setMemberToDelete(member), 10); }}
-                        >
-                          <Trash2 className="h-4 w-4" /> Terminate Record
-                        </DropdownMenuItem>
+                        <DropdownMenuItem className="p-3 gap-3 rounded-lg mx-1 text-destructive cursor-pointer" onSelect={() => setMemberToDelete(member)}><Trash2 className="h-4 w-4" /> Terminate Record</DropdownMenuItem>
                       </DropdownMenuContent>
                     </DropdownMenu>
                   </TableCell>
                 </TableRow>
               )) : (
                 <TableRow>
-                  <TableCell colSpan={5} className="h-64 text-center text-muted-foreground opacity-30 italic font-medium uppercase tracking-[0.2em]">
-                    No members match these filters
-                  </TableCell>
+                  <TableCell colSpan={5} className="h-64 text-center text-muted-foreground opacity-30 italic font-medium uppercase tracking-[0.2em]">No members found</TableCell>
                 </TableRow>
               )}
             </TableBody>
@@ -448,31 +374,26 @@ export default function MembersListPage() {
       </Card>
 
       {/* Member QR Dialog */}
-      <Dialog open={!!memberQrToShow} onOpenChange={(open) => { if (!open) setMemberQrToShow(null); }}>
+      <Dialog open={!!memberQrToShow} onOpenChange={(open) => !open && setMemberQrToShow(null)}>
         <DialogContent className="sm:max-w-md bg-zinc-900 border-white/10 rounded-3xl p-8">
-          <DialogHeader className="items-center text-center">
-            <div className="h-16 w-16 bg-primary/10 rounded-2xl flex items-center justify-center mb-4">
+          <div className="flex flex-col items-center text-center gap-4">
+            <div className="h-16 w-16 bg-primary/10 rounded-2xl flex items-center justify-center">
               <QrCode className="h-8 w-8 text-primary" />
             </div>
-            <DialogTitle className="text-2xl font-black font-headline tracking-tighter">DAILY PASSPORT</DialogTitle>
-            <DialogDescription className="text-xs font-bold uppercase tracking-widest opacity-60">Expires in 24 hours • Valid for {memberQrToShow?.fullName}</DialogDescription>
-          </DialogHeader>
+            <DialogTitle className="text-2xl font-black font-headline tracking-tighter uppercase">Member Passport</DialogTitle>
+            <DialogDescription className="text-xs font-bold uppercase tracking-widest opacity-60">Permanent Entry ID for {memberQrToShow?.fullName}</DialogDescription>
+          </div>
           <div className="flex flex-col items-center justify-center py-8 gap-8">
              <div ref={qrRef} className="bg-white p-6 rounded-3xl shadow-[0_0_50px_-12px_rgba(255,255,255,0.3)]">
-                {dynamicQrPayload && (
+                {memberQrToShow && (
                   <QRCodeCanvas 
-                    value={dynamicQrPayload} 
+                    value={generateMemberQrPayload(memberQrToShow.phone)} 
                     size={256}
                     level="H"
                   />
                 )}
              </div>
-             <div className="text-center space-y-4">
-                <div className="flex items-center justify-center gap-2 text-[10px] font-black text-primary uppercase tracking-[0.4em] animate-pulse">
-                  <RefreshCw className="h-3 w-3 animate-spin" /> Anti-Fraud Rotation Active
-                </div>
-                <p className="text-xs font-mono opacity-40">{memberQrToShow?.phone}</p>
-             </div>
+             <p className="text-xs font-mono opacity-40 tracking-widest">{memberQrToShow?.phone}</p>
           </div>
           <DialogFooter className="sm:justify-center">
             <Button className="w-full h-14 rounded-2xl font-black text-lg shadow-xl shadow-primary/20" onClick={handleExportQr}>
@@ -483,7 +404,7 @@ export default function MembersListPage() {
       </Dialog>
 
       {/* Add PT Session Dialog */}
-      <Dialog open={!!memberForPT} onOpenChange={(open) => { if (!open) setMemberForPT(null); }}>
+      <Dialog open={!!memberForPT} onOpenChange={(open) => !open && setMemberForPT(null)}>
         <DialogContent className="sm:max-w-md bg-zinc-900 border-white/10 rounded-3xl p-8">
           <DialogHeader>
             <DialogTitle className="text-2xl font-black font-headline tracking-tighter text-primary flex items-center gap-3">
@@ -496,16 +417,9 @@ export default function MembersListPage() {
               <Label className="text-[10px] uppercase font-black tracking-widest opacity-40">Package Price (INR)</Label>
               <div className="relative">
                 <span className="absolute left-4 top-1/2 -translate-y-1/2 text-primary font-black">₹</span>
-                <Input 
-                  type="number" 
-                  className="pl-8 h-12 bg-black/20 border-white/10 font-bold text-lg" 
-                  placeholder="0.00"
-                  value={ptPrice}
-                  onChange={(e) => setPtPrice(e.target.value)}
-                />
+                <Input type="number" className="pl-8 h-12 bg-black/20 border-white/10 font-bold text-lg" placeholder="0.00" value={ptPrice} onChange={(e) => setPtPrice(e.target.value)} />
               </div>
             </div>
-
             <div className="grid grid-cols-2 gap-4">
               <div className="space-y-2">
                 <Label className="text-[10px] uppercase font-black tracking-widest opacity-40">Start Date</Label>
@@ -516,14 +430,7 @@ export default function MembersListPage() {
                       {ptStartDate ? format(ptStartDate, "MMM dd") : "Pick"}
                     </Button>
                   </PopoverTrigger>
-                  <PopoverContent className="w-auto p-0" align="start">
-                    <Calendar
-                      mode="single"
-                      selected={ptStartDate}
-                      onSelect={(date) => { setPtStartDate(date); setIsPtStartDateOpen(false); }}
-                      disabled={(date) => date < today}
-                    />
-                  </PopoverContent>
+                  <PopoverContent className="w-auto p-0" align="start"><Calendar mode="single" selected={ptStartDate} onSelect={(date) => { setPtStartDate(date); setIsPtStartDateOpen(false); }} disabled={(date) => date < today} /></PopoverContent>
                 </Popover>
               </div>
               <div className="space-y-2">
@@ -535,43 +442,28 @@ export default function MembersListPage() {
                       {ptEndDate ? format(ptEndDate, "MMM dd") : "Pick"}
                     </Button>
                   </PopoverTrigger>
-                  <PopoverContent className="w-auto p-0" align="start">
-                    <Calendar
-                      mode="single"
-                      selected={ptEndDate}
-                      onSelect={(date) => { setPtEndDate(date); setIsPtEndDateOpen(false); }}
-                      disabled={(date) => date < (ptStartDate || today)}
-                    />
-                  </PopoverContent>
+                  <PopoverContent className="w-auto p-0" align="start"><Calendar mode="single" selected={ptEndDate} onSelect={(date) => { setPtEndDate(date); setIsPtEndDateOpen(false); }} disabled={(date) => date < (ptStartDate || today)} /></PopoverContent>
                 </Popover>
               </div>
             </div>
           </div>
           <DialogFooter>
-            <Button 
-              className="w-full h-14 rounded-2xl font-black text-lg shadow-xl shadow-primary/20" 
-              onClick={handleSavePT}
-              disabled={isUpdatingPT}
-            >
+            <Button className="w-full h-14 rounded-2xl font-black text-lg shadow-xl shadow-primary/20" onClick={handleSavePT} disabled={isUpdatingPT}>
               {isUpdatingPT ? <Loader2 className="h-5 w-5 animate-spin" /> : "CONFIRM & LOG SALE"}
             </Button>
           </DialogFooter>
         </DialogContent>
       </Dialog>
 
-      <AlertDialog open={!!memberToDelete} onOpenChange={(open) => { if (!open) setMemberToDelete(null); }}>
+      <AlertDialog open={!!memberToDelete} onOpenChange={(open) => !open && setMemberToDelete(null)}>
         <AlertDialogContent className="bg-zinc-900 border-white/10 rounded-3xl p-8">
           <AlertDialogHeader>
             <AlertDialogTitle className="text-xl font-bold font-headline text-primary">Permanently Delete Record?</AlertDialogTitle>
-            <AlertDialogDescription>
-              This will remove all biometric and transaction data for <b>{memberToDelete?.fullName}</b>. This action is irreversible.
-            </AlertDialogDescription>
+            <AlertDialogDescription>This will remove all biometric and transaction data for <b>{memberToDelete?.fullName}</b>.</AlertDialogDescription>
           </AlertDialogHeader>
           <AlertDialogFooter className="mt-6">
             <AlertDialogCancel className="rounded-xl h-12">Cancel</AlertDialogCancel>
-            <AlertDialogAction onClick={handleDeleteMember} className="bg-destructive hover:bg-destructive/90 rounded-xl h-12">
-              Confirm Deletion
-            </AlertDialogAction>
+            <AlertDialogAction onClick={handleDeleteMember} className="bg-destructive hover:bg-destructive/90 rounded-xl h-12">Confirm Deletion</AlertDialogAction>
           </AlertDialogFooter>
         </AlertDialogContent>
       </AlertDialog>

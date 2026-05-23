@@ -1,28 +1,21 @@
 'use client';
 
 /**
- * QR Logic Service - Dynamic Security Edition
+ * QR Logic Service - High Performance Edition
  * 
- * This service handles the generation and validation of secure entry tokens.
- * It uses a timestamp-based rolling window to ensure tokens are fresh.
+ * Generates unique, permanent QR payloads for members.
+ * Simplified for maximum scanning speed and zero latency.
  */
-
-const TOKEN_EXPIRY_MS = 86400000; // 24 Hours TTL (Daily Passport)
 
 /**
- * Generates a secure, time-stamped QR payload for a member.
- * @param memberId The unique ID (usually phone) of the member.
- * @returns A Base64 encoded string to be rendered as a QR code.
+ * Generates a unique, permanent QR payload for a member.
+ * This payload is static and generated once per member.
+ * @param memberId The unique ID (phone) of the member.
+ * @returns A unique string to be rendered as a QR code.
  */
 export function generateMemberQrPayload(memberId: string) {
-  const payload = {
-    mid: memberId,
-    iat: Date.now(), // Issued At
-    v: '1.2'         // Security Version 1.2
-  };
-  
-  // Encoding the JSON payload to Base64
-  return btoa(JSON.stringify(payload));
+  // Using a simple prefix to identify gym tokens while keeping payload small for fast scanning
+  return `TFIT-${memberId}`;
 }
 
 /**
@@ -32,22 +25,17 @@ export function generateMemberQrPayload(memberId: string) {
  */
 export function validateQrPayload(payload: string) {
   try {
-    const decoded = JSON.parse(atob(payload));
-    
-    if (!decoded.mid || !decoded.iat) return { valid: false, reason: 'MALFORMED' };
-    
-    // Check if the token has expired
-    const age = Date.now() - decoded.iat;
-    if (age > TOKEN_EXPIRY_MS) {
-      return { valid: false, reason: 'EXPIRED', memberId: decoded.mid };
+    if (!payload.startsWith('TFIT-')) {
+      return { valid: false, reason: 'INVALID_FORMAT' };
     }
+    
+    const memberId = payload.replace('TFIT-', '');
     
     return {
       valid: true,
-      memberId: decoded.mid,
-      issuedAt: decoded.iat
+      memberId: memberId
     };
   } catch (e) {
-    return { valid: false, reason: 'INVALID_FORMAT' };
+    return { valid: false, reason: 'DECODE_ERROR' };
   }
 }
