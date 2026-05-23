@@ -9,7 +9,8 @@ import {
   History,
   Cloud,
   ShieldCheck,
-  RefreshCw
+  RefreshCw,
+  Loader2
 } from 'lucide-react';
 import { collection, query, updateDoc, doc, serverTimestamp, onSnapshot, addDoc } from 'firebase/firestore';
 import { useFirestore } from '@/firebase';
@@ -72,7 +73,11 @@ export default function SmartEntrancePage() {
           frameRate: { ideal: 60 }
         } 
       });
-      if (videoRef.current) videoRef.current.srcObject = stream;
+      if (videoRef.current) {
+        videoRef.current.srcObject = stream;
+        videoRef.current.setAttribute("playsinline", "true"); // required to tell iOS safari we don't want fullscreen
+        await videoRef.current.play();
+      }
     } catch (err) {
       toast({ variant: "destructive", title: "Camera Error", description: "Webcam access required." });
       setIsCameraActive(false);
@@ -167,13 +172,12 @@ export default function SmartEntrancePage() {
       const context = canvas.getContext('2d', { willReadFrequently: true });
       
       if (context) {
-        // High-fidelity small-buffer scan
-        const targetWidth = 480;
-        const scale = targetWidth / video.videoWidth;
-        canvas.width = targetWidth;
-        canvas.height = video.videoHeight * scale;
+        // High-fidelity scan: Use full video resolution
+        canvas.width = video.videoWidth;
+        canvas.height = video.videoHeight;
         
-        context.imageSmoothingEnabled = false; // Preserve QR edges
+        // Disable smoothing to keep QR edges sharp
+        context.imageSmoothingEnabled = false;
         context.drawImage(video, 0, 0, canvas.width, canvas.height);
         
         const imageData = context.getImageData(0, 0, canvas.width, canvas.height);
@@ -185,10 +189,14 @@ export default function SmartEntrancePage() {
           const validated = validateQrPayload(code.data);
           
           if (validated.valid) {
-            const member = cachedMembersRef.current.find(m => m.phone === validated.memberId || m.id === validated.memberId);
+            // Find member by phone or document ID
+            const member = cachedMembersRef.current.find(m => 
+              m.phone === validated.memberId || m.id === validated.memberId
+            );
+
             if (member && member.status === 'active') {
               triggerAccess(member);
-              return;
+              return; // Stop the loop for a few seconds
             } else {
               setFeedback(member ? 'EXPIRED MEMBERSHIP' : 'UNKNOWN ID');
             }
