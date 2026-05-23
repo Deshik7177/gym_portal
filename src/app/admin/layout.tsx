@@ -16,8 +16,7 @@ import {
   WifiOff,
   Scan,
   ShieldCheck,
-  History,
-  BookOpen
+  History
 } from 'lucide-react';
 
 import { Button } from '@/components/ui/button';
@@ -67,7 +66,6 @@ export default function ReceptionLayout({ children }: { children: React.ReactNod
     { href: '/admin/sales', label: 'Sales Report', icon: BarChart3 },
     { href: '/admin/absent', label: 'Retention Alerts', icon: Clock },
     { href: '/admin/register', label: 'Registration', icon: UserPlus },
-    { href: '/admin/help', label: 'Operations Manual', icon: BookOpen },
   ];
 
   return (
