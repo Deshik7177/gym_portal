@@ -9,8 +9,8 @@ import {
   Cloud,
   ShieldCheck,
   RefreshCw,
-  Maximize,
   AlertCircle,
+  Loader2,
 } from 'lucide-react';
 import { collection, query, updateDoc, doc, serverTimestamp, onSnapshot, addDoc } from 'firebase/firestore';
 import { useFirestore } from '@/firebase';
@@ -75,7 +75,6 @@ export default function SmartEntrancePage() {
       if (videoRef.current) {
         videoRef.current.srcObject = stream;
         videoRef.current.setAttribute("playsinline", "true");
-        // Wait for metadata to ensure videoWidth/videoHeight are populated
         videoRef.current.onloadedmetadata = () => {
           videoRef.current?.play().catch(console.error);
         };
@@ -112,6 +111,7 @@ export default function SmartEntrancePage() {
 
     const memberId = member.id || member.phone;
     
+    // Log attendance
     addDoc(collection(db, 'attendance'), {
       memberId: memberId,
       memberName: member.fullName,
@@ -120,10 +120,12 @@ export default function SmartEntrancePage() {
       latency: Math.round(latency)
     });
 
+    // Update member record
     updateDoc(doc(db, 'members', memberId), {
       lastCheckIn: serverTimestamp()
     });
 
+    // Pulse gate command
     addDoc(collection(db, 'gateControl'), {
       command: 'OPEN',
       timestamp: serverTimestamp(),
@@ -167,7 +169,7 @@ export default function SmartEntrancePage() {
       if (context) {
         const startTime = performance.now();
 
-        // High-fidelity full-frame scan with optimized scaling
+        // High-fidelity full-frame scan
         // We use a fixed width of 640 to maintain detail while reducing computation
         const scale = 640 / video.videoWidth;
         canvas.width = 640;
@@ -175,9 +177,14 @@ export default function SmartEntrancePage() {
         
         // Disable smoothing to keep QR edges sharp
         context.imageSmoothingEnabled = false;
+        
+        // Draw video frame to canvas
         context.drawImage(video, 0, 0, canvas.width, canvas.height);
         
+        // Get raw image data for decoding
         const imageData = context.getImageData(0, 0, canvas.width, canvas.height);
+        
+        // Use jsQR to decode
         const code = jsQR(imageData.data, imageData.width, imageData.height, {
           inversionAttempts: "attemptBoth",
         });
@@ -192,7 +199,7 @@ export default function SmartEntrancePage() {
 
             if (member && member.status === 'active') {
               triggerAccess(member, startTime);
-              return; 
+              return; // Stop scanning until reset
             } else {
               setFeedback(member ? 'EXPIRED MEMBERSHIP' : 'INVALID PASSPORT');
             }
