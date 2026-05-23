@@ -1,15 +1,15 @@
+
 'use client';
 
 import { useState, useRef, useEffect, useCallback } from 'react';
 import { 
   Camera, 
   CheckCircle2, 
-  Loader2, 
-  RefreshCw,
   QrCode,
   History,
   Cloud,
-  ShieldCheck
+  ShieldCheck,
+  RefreshCw
 } from 'lucide-react';
 import { collection, query, updateDoc, doc, serverTimestamp, onSnapshot, addDoc } from 'firebase/firestore';
 import { useFirestore } from '@/firebase';
@@ -46,7 +46,7 @@ export default function SmartEntrancePage() {
   const isProcessingRef = useRef(false);
   const cachedMembersRef = useRef<any[]>([]);
 
-  // Sync Member Cache
+  // Local Cache Sync
   useEffect(() => {
     if (!db) return;
     setIsSyncing(true);
@@ -93,19 +93,19 @@ export default function SmartEntrancePage() {
     return () => stopCamera();
   }, [facingMode, isCameraActive]);
 
-  const triggerAccess = useCallback(async (member: any) => {
+  const triggerAccess = useCallback((member: any) => {
     if (!db || !member || isProcessingRef.current) return;
     
     const latency = performance.now() - (scanStartTimeRef.current || performance.now());
     
-    // Immediate Visual Feedback (Zero Latency UI)
+    // UI Logic (Zero Latency Response)
     isProcessingRef.current = true;
     setIsProcessing(true);
     setScanResult('success');
     setIdentifiedMember(member);
     setLastLatency(Math.round(latency));
 
-    // Async Background Tasks (Non-blocking)
+    // Background Database Sync (Non-blocking)
     const memberId = member.id || member.phone;
     
     addDoc(collection(db, 'attendance'), {
@@ -113,7 +113,6 @@ export default function SmartEntrancePage() {
       memberName: member.fullName,
       timestamp: serverTimestamp(),
       method: 'qr',
-      score: 1.0,
       latency: Math.round(latency)
     });
 
@@ -134,7 +133,7 @@ export default function SmartEntrancePage() {
       method: 'QR'
     }, ...prev].slice(0, 10));
 
-    // Reset for next person after 3 seconds
+    // Reset for next person
     setTimeout(() => {
       if (isComponentMounted.current) {
         setScanResult(null);
@@ -144,7 +143,7 @@ export default function SmartEntrancePage() {
         setFeedback('READY');
         scanStartTimeRef.current = 0;
       }
-    }, 3000);
+    }, 2500);
   }, [db]);
 
   const runScanLoop = useCallback(async () => {
@@ -168,13 +167,13 @@ export default function SmartEntrancePage() {
       const context = canvas.getContext('2d', { willReadFrequently: true });
       
       if (context) {
-        // High-speed low-resolution detection
+        // High-fidelity small-buffer scan
         const targetWidth = 480;
         const scale = targetWidth / video.videoWidth;
         canvas.width = targetWidth;
         canvas.height = video.videoHeight * scale;
         
-        context.imageSmoothingEnabled = false;
+        context.imageSmoothingEnabled = false; // Preserve QR edges
         context.drawImage(video, 0, 0, canvas.width, canvas.height);
         
         const imageData = context.getImageData(0, 0, canvas.width, canvas.height);
@@ -190,16 +189,12 @@ export default function SmartEntrancePage() {
             if (member && member.status === 'active') {
               triggerAccess(member);
               return;
-            } else if (member) {
-              setFeedback('MEMBERSHIP LAPSED');
             } else {
-              setFeedback('UNKNOWN MEMBER');
+              setFeedback(member ? 'EXPIRED MEMBERSHIP' : 'UNKNOWN ID');
             }
-          } else {
-            setFeedback('SCANNING...');
           }
-        } else if (isComponentMounted.current) {
-          setFeedback('SCANNING...');
+        } else {
+          setFeedback('SCANNING QR');
         }
       }
     }
@@ -219,9 +214,9 @@ export default function SmartEntrancePage() {
   return (
     <div className="max-w-7xl mx-auto space-y-6 pb-20">
       <div className="flex flex-col gap-2">
-         <h1 className="text-4xl font-black font-headline tracking-tighter text-white flex items-center gap-3">
+         <h1 className="text-4xl font-black font-headline tracking-tighter text-white flex items-center gap-3 uppercase">
             <ShieldCheck className="h-10 w-10 text-primary" />
-            GYM ENTRANCE
+            Entry Portal
          </h1>
          <div className="flex items-center gap-2">
             <p className="text-muted-foreground italic text-xs uppercase tracking-widest font-bold opacity-60">Optical Scan Engine Active</p>
@@ -292,15 +287,15 @@ export default function SmartEntrancePage() {
           <CardContent className="p-8 border-t border-white/5 bg-card/80 backdrop-blur-3xl">
              <div className="flex flex-col sm:flex-row items-center justify-between gap-6">
                 <div>
-                   <p className="text-[10px] font-black text-muted-foreground uppercase tracking-[0.5em] mb-2">Gate Status</p>
+                   <p className="text-[10px] font-black text-muted-foreground uppercase tracking-[0.5em] mb-2">System Health</p>
                    <div className="flex items-center gap-4">
                       <div className="h-3 w-3 rounded-full bg-green-500 animate-pulse shadow-[0_0_10px_rgba(34,197,94,1)]" />
-                      <span className="font-mono text-xs text-white/40 uppercase tracking-widest">GATEWAY ACTIVE</span>
+                      <span className="font-mono text-xs text-white/40 uppercase tracking-widest">GATEWAY LINK ACTIVE</span>
                    </div>
                 </div>
                 {!isCameraActive && (
-                  <Button size="lg" onClick={() => setIsCameraActive(true)} className="w-full sm:px-16 font-black h-16 text-xl rounded-2xl shadow-2xl shadow-primary/20">
-                      <Camera className="mr-3 h-6 w-6" /> START SCANNER
+                  <Button size="lg" onClick={() => setIsCameraActive(true)} className="w-full sm:px-16 font-black h-16 text-xl rounded-2xl shadow-2xl shadow-primary/20 uppercase">
+                      Start Scanning
                   </Button>
                 )}
              </div>
@@ -311,7 +306,7 @@ export default function SmartEntrancePage() {
           <Card className="flex-1 overflow-auto border-none shadow-2xl bg-black/40 backdrop-blur-xl rounded-3xl">
             <div className="bg-white/[0.02] border-b border-white/5 py-6 px-8">
               <h2 className="text-[10px] uppercase tracking-[0.5em] font-black flex items-center gap-3 text-primary">
-                  <History className="h-4 w-4" /> RECENT ACCESS
+                  <History className="h-4 w-4" /> RECENT TRAFFIC
               </h2>
             </div>
             <CardContent className="p-0">
@@ -322,7 +317,7 @@ export default function SmartEntrancePage() {
                           <TableCell className="text-[10px] font-mono opacity-30 pl-8">{log.time}</TableCell>
                           <TableCell className="font-bold text-sm text-white/80">{log.name}</TableCell>
                           <TableCell className="text-right pr-8">
-                             <Badge variant="outline" className="text-[9px] font-black px-2 py-0 border-none text-primary">QR</Badge>
+                             <Badge variant="outline" className="text-[9px] font-black px-2 py-0 border-none text-primary uppercase">QR</Badge>
                           </TableCell>
                       </TableRow>
                     )) : (

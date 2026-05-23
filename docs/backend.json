@@ -3,7 +3,7 @@
   "entities": {
     "Member": {
       "title": "Member",
-      "description": "A gym member profile with local face embeddings and QR tokens.",
+      "description": "A gym member profile with a permanent QR ID.",
       "type": "object",
       "properties": {
         "fullName": { "type": "string" },
@@ -12,13 +12,9 @@
         "type": { "type": "string", "enum": ["group", "personal"] },
         "startDate": { "type": "string", "format": "date" },
         "endDate": { "type": "string", "format": "date" },
-        "qrToken": { "type": "string", "description": "Secure dynamic QR payload" },
+        "qrToken": { "type": "string", "description": "Unique permanent QR payload" },
         "price": { "type": "number" },
         "photoData": { "type": "string" },
-        "faceEmbedding": { 
-          "type": "array", 
-          "items": { "type": "number" }
-        },
         "lastCheckIn": { "type": "string", "format": "date-time" },
         "createdAt": { "type": "string", "format": "date-time" }
       },
@@ -32,7 +28,7 @@
         "command": { "type": "string", "enum": ["OPEN", "CLOSE"] },
         "timestamp": { "type": "string", "format": "date-time" },
         "memberId": { "type": "string" },
-        "method": { "type": "string", "enum": ["face", "qr"] }
+        "method": { "type": "string", "enum": ["qr", "manual"] }
       }
     },
     "Attendance": {
@@ -43,8 +39,8 @@
         "memberId": { "type": "string" },
         "memberName": { "type": "string" },
         "timestamp": { "type": "string", "format": "date-time" },
-        "method": { "type": "string", "enum": ["face", "qr"] },
-        "score": { "type": "number" }
+        "method": { "type": "string", "enum": ["qr", "manual"] },
+        "latency": { "type": "number", "description": "Scan speed in ms" }
       }
     },
     "Sale": {

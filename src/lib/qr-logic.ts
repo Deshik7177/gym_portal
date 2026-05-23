@@ -1,20 +1,20 @@
+
 'use client';
 
 /**
- * QR Logic Service - High Performance Edition
+ * QR Logic Service - Permanent ID Edition
  * 
- * Generates unique, permanent QR payloads for members.
- * Simplified for maximum scanning speed and zero latency.
+ * Generates unique, static QR payloads for members.
+ * These IDs never change and are optimized for zero-latency scanning.
  */
 
 /**
  * Generates a unique, permanent QR payload for a member.
- * This payload is static and generated once per member.
- * @param memberId The unique ID (phone) of the member.
+ * This ID is static and acts as the member's digital passport.
+ * @param memberId The unique phone ID of the member.
  * @returns A unique string to be rendered as a QR code.
  */
 export function generateMemberQrPayload(memberId: string) {
-  // Using a simple prefix to identify gym tokens while keeping payload small for fast scanning
   return `TFIT-${memberId}`;
 }
 
@@ -25,7 +25,7 @@ export function generateMemberQrPayload(memberId: string) {
  */
 export function validateQrPayload(payload: string) {
   try {
-    if (!payload.startsWith('TFIT-')) {
+    if (!payload || !payload.startsWith('TFIT-')) {
       return { valid: false, reason: 'INVALID_FORMAT' };
     }
     

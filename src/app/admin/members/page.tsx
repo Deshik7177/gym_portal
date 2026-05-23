@@ -1,6 +1,7 @@
+
 'use client';
 
-import { useState, useMemo, useRef, useEffect } from 'react';
+import { useState, useMemo, useRef } from 'react';
 import { 
   Search, 
   User, 
@@ -15,7 +16,6 @@ import {
   Download,
   Filter,
   X,
-  RefreshCw,
   UserCheck
 } from 'lucide-react';
 import { collection, query, doc, deleteDoc, updateDoc, serverTimestamp, addDoc } from 'firebase/firestore';
@@ -159,10 +159,9 @@ export default function MembersListPage() {
         memberName: member.fullName,
         timestamp: timestamp,
         method: 'manual',
-        score: 1.0,
-        staffAction: true
+        latency: 0
       });
-      toast({ title: "Check-In Recorded", description: `Attendance logged for ${member.fullName}.` });
+      toast({ title: "Manual Attendance Recorded", description: `Check-in logged for ${member.fullName}.` });
     } catch (e: any) {
       toast({ variant: "destructive", title: "Check-In Failed" });
     } finally {
@@ -176,7 +175,7 @@ export default function MembersListPage() {
     if (canvas) {
       const url = canvas.toDataURL("image/png");
       const link = document.createElement("a");
-      link.download = `ThriveFit_QR_${memberQrToShow.fullName.replace(/\s+/g, '_')}.png`;
+      link.download = `Passport_${memberQrToShow.fullName.replace(/\s+/g, '_')}.png`;
       link.href = url;
       link.click();
       toast({ title: "Export Success", description: "Member Passport saved." });
@@ -230,7 +229,7 @@ export default function MembersListPage() {
       <div className="flex flex-col md:flex-row justify-between items-start md:items-center gap-4">
         <div>
           <h1 className="text-3xl font-bold font-headline uppercase tracking-tighter text-primary">Vault Directory</h1>
-          <p className="text-muted-foreground text-xs font-bold tracking-widest uppercase opacity-60">Staff Control Panel</p>
+          <p className="text-muted-foreground text-xs font-bold tracking-widest uppercase opacity-60">System Registry</p>
         </div>
         <Button asChild className="h-12 px-8 rounded-xl font-bold">
           <Link href="/admin/register"><Plus className="mr-2 h-4 w-4" /> Enroll New Member</Link>
@@ -240,7 +239,7 @@ export default function MembersListPage() {
       <div className="grid gap-4 md:grid-cols-3">
          <Card className="bg-primary/5 border-primary/10 shadow-none">
             <CardHeader className="pb-2">
-                <CardTitle className="text-[10px] font-black uppercase tracking-[0.3em] opacity-40">Total Capacity</CardTitle>
+                <CardTitle className="text-[10px] font-black uppercase tracking-[0.3em] opacity-40">Registered Population</CardTitle>
             </CardHeader>
             <CardContent>
                 <div className="text-3xl font-black">{stats.total}</div>
@@ -248,7 +247,7 @@ export default function MembersListPage() {
          </Card>
          <Card className="bg-green-500/5 border-green-500/10 shadow-none">
             <CardHeader className="pb-2">
-                <CardTitle className="text-[10px] font-black uppercase tracking-[0.3em] opacity-40">Active Sync</CardTitle>
+                <CardTitle className="text-[10px] font-black uppercase tracking-[0.3em] opacity-40">Active Contracts</CardTitle>
             </CardHeader>
             <CardContent>
                 <div className="text-3xl font-black text-green-500">{stats.active}</div>
@@ -256,7 +255,7 @@ export default function MembersListPage() {
          </Card>
          <Card className="bg-accent/5 border-accent/10 shadow-none">
             <CardHeader className="pb-2">
-                <CardTitle className="text-[10px] font-black uppercase tracking-[0.3em] opacity-40">PT Coverage</CardTitle>
+                <CardTitle className="text-[10px] font-black uppercase tracking-[0.3em] opacity-40">Personal Training</CardTitle>
             </CardHeader>
             <CardContent>
                 <div className="text-3xl font-black text-accent">{stats.personal}</div>
@@ -373,7 +372,7 @@ export default function MembersListPage() {
         </CardContent>
       </Card>
 
-      {/* Member QR Dialog */}
+      {/* Permanent Member Passport Dialog */}
       <Dialog open={!!memberQrToShow} onOpenChange={(open) => !open && setMemberQrToShow(null)}>
         <DialogContent className="sm:max-w-md bg-zinc-900 border-white/10 rounded-3xl p-8">
           <div className="flex flex-col items-center text-center gap-4">
@@ -381,7 +380,7 @@ export default function MembersListPage() {
               <QrCode className="h-8 w-8 text-primary" />
             </div>
             <DialogTitle className="text-2xl font-black font-headline tracking-tighter uppercase">Member Passport</DialogTitle>
-            <DialogDescription className="text-xs font-bold uppercase tracking-widest opacity-60">Permanent Entry ID for {memberQrToShow?.fullName}</DialogDescription>
+            <DialogDescription className="text-xs font-bold uppercase tracking-widest opacity-60">Permanent Entry ID: {memberQrToShow?.fullName}</DialogDescription>
           </div>
           <div className="flex flex-col items-center justify-center py-8 gap-8">
              <div ref={qrRef} className="bg-white p-6 rounded-3xl shadow-[0_0_50px_-12px_rgba(255,255,255,0.3)]">
@@ -393,17 +392,17 @@ export default function MembersListPage() {
                   />
                 )}
              </div>
-             <p className="text-xs font-mono opacity-40 tracking-widest">{memberQrToShow?.phone}</p>
+             <p className="text-xs font-mono opacity-40 tracking-widest uppercase">Valid Passport ID: {memberQrToShow?.phone}</p>
           </div>
           <DialogFooter className="sm:justify-center">
-            <Button className="w-full h-14 rounded-2xl font-black text-lg shadow-xl shadow-primary/20" onClick={handleExportQr}>
-               <Download className="mr-2 h-5 w-5" /> EXPORT TO DEVICE
+            <Button className="w-full h-14 rounded-2xl font-black text-lg shadow-xl shadow-primary/20 uppercase" onClick={handleExportQr}>
+               <Download className="mr-2 h-5 w-5" /> Export ID
             </Button>
           </DialogFooter>
         </DialogContent>
       </Dialog>
 
-      {/* Add PT Session Dialog */}
+      {/* PT Session Dialog */}
       <Dialog open={!!memberForPT} onOpenChange={(open) => !open && setMemberForPT(null)}>
         <DialogContent className="sm:max-w-md bg-zinc-900 border-white/10 rounded-3xl p-8">
           <DialogHeader>
