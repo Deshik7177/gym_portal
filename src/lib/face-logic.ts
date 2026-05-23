@@ -42,8 +42,8 @@ export async function checkFrameQuality(detection: faceapi.WithFaceDescriptor<fa
   
   const { detection: d, landmarks } = detection;
   
-  // 1. High Confidence Threshold
-  if (d.score < 0.8) return { isValid: false, reason: "Low quality frame" };
+  // 1. Confidence Threshold (Relaxed from 0.8 to 0.6 for better accessibility)
+  if (d.score < 0.6) return { isValid: false, reason: "Face unclear" };
 
   // 2. Pose Estimation (Alignment)
   const nose = landmarks.getNose();
@@ -54,15 +54,15 @@ export async function checkFrameQuality(detection: faceapi.WithFaceDescriptor<fa
   const noseX = nose[0].x;
   const horizontalOffset = Math.abs(noseX - eyeCenterX);
   
-  // Reject if head is tilted too far
-  if (horizontalOffset > 30) return { isValid: false, reason: "Face the camera directly" };
+  // Relaxed from 30 to 50 to allow more natural movement
+  if (horizontalOffset > 50) return { isValid: false, reason: "Look at camera" };
 
-  // 3. Proximity Check
-  if (d.box.width < 140) return { isValid: false, reason: "Move closer" };
+  // 3. Proximity Check (Relaxed from 140 to 100)
+  if (d.box.width < 100) return { isValid: false, reason: "Step closer" };
 
   // 4. Descriptor Validation
   if (!detection.descriptor || detection.descriptor.length !== 128) {
-    return { isValid: false, reason: "Invalid facial signature" };
+    return { isValid: false, reason: "Signal error" };
   }
 
   return { isValid: true };
@@ -113,22 +113,18 @@ export function findBestMatch(liveDescriptor: number[], members: any[]) {
     }
   }
 
-  // Log debug stats for the best match found
   if (bestMatch) {
-    console.debug(`[Biometric] Match: ${bestMatch.fullName}, Distance: ${minDistance.toFixed(4)}`);
+    console.debug(`[Biometric] Best Candidate: ${bestMatch.fullName}, Dist: ${minDistance.toFixed(4)}`);
   }
 
   return { bestMatch, distance: minDistance };
 }
 
 /**
- * Lightweight passive detection remains available for background triggers
+ * Lightweight passive detection
  */
 export async function detectFacePassive(input: HTMLVideoElement | HTMLCanvasElement) {
   if (!input || (input instanceof HTMLVideoElement && input.readyState < 2)) return null;
-  
-  // Use SSD for passive as well if accuracy is preferred over speed, 
-  // but keeping it lightweight until active verification starts
   const options = new faceapi.SsdMobilenetv1Options({ minConfidence: 0.5 });
   return await faceapi.detectSingleFace(input, options);
 }

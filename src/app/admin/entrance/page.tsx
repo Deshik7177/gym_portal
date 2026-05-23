@@ -120,9 +120,10 @@ export default function SmartEntrancePage() {
     setIsProcessing(true);
     setFeedback('HOLD STILL...');
     
+    // Multi-frame verification: Higher confidence for security
     const ssdOptions = new faceapi.SsdMobilenetv1Options({ minConfidence: 0.7 });
     const collectedEmbeddings: number[][] = [];
-    const requiredSamples = 8; // Multi-frame verification
+    const requiredSamples = 8; 
     let framesAttempted = 0;
     const maxFrames = 50; 
 
@@ -134,6 +135,14 @@ export default function SmartEntrancePage() {
 
       if (framesAttempted >= maxFrames || collectedEmbeddings.length >= requiredSamples) {
         // Finalize Verification
+        if (collectedEmbeddings.length < 3) {
+            setScanResult('failure');
+            setIsProcessing(false);
+            setFeedback('STABILIZE AND RETRY');
+            setTimeout(() => setScanResult(null), 3000);
+            return;
+        }
+
         const averagedLive = averageEmbeddings(collectedEmbeddings);
         const { bestMatch, distance } = findBestMatch(averagedLive, cachedMembers);
 
@@ -231,11 +240,12 @@ export default function SmartEntrancePage() {
     if (!videoRef.current || !db || !pendingMember || !modelsReady) return;
     setIsProcessing(true);
     setEnrollProgress(0);
-    setFeedback('COLLECTING SAMPLES...');
+    setFeedback('FINDING FACE...');
 
     const samples: number[][] = [];
     const requiredSamples = 10;
-    const ssdOptions = new faceapi.SsdMobilenetv1Options({ minConfidence: 0.75 });
+    // Lower threshold for enrollment to catch face, then check quality
+    const ssdOptions = new faceapi.SsdMobilenetv1Options({ minConfidence: 0.5 });
 
     const enrollLoop = async () => {
       if (!videoRef.current || !isCameraActive || !isProcessing || videoRef.current.readyState < 2) {
@@ -244,7 +254,7 @@ export default function SmartEntrancePage() {
       }
 
       if (samples.length >= requiredSamples) {
-        // Average all samples for stability
+        setFeedback('SAVING MASTER PROFILE...');
         const averaged = averageEmbeddings(samples);
 
         const canvas = document.createElement('canvas');
@@ -280,10 +290,12 @@ export default function SmartEntrancePage() {
           if (quality.isValid) {
             samples.push(Array.from(detection.descriptor));
             setEnrollProgress(samples.length / requiredSamples);
-            setFeedback(`CAPTURING: ${samples.length}/${requiredSamples}`);
+            setFeedback(`COLLECTING SAMPLES: ${samples.length}/${requiredSamples}`);
           } else {
             setFeedback(quality.reason || 'STABILIZING...');
           }
+        } else {
+            setFeedback('FACE NOT DETECTED');
         }
       } catch (err) {
         console.warn("Enrollment skip:", err);
@@ -366,7 +378,7 @@ export default function SmartEntrancePage() {
                 <div className="absolute inset-0 flex flex-col items-center justify-center z-10 bg-destructive/20 backdrop-blur-md">
                   <XCircle className="h-32 w-32 text-destructive mb-4 drop-shadow-xl" />
                   <p className="text-white font-headline text-2xl font-bold tracking-[0.2em] uppercase">ACCESS DENIED</p>
-                  <p className="text-white/60 text-xs mt-2 uppercase tracking-widest font-bold">Identity Mismatch</p>
+                  <p className="text-white/60 text-xs mt-2 uppercase tracking-widest font-bold">{feedback || 'Identity Mismatch'}</p>
                 </div>
               )}
             </div>
