@@ -51,7 +51,6 @@ export default function SmartEntrancePage() {
   const scanLoopRef = useRef<number | null>(null);
   const isComponentMounted = useRef(true);
   const scanStartTimeRef = useRef<number>(0);
-  const lastQrScanRef = useRef<number>(0);
   
   // Refs to avoid loop restarts on state changes
   const isProcessingRef = useRef(false);
@@ -95,7 +94,7 @@ export default function SmartEntrancePage() {
   const startCamera = async () => {
     try {
       const stream = await navigator.mediaDevices.getUserMedia({ 
-        video: { facingMode: facingMode, width: { ideal: 640 }, height: { ideal: 480 } } 
+        video: { facingMode: facingMode, width: { ideal: 1280 }, height: { ideal: 720 } } 
       });
       if (videoRef.current) videoRef.current.srcObject = stream;
     } catch (err) {
@@ -184,7 +183,6 @@ export default function SmartEntrancePage() {
       scanStartTimeRef.current = performance.now();
     }
 
-    const now = performance.now();
     const mode = authModeRef.current;
 
     if (mode === 'face' && modelsReady) {
@@ -201,54 +199,50 @@ export default function SmartEntrancePage() {
             triggerAccess(bestMatch, 'face', 1 - distance);
             return;
           } else {
-            setFeedback('ID NOT FOUND - TRY QR OR RE-ALIGN');
+            setFeedback('ID NOT FOUND');
           }
         } else if (isComponentMounted.current) {
           setFeedback('SEARCHING FOR FACE...');
         }
       } catch (e) {
-        console.warn("Biometric loop skip:", e);
+        // Skip frame on error
       }
     } else if (mode === 'qr') {
-      // High-frequency polling (50ms) for instant response
-      if (now - lastQrScanRef.current > 50) {
-        lastQrScanRef.current = now;
-
-        if (canvasRef.current && isComponentMounted.current) {
-          const canvas = canvasRef.current;
-          const context = canvas.getContext('2d', { willReadFrequently: true });
-          if (context) {
-            // Optimized detection resolution (300px)
-            const targetWidth = 300;
-            const scale = targetWidth / video.videoWidth;
-            canvas.width = targetWidth;
-            canvas.height = video.videoHeight * scale;
+      if (canvasRef.current && isComponentMounted.current) {
+        const canvas = canvasRef.current;
+        const context = canvas.getContext('2d', { willReadFrequently: true });
+        if (context) {
+          // Optimized high-fidelity resolution for QR
+          const targetWidth = 480;
+          const scale = targetWidth / video.videoWidth;
+          canvas.width = targetWidth;
+          canvas.height = video.videoHeight * scale;
+          
+          context.imageSmoothingEnabled = false; // Important for QR sharpness
+          context.drawImage(video, 0, 0, canvas.width, canvas.height);
+          
+          const imageData = context.getImageData(0, 0, canvas.width, canvas.height);
+          const code = jsQR(imageData.data, imageData.width, imageData.height, {
+            inversionAttempts: "attemptBoth", // Necessary for phone screens
+          });
+          
+          if (code && isComponentMounted.current) {
+            setFeedback('DECODING PASSPORT...');
+            const validated = validateQrPayload(code.data);
             
-            context.drawImage(video, 0, 0, canvas.width, canvas.height);
-            
-            const imageData = context.getImageData(0, 0, canvas.width, canvas.height);
-            const code = jsQR(imageData.data, imageData.width, imageData.height, {
-              inversionAttempts: "dontInvert",
-            });
-            
-            if (code && isComponentMounted.current) {
-              setFeedback('DECODING PASSPORT...');
-              const validated = validateQrPayload(code.data);
-              
-              if (validated.valid) {
-                const member = cachedMembersRef.current.find(m => m.phone === validated.memberId || m.id === validated.memberId);
-                if (member) {
-                  triggerAccess(member, 'qr');
-                  return;
-                } else {
-                  setFeedback('NOT A REGISTERED MEMBER');
-                }
+            if (validated.valid) {
+              const member = cachedMembersRef.current.find(m => m.phone === validated.memberId || m.id === validated.memberId);
+              if (member) {
+                triggerAccess(member, 'qr');
+                return;
               } else {
-                setFeedback(validated.reason === 'EXPIRED' ? 'QR EXPIRED - PLEASE REFRESH' : 'INVALID QR FORMAT');
+                setFeedback('INVALID MEMBER ID');
               }
-            } else if (isComponentMounted.current) {
-              setFeedback('PRESENT QR TO SCANNER');
+            } else {
+              setFeedback(validated.reason === 'EXPIRED' ? 'QR EXPIRED' : 'INVALID FORMAT');
             }
+          } else if (isComponentMounted.current) {
+            setFeedback('SCANNING FOR QR...');
           }
         }
       }
@@ -274,8 +268,8 @@ export default function SmartEntrancePage() {
             SECURE KIOSK
          </h1>
          <div className="flex items-center gap-2">
-            <p className="text-muted-foreground italic text-xs uppercase tracking-widest font-bold opacity-60">Biometric & QR Hybrid Gateway</p>
-            {isSyncing && <Badge variant="outline" className="h-5 text-[9px] animate-pulse border-primary/20 bg-primary/5 text-primary"><Cloud className="h-2 w-2 mr-1" /> SYNCING CACHE</Badge>}
+            <p className="text-muted-foreground italic text-xs uppercase tracking-widest font-bold opacity-60">High-Speed Gateway Engine</p>
+            {isSyncing && <Badge variant="outline" className="h-5 text-[9px] animate-pulse border-primary/20 bg-primary/5 text-primary"><Cloud className="h-2 w-2 mr-1" /> SYNCING</Badge>}
          </div>
       </div>
 
@@ -284,10 +278,10 @@ export default function SmartEntrancePage() {
           {/* HUD Overlay */}
           <div className="absolute top-6 left-6 z-20 flex flex-wrap gap-3">
             <Badge className={cn("px-4 py-1.5 rounded-full font-black text-[10px] tracking-[0.2em] uppercase transition-all duration-500", authMode === 'face' ? "bg-primary text-primary-foreground" : "bg-muted text-muted-foreground opacity-40")}>
-              <Zap className="h-3 w-3 mr-2" /> PREMIUM FACE
+              <Zap className="h-3 w-3 mr-2" /> BIOMETRIC
             </Badge>
             <Badge className={cn("px-4 py-1.5 rounded-full font-black text-[10px] tracking-[0.2em] uppercase transition-all duration-500", authMode === 'qr' ? "bg-blue-500 text-white" : "bg-muted text-muted-foreground opacity-40")}>
-              <QrCode className="h-3 w-3 mr-2" /> OPTICAL QR
+              <QrCode className="h-3 w-3 mr-2" /> OPTICAL
             </Badge>
           </div>
 
@@ -304,7 +298,7 @@ export default function SmartEntrancePage() {
                 autoPlay 
                 muted 
                 playsInline 
-                className={cn("w-full h-full object-cover transition-all duration-1000", (scanResult === 'success' || isProcessing) ? "scale-110 blur-xl opacity-20" : "scale-100 opacity-90")} 
+                className={cn("w-full h-full object-cover transition-all duration-700", (scanResult === 'success' || isProcessing) ? "scale-110 blur-xl opacity-20" : "scale-100 opacity-90")} 
               />
             ) : (
               <div className="flex flex-col items-center gap-6 text-muted-foreground/10">
@@ -318,7 +312,7 @@ export default function SmartEntrancePage() {
               <div className="absolute bottom-12 left-1/2 -translate-x-1/2 w-full max-w-sm px-6">
                 <div className="bg-black/80 backdrop-blur-2xl border border-white/10 rounded-2xl p-6 shadow-2xl animate-in slide-in-from-bottom-4">
                   <div className="flex items-center justify-between mb-4">
-                     <p className="text-[10px] font-black uppercase tracking-[0.4em] text-primary">{authMode === 'face' ? 'AI Biometric' : 'Optical Engine'}</p>
+                     <p className="text-[10px] font-black uppercase tracking-[0.4em] text-primary">{authMode === 'face' ? 'Biometric' : 'Optical Engine'}</p>
                      <Loader2 className="h-3 w-3 text-primary animate-spin" />
                   </div>
                   <h3 className="text-xl font-headline font-bold text-white mb-2 uppercase tracking-tight min-h-[1.5em]">{feedback}</h3>
@@ -339,16 +333,21 @@ export default function SmartEntrancePage() {
                 <h2 className="text-8xl font-black font-headline text-white mb-2 tracking-tighter italic uppercase">Welcome</h2>
                 <p className="text-4xl text-primary font-black uppercase tracking-tight border-b-4 border-primary pb-2 mb-4">{identifiedMember.fullName}</p>
                 <Badge variant="outline" className="bg-white/10 border-white/20 text-white font-mono text-[10px] tracking-widest px-4 py-1">
-                  <Timer className="h-3 w-3 mr-2 text-primary" /> VERIFIED IN {lastLatency}ms
+                   VERIFIED IN {lastLatency}ms
                 </Badge>
               </div>
             )}
 
             {/* Scanning Grids/Effects */}
             {isCameraActive && !scanResult && authMode === 'qr' && (
-              <div className="absolute inset-0 border-[40px] border-black/60 pointer-events-none">
-                 <div className="absolute top-1/2 left-1/2 -translate-x-1/2 -translate-y-1/2 w-64 h-64 border-2 border-dashed border-blue-500/50 rounded-3xl" />
-                 <div className="absolute top-1/2 left-0 w-full h-0.5 bg-blue-500/30 animate-scan-line" />
+              <div className="absolute inset-0 pointer-events-none flex items-center justify-center">
+                 <div className="w-64 h-64 border-2 border-primary/40 rounded-3xl relative">
+                    <div className="absolute -top-1 -left-1 w-8 h-8 border-t-4 border-l-4 border-primary rounded-tl-xl" />
+                    <div className="absolute -top-1 -right-1 w-8 h-8 border-t-4 border-r-4 border-primary rounded-tr-xl" />
+                    <div className="absolute -bottom-1 -left-1 w-8 h-8 border-b-4 border-l-4 border-primary rounded-bl-xl" />
+                    <div className="absolute -bottom-1 -right-1 w-8 h-8 border-b-4 border-r-4 border-primary rounded-br-xl" />
+                 </div>
+                 <div className="absolute top-1/2 left-0 w-full h-0.5 bg-primary/20 animate-pulse" />
               </div>
             )}
           </div>
@@ -356,10 +355,10 @@ export default function SmartEntrancePage() {
           <CardContent className="p-8 border-t border-white/5 bg-card/80 backdrop-blur-3xl">
              <div className="flex flex-col sm:flex-row items-center justify-between gap-6">
                 <div>
-                   <p className="text-[10px] font-black text-muted-foreground uppercase tracking-[0.5em] mb-2">Manual Control Override</p>
+                   <p className="text-[10px] font-black text-muted-foreground uppercase tracking-[0.5em] mb-2">Gate Status</p>
                    <div className="flex items-center gap-4">
                       <div className="h-3 w-3 rounded-full bg-green-500 animate-pulse shadow-[0_0_10px_rgba(34,197,94,1)]" />
-                      <span className="font-mono text-xs text-white/40 uppercase tracking-widest">RELAY-01: ONLINE</span>
+                      <span className="font-mono text-xs text-white/40 uppercase tracking-widest">GATEWAY ACTIVE</span>
                    </div>
                 </div>
                 <div className="flex gap-4 w-full sm:w-auto">
@@ -372,10 +371,7 @@ export default function SmartEntrancePage() {
                         <Button 
                           size="lg" 
                           variant="outline" 
-                          onClick={() => {
-                            setAuthMode(authMode === 'face' ? 'qr' : 'face');
-                            setFeedback(authMode === 'face' ? 'QR MODE ACTIVE' : 'FACE MODE ACTIVE');
-                          }}
+                          onClick={() => setAuthMode(authMode === 'face' ? 'qr' : 'face')}
                           className="flex-1 h-16 rounded-2xl border-white/10 hover:bg-white/5 font-bold"
                         >
                            {authMode === 'face' ? <QrCode className="mr-2 h-5 w-5" /> : <Scan className="mr-2 h-5 w-5" />}
@@ -391,7 +387,6 @@ export default function SmartEntrancePage() {
                             isProcessingRef.current = false;
                             setFeedback('SCANNER RESET');
                             scanStartTimeRef.current = 0;
-                            lastQrScanRef.current = 0;
                           }}
                           className="flex-1 h-16 rounded-2xl font-bold bg-white/5 hover:bg-white/10"
                         >
@@ -408,10 +403,10 @@ export default function SmartEntrancePage() {
           <Card className="flex-1 overflow-auto border-none shadow-2xl bg-black/40 backdrop-blur-xl rounded-3xl">
             <CardHeader className="bg-white/[0.02] border-b border-white/5 py-6 px-8">
               <CardTitle className="text-[10px] uppercase tracking-[0.5em] font-black flex items-center gap-3 text-primary">
-                  <History className="h-4 w-4" /> ACCESS LOGS
+                  <History className="h-4 w-4" /> RECENT ACCESS
               </CardTitle>
             </CardHeader>
-            <CardContent className="p-0 max-h-[500px]">
+            <CardContent className="p-0">
               <Table>
                   <TableBody>
                     {recentLogs.length > 0 ? recentLogs.map((log, i) => (
@@ -425,7 +420,7 @@ export default function SmartEntrancePage() {
                     )) : (
                       <TableRow>
                         <TableCell colSpan={3} className="h-64 text-center italic text-muted-foreground opacity-20 text-xs p-12 leading-relaxed uppercase tracking-[0.3em] font-black">
-                          Gateway Idle
+                          IDLE
                         </TableCell>
                       </TableRow>
                     )}
