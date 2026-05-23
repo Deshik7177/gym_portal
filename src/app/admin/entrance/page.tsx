@@ -1,4 +1,3 @@
-
 'use client';
 
 import { useState, useRef, useEffect, useCallback, useMemo } from 'react';
@@ -21,7 +20,7 @@ import {
 } from 'lucide-react';
 import { collection, query, updateDoc, doc, serverTimestamp, getDoc, onSnapshot } from 'firebase/firestore';
 import { useFirestore } from '@/firebase';
-import { loadFaceModels, detectFacePassive, findBestMatch, checkFrameQuality } from '@/lib/face-logic';
+import { loadFaceModels, detectFacePassive, findBestMatch, checkFrameQuality, averageEmbeddings } from '@/lib/face-logic';
 import * as faceapi from 'face-api.js';
 import { cn } from '@/lib/utils';
 import { errorEmitter } from '@/firebase/error-emitter';
@@ -59,7 +58,7 @@ export default function SmartEntrancePage() {
   const scanLoopRef = useRef<number | null>(null);
   const passiveLoopTimeoutRef = useRef<NodeJS.Timeout | null>(null);
 
-  // Preload ALL members with embeddings, regardless of status
+  // Preload ALL members with embeddings
   useEffect(() => {
     if (!db) return;
     setIsSyncing(true);
@@ -70,7 +69,7 @@ export default function SmartEntrancePage() {
         .filter((m: any) => 
           m.faceEmbedding && 
           Array.isArray(m.faceEmbedding) && 
-          m.faceEmbedding.length > 0
+          m.faceEmbedding.length === 128
         );
       setCachedMembers(members);
       setIsSyncing(false);
@@ -115,71 +114,17 @@ export default function SmartEntrancePage() {
     if (passiveLoopTimeoutRef.current) clearTimeout(passiveLoopTimeoutRef.current);
   };
 
-  const finalizeScan = useCallback((results: { member: any, similarity: number }[]) => {
-    setIsProcessing(false);
-    setFeedback('');
-
-    if (results.length === 0) {
-      setScanResult('failure');
-      setTimeout(() => setScanResult(null), 3000);
-      return;
-    }
-
-    const memberStats: Record<string, { member: any, totalSim: number, count: number }> = {};
-    results.forEach(r => {
-      if (!memberStats[r.member.id]) {
-        memberStats[r.member.id] = { member: r.member, totalSim: 0, count: 0 };
-      }
-      memberStats[r.member.id].totalSim += r.similarity;
-      memberStats[r.member.id].count++;
-    });
-
-    const bestFinal = Object.values(memberStats)
-      .map(v => ({ member: v.member, avgSim: v.totalSim / v.count }))
-      .sort((a, b) => b.avgSim - a.avgSim)[0];
-
-    // Accurate Thresholds: 0.84 Stable Match
-    if (bestFinal && bestFinal.avgSim >= 0.84 && db) {
-      const memberRef = doc(db, 'members', bestFinal.member.id);
-      const updateData = { lastCheckIn: serverTimestamp(), updatedAt: serverTimestamp() };
-
-      updateDoc(memberRef, updateData).catch(async () => {
-        errorEmitter.emit('permission-error', new FirestorePermissionError({
-          path: memberRef.path,
-          operation: 'update',
-          requestResourceData: updateData,
-        } satisfies SecurityRuleContext));
-      });
-
-      setIdentifiedMember(bestFinal.member);
-      setScanResult('success');
-      setRecentLogs(prev => [{
-          name: bestFinal.member.fullName,
-          time: new Date().toLocaleTimeString(),
-          confidence: (bestFinal.avgSim * 100).toFixed(0) + '%'
-      }, ...prev].slice(0, 10));
-
-      setTimeout(() => { 
-          setScanResult(null); 
-          setIdentifiedMember(null); 
-      }, 5000);
-    } else {
-      setScanResult('failure');
-      setTimeout(() => setScanResult(null), 3000);
-    }
-  }, [db]);
-
   const triggerVerification = useCallback(async () => {
     if (!modelsReady || isProcessing || scanResult || !videoRef.current || !db || cachedMembers.length === 0) return;
 
     setIsProcessing(true);
     setFeedback('HOLD STILL...');
     
-    const ssdOptions = new faceapi.SsdMobilenetv1Options({ minConfidence: 0.6 });
-    const collectedResults: { member: any, similarity: number }[] = [];
-    const requiredSamples = 10; // Multi-frame stability
+    const ssdOptions = new faceapi.SsdMobilenetv1Options({ minConfidence: 0.7 });
+    const collectedEmbeddings: number[][] = [];
+    const requiredSamples = 8; // Multi-frame verification
     let framesAttempted = 0;
-    const maxFrames = 60; 
+    const maxFrames = 50; 
 
     const processFrame = async () => {
       if (!videoRef.current || !isCameraActive || !isProcessing || videoRef.current.readyState < 2) {
@@ -187,8 +132,32 @@ export default function SmartEntrancePage() {
         return;
       }
 
-      if (framesAttempted >= maxFrames || collectedResults.length >= requiredSamples) {
-        finalizeScan(collectedResults);
+      if (framesAttempted >= maxFrames || collectedEmbeddings.length >= requiredSamples) {
+        // Finalize Verification
+        const averagedLive = averageEmbeddings(collectedEmbeddings);
+        const { bestMatch, distance } = findBestMatch(averagedLive, cachedMembers);
+
+        setIsProcessing(false);
+        setFeedback('');
+
+        // Euclidean Threshold: < 0.55 is a strong match
+        if (bestMatch && distance < 0.55) {
+          const memberRef = doc(db, 'members', bestMatch.id);
+          updateDoc(memberRef, { lastCheckIn: serverTimestamp(), updatedAt: serverTimestamp() });
+
+          setIdentifiedMember(bestMatch);
+          setScanResult('success');
+          setRecentLogs(prev => [{
+              name: bestMatch.fullName,
+              time: new Date().toLocaleTimeString(),
+              confidence: (Math.max(0, (1 - distance) * 100)).toFixed(0) + '%'
+          }, ...prev].slice(0, 10));
+
+          setTimeout(() => { setScanResult(null); setIdentifiedMember(null); }, 5000);
+        } else {
+          setScanResult('failure');
+          setTimeout(() => setScanResult(null), 3000);
+        }
         return;
       }
 
@@ -202,11 +171,8 @@ export default function SmartEntrancePage() {
         if (detection) {
           const quality = await checkFrameQuality(detection);
           if (quality.isValid) {
-            const { bestMatch, confidence } = findBestMatch(Array.from(detection.descriptor), cachedMembers);
-            if (bestMatch) {
-              collectedResults.push({ member: bestMatch, similarity: confidence });
-              setFeedback(`VERIFYING: ${Math.round((collectedResults.length / requiredSamples) * 100)}%`);
-            }
+            collectedEmbeddings.push(Array.from(detection.descriptor));
+            setFeedback(`AUTHENTICATING: ${Math.round((collectedEmbeddings.length / requiredSamples) * 100)}%`);
           } else {
             setFeedback(quality.reason || 'ADJUSTING...');
           }
@@ -219,7 +185,7 @@ export default function SmartEntrancePage() {
     };
 
     scanLoopRef.current = requestAnimationFrame(processFrame);
-  }, [modelsReady, isProcessing, scanResult, isCameraActive, cachedMembers, finalizeScan, db]);
+  }, [modelsReady, isProcessing, scanResult, isCameraActive, cachedMembers, db]);
 
   // SMART DETECTION: Passive detection triggers active verification
   useEffect(() => {
@@ -265,11 +231,11 @@ export default function SmartEntrancePage() {
     if (!videoRef.current || !db || !pendingMember || !modelsReady) return;
     setIsProcessing(true);
     setEnrollProgress(0);
-    setFeedback('SAMPLING BIOMETRICS...');
+    setFeedback('COLLECTING SAMPLES...');
 
     const samples: number[][] = [];
-    const maxSamples = 10;
-    const ssdOptions = new faceapi.SsdMobilenetv1Options({ minConfidence: 0.6 });
+    const requiredSamples = 10;
+    const ssdOptions = new faceapi.SsdMobilenetv1Options({ minConfidence: 0.75 });
 
     const enrollLoop = async () => {
       if (!videoRef.current || !isCameraActive || !isProcessing || videoRef.current.readyState < 2) {
@@ -277,10 +243,9 @@ export default function SmartEntrancePage() {
         return;
       }
 
-      if (samples.length >= maxSamples) {
-        const averaged = samples[0].map((_, i) => 
-          samples.reduce((acc, sample) => acc + sample[i], 0) / samples.length
-        );
+      if (samples.length >= requiredSamples) {
+        // Average all samples for stability
+        const averaged = averageEmbeddings(samples);
 
         const canvas = document.createElement('canvas');
         canvas.width = videoRef.current.videoWidth;
@@ -296,7 +261,7 @@ export default function SmartEntrancePage() {
         };
 
         await updateDoc(memberRef, updateData);
-        toast({ title: "Enrollment Complete", description: `${pendingMember.fullName} biometrics are now synced.` });
+        toast({ title: "Enrollment Complete", description: "Identity mastered." });
         setPendingMember(null);
         setSearchPhone('');
         setIsProcessing(false);
@@ -314,8 +279,8 @@ export default function SmartEntrancePage() {
           const quality = await checkFrameQuality(detection);
           if (quality.isValid) {
             samples.push(Array.from(detection.descriptor));
-            setEnrollProgress(samples.length / maxSamples);
-            setFeedback(`CAPTURING: ${samples.length}/${maxSamples}`);
+            setEnrollProgress(samples.length / requiredSamples);
+            setFeedback(`CAPTURING: ${samples.length}/${requiredSamples}`);
           } else {
             setFeedback(quality.reason || 'STABILIZING...');
           }
@@ -335,21 +300,21 @@ export default function SmartEntrancePage() {
       <div className="flex flex-col gap-2">
          <h1 className="text-3xl font-bold font-headline">Smart Entrance</h1>
          <div className="flex items-center gap-2">
-            <p className="text-muted-foreground italic text-sm">Active Biometric Monitoring</p>
-            {isSyncing && <Badge variant="outline" className="h-5 text-[9px] animate-pulse border-primary/20 bg-primary/5"><Cloud className="h-2 w-2 mr-1" /> REFRESHING CACHE</Badge>}
+            <p className="text-muted-foreground italic text-sm">High-Precision Neural Monitoring</p>
+            {isSyncing && <Badge variant="outline" className="h-5 text-[9px] animate-pulse border-primary/20 bg-primary/5"><Cloud className="h-2 w-2 mr-1" /> SYNCING VAULT</Badge>}
          </div>
       </div>
 
       <Tabs value={activeMode} onValueChange={(v: any) => { setActiveMode(v); setScanResult(null); setIsProcessing(false); }} className="w-full">
         <TabsList className="grid w-full grid-cols-2 h-14 bg-muted/50 p-1">
-          <TabsTrigger value="kiosk" className="text-lg font-bold"><Zap className="mr-2 h-5 w-5 text-primary" /> HANDS-FREE SCAN</TabsTrigger>
-          <TabsTrigger value="enroll" className="text-lg font-bold"><UserPlus className="mr-2 h-5 w-5" /> MEMBER ENROLL</TabsTrigger>
+          <TabsTrigger value="kiosk" className="text-lg font-bold"><Zap className="mr-2 h-5 w-5 text-primary" /> BIOMETRIC KIOSK</TabsTrigger>
+          <TabsTrigger value="enroll" className="text-lg font-bold"><UserPlus className="mr-2 h-5 w-5" /> ENROLL IDENTITY</TabsTrigger>
         </TabsList>
 
         <div className="grid grid-cols-1 lg:grid-cols-12 gap-6 mt-6">
           <Card className="lg:col-span-8 overflow-hidden flex flex-col relative bg-black border-none shadow-2xl rounded-2xl min-h-[500px]">
             <div className="absolute top-4 left-4 z-20 flex flex-wrap gap-2">
-              <Badge variant="outline" className="bg-background/80 backdrop-blur-sm text-primary font-mono border-primary/20"><Cpu className="h-3 w-3 mr-1" /> SSD-AI PIPELINE</Badge>
+              <Badge variant="outline" className="bg-background/80 backdrop-blur-sm text-primary font-mono border-primary/20"><Cpu className="h-3 w-3 mr-1" /> SSD-LANDMARK PIPELINE</Badge>
               {isCameraActive && !isProcessing && <Badge className="bg-primary/20 text-primary border-primary/30 animate-pulse">WATCHING...</Badge>}
             </div>
 
@@ -379,7 +344,7 @@ export default function SmartEntrancePage() {
                         <Loader2 className="h-24 w-24 animate-spin text-primary opacity-20" />
                         <Activity className="h-10 w-10 text-primary absolute inset-0 m-auto animate-pulse" />
                     </div>
-                    <p className="text-white font-headline text-2xl tracking-[0.2em] animate-pulse uppercase">{feedback || 'IDENTIFYING...'}</p>
+                    <p className="text-white font-headline text-2xl tracking-[0.2em] animate-pulse uppercase">{feedback || 'ANALYZING...'}</p>
                     {enrollProgress > 0 && (
                       <div className="w-64 space-y-3">
                         <Progress value={enrollProgress * 100} className="h-1.5 bg-white/10" />
@@ -394,15 +359,14 @@ export default function SmartEntrancePage() {
                   <CheckCircle2 className="h-40 w-40 text-green-500 mb-6 drop-shadow-[0_0_30px_rgba(34,197,94,0.5)]" />
                   <h2 className="text-6xl font-headline font-bold text-white mb-2 tracking-tighter">SUCCESS</h2>
                   <p className="text-4xl text-green-300 font-black uppercase tracking-tight">{identifiedMember.fullName}</p>
-                  <div className="mt-8 bg-black/60 px-8 py-2.5 rounded-full border border-green-500/50 text-[10px] text-green-500 uppercase font-black tracking-[0.5em]">Access Granted</div>
                 </div>
               )}
 
               {scanResult === 'failure' && (
                 <div className="absolute inset-0 flex flex-col items-center justify-center z-10 bg-destructive/20 backdrop-blur-md">
                   <XCircle className="h-32 w-32 text-destructive mb-4 drop-shadow-xl" />
-                  <p className="text-white font-headline text-2xl font-bold tracking-[0.2em] uppercase">RETRY SCAN</p>
-                  <p className="text-white/60 text-xs mt-2 uppercase tracking-widest font-bold">Matching Uncertain</p>
+                  <p className="text-white font-headline text-2xl font-bold tracking-[0.2em] uppercase">ACCESS DENIED</p>
+                  <p className="text-white/60 text-xs mt-2 uppercase tracking-widest font-bold">Identity Mismatch</p>
                 </div>
               )}
             </div>
@@ -458,7 +422,7 @@ export default function SmartEntrancePage() {
                           </div>
                           <div>
                             <p className="font-black text-xl leading-tight uppercase tracking-tight">{pendingMember.fullName}</p>
-                            <p className="text-[10px] text-muted-foreground uppercase font-bold tracking-widest mt-1 opacity-60">Identity ready for sampling</p>
+                            <p className="text-[10px] text-muted-foreground uppercase font-bold tracking-widest mt-1 opacity-60">Identity ready for mastering</p>
                           </div>
                        </div>
                        <div className="flex gap-2 w-full sm:w-auto">
@@ -509,14 +473,14 @@ export default function SmartEntrancePage() {
 
             <Card className="bg-primary/[0.02] border border-primary/10 rounded-2xl">
               <CardHeader className="py-4 px-6 border-b border-primary/5">
-                  <CardTitle className="text-[10px] uppercase font-black text-primary/60 flex items-center gap-2"><AlertCircle className="h-3.5 w-3.5" /> BIOMETRIC TELEMETRY</CardTitle>
+                  <CardTitle className="text-[10px] uppercase font-black text-primary/60 flex items-center gap-2"><AlertCircle className="h-3.5 w-3.5" /> SYSTEM TELEMETRY</CardTitle>
               </CardHeader>
               <CardContent className="p-6 space-y-4 text-[10px] font-bold uppercase tracking-widest">
-                  <div className="flex justify-between"><span className="opacity-40">Precision</span><span className="text-primary">SSD Mobilenet</span></div>
-                  <div className="flex justify-between"><span className="opacity-40">Auto-Detect</span><span className="text-green-500">Active</span></div>
-                  <div className="flex justify-between"><span className="opacity-40">Preloaded Cache</span><span className="text-primary">{cachedMembers.length} Profiles</span></div>
-                  <div className="flex justify-between"><span className="opacity-40">Threshold</span><span className="text-primary">0.84 Stable</span></div>
-                  <p className="leading-relaxed opacity-40 border-t border-primary/5 pt-4 italic normal-case font-medium">Matching all members across all status levels.</p>
+                  <div className="flex justify-between"><span className="opacity-40">Precision</span><span className="text-primary">Euclidean 0.55</span></div>
+                  <div className="flex justify-between"><span className="opacity-40">Verification</span><span className="text-green-500">Multi-Frame</span></div>
+                  <div className="flex justify-between"><span className="opacity-40">Enrollment</span><span className="text-primary">10x Sample Avg</span></div>
+                  <div className="flex justify-between"><span className="opacity-40">Cache Size</span><span className="text-primary">{cachedMembers.length} Vectors</span></div>
+                  <p className="leading-relaxed opacity-40 border-t border-primary/5 pt-4 italic normal-case font-medium">Processing 100% local for member privacy.</p>
               </CardContent>
             </Card>
           </div>
