@@ -3,10 +3,8 @@
 import { useState, useMemo, useRef } from 'react';
 import { 
   Search, 
-  UserCircle, 
-  MoreHorizontal, 
-  Users, 
   User, 
+  MoreHorizontal, 
   ArrowUpRight, 
   Loader2, 
   Trash2, 
@@ -14,15 +12,13 @@ import {
   Calendar as CalendarIcon,
   CreditCard,
   QrCode,
-  Download,
-  Info,
-  CheckCircle2
+  Download
 } from 'lucide-react';
 import { collection, query, doc, deleteDoc, updateDoc, serverTimestamp, addDoc } from 'firebase/firestore';
 import { useFirestore, useCollection } from '@/firebase';
 import Link from 'next/link';
 import { useRouter } from 'next/navigation';
-import { format, isWithinInterval, startOfDay, parseISO } from 'date-fns';
+import { format, startOfDay } from 'date-fns';
 import { QRCodeCanvas } from 'qrcode.react';
 import { generateMemberQrPayload } from '@/lib/qr-logic';
 
@@ -31,7 +27,6 @@ import { Button } from '@/components/ui/button';
 import {
   Card,
   CardContent,
-  CardDescription,
   CardHeader,
   CardTitle,
 } from '@/components/ui/card';
@@ -62,21 +57,13 @@ import {
   AlertDialogHeader,
   AlertDialogTitle,
 } from "@/components/ui/alert-dialog";
-import {
+import { 
   Dialog,
   DialogContent,
   DialogDescription,
   DialogFooter,
   DialogHeader,
   DialogTitle,
-} from "@/dialog"; // Note: Using the provided dialog alias if applicable, but standard shadcn is @/components/ui/dialog. Using standard path to be safe.
-import { 
-  Dialog as DialogUI,
-  DialogContent as DialogContentUI,
-  DialogDescription as DialogDescriptionUI,
-  DialogFooter as DialogFooterUI,
-  DialogHeader as DialogHeaderUI,
-  DialogTitle as DialogTitleUI,
 } from "@/components/ui/dialog";
 import { Label } from '@/components/ui/label';
 import { useToast } from '@/hooks/use-toast';
@@ -89,7 +76,6 @@ import {
   PopoverTrigger,
 } from "@/components/ui/popover";
 import { cn } from '@/lib/utils';
-import { Alert, AlertDescription } from '@/components/ui/alert';
 
 export default function MembersListPage() {
   const db = useFirestore();
@@ -179,10 +165,7 @@ export default function MembersListPage() {
     };
 
     try {
-      // 1. Record the Sale
       await addDoc(collection(db, 'sales'), saleData);
-      
-      // 2. Update Member Type to personal
       await updateDoc(doc(db, 'members', memberForPT.phone), {
         type: 'personal',
         updatedAt: serverTimestamp()
@@ -275,7 +258,7 @@ export default function MembersListPage() {
                   <TableCell className="pl-8">
                     <div className="flex items-center gap-4 py-2">
                       <div className="h-10 w-10 rounded-full bg-primary/10 flex items-center justify-center overflow-hidden border border-primary/20">
-                        {member.photoData ? <img src={member.photoData} className="w-full h-full object-cover" /> : <User className="h-5 w-5 text-primary" />}
+                        {member.photoData ? <img src={member.photoData} className="w-full h-full object-cover" alt={member.fullName} /> : <User className="h-5 w-5 text-primary" />}
                       </div>
                       <span className="font-bold text-sm tracking-tight">{member.fullName}</span>
                     </div>
@@ -322,15 +305,15 @@ export default function MembersListPage() {
       </Card>
 
       {/* Member QR Dialog */}
-      <DialogUI open={!!memberQrToShow} onOpenChange={() => setMemberQrToShow(null)}>
-        <DialogContentUI className="sm:max-w-md bg-zinc-900 border-white/10 rounded-3xl p-8">
-          <DialogHeaderUI className="items-center text-center">
+      <Dialog open={!!memberQrToShow} onOpenChange={(open) => !open && setMemberQrToShow(null)}>
+        <DialogContent className="sm:max-w-md bg-zinc-900 border-white/10 rounded-3xl p-8">
+          <DialogHeader className="items-center text-center">
             <div className="h-16 w-16 bg-primary/10 rounded-2xl flex items-center justify-center mb-4">
               <QrCode className="h-8 w-8 text-primary" />
             </div>
-            <DialogTitleUI className="text-2xl font-black font-headline tracking-tighter">MEMBER PASSPORT</DialogTitleUI>
-            <DialogDescriptionUI className="text-xs font-bold uppercase tracking-widest opacity-60">Digital Key for {memberQrToShow?.fullName}</DialogDescriptionUI>
-          </DialogHeaderUI>
+            <DialogTitle className="text-2xl font-black font-headline tracking-tighter">MEMBER PASSPORT</DialogTitle>
+            <DialogDescription className="text-xs font-bold uppercase tracking-widest opacity-60">Digital Key for {memberQrToShow?.fullName}</DialogDescription>
+          </DialogHeader>
           <div className="flex flex-col items-center justify-center py-8 gap-8">
              <div ref={qrRef} className="bg-white p-6 rounded-3xl shadow-[0_0_50px_-12px_rgba(255,255,255,0.3)]">
                 {memberQrToShow && (
@@ -338,7 +321,6 @@ export default function MembersListPage() {
                     value={generateMemberQrPayload(memberQrToShow.phone)} 
                     size={256}
                     level="H"
-                    includeMargin={false}
                   />
                 )}
              </div>
@@ -347,23 +329,23 @@ export default function MembersListPage() {
                 <p className="text-xs font-mono opacity-40">{memberQrToShow?.phone}</p>
              </div>
           </div>
-          <DialogFooterUI className="sm:justify-center">
+          <DialogFooter className="sm:justify-center">
             <Button className="w-full h-14 rounded-2xl font-black text-lg shadow-xl shadow-primary/20" onClick={handleExportQr}>
                <Download className="mr-2 h-5 w-5" /> EXPORT TO DEVICE
             </Button>
-          </DialogFooterUI>
-        </DialogContentUI>
-      </DialogUI>
+          </DialogFooter>
+        </DialogContent>
+      </Dialog>
 
       {/* Add PT Session Dialog */}
-      <DialogUI open={!!memberForPT} onOpenChange={() => setMemberForPT(null)}>
-        <DialogContentUI className="sm:max-w-md bg-zinc-900 border-white/10 rounded-3xl p-8">
-          <DialogHeaderUI>
-            <DialogTitleUI className="text-2xl font-black font-headline tracking-tighter text-primary flex items-center gap-3">
+      <Dialog open={!!memberForPT} onOpenChange={(open) => !open && setMemberForPT(null)}>
+        <DialogContent className="sm:max-w-md bg-zinc-900 border-white/10 rounded-3xl p-8">
+          <DialogHeader>
+            <DialogTitle className="text-2xl font-black font-headline tracking-tighter text-primary flex items-center gap-3">
               <CreditCard className="h-6 w-6" /> ADD PT SESSION
-            </DialogTitleUI>
-            <DialogDescriptionUI className="text-xs font-bold uppercase tracking-widest opacity-60">For {memberForPT?.fullName}</DialogDescriptionUI>
-          </DialogHeaderUI>
+            </DialogTitle>
+            <DialogDescription className="text-xs font-bold uppercase tracking-widest opacity-60">For {memberForPT?.fullName}</DialogDescription>
+          </DialogHeader>
           <div className="space-y-6 py-6">
             <div className="space-y-2">
               <Label className="text-[10px] uppercase font-black tracking-widest opacity-40">Package Price (INR)</Label>
@@ -420,7 +402,7 @@ export default function MembersListPage() {
               </div>
             </div>
           </div>
-          <DialogFooterUI>
+          <DialogFooter>
             <Button 
               className="w-full h-14 rounded-2xl font-black text-lg shadow-xl shadow-primary/20" 
               onClick={handleSavePT}
@@ -428,11 +410,11 @@ export default function MembersListPage() {
             >
               {isUpdatingPT ? <Loader2 className="h-5 w-5 animate-spin" /> : "CONFIRM & LOG SALE"}
             </Button>
-          </DialogFooterUI>
-        </DialogContentUI>
-      </DialogUI>
+          </DialogFooter>
+        </DialogContent>
+      </Dialog>
 
-      <AlertDialog open={!!memberToDelete} onOpenChange={() => setMemberToDelete(null)}>
+      <AlertDialog open={!!memberToDelete} onOpenChange={(open) => !open && setMemberToDelete(null)}>
         <AlertDialogContent className="bg-zinc-900 border-white/10 rounded-3xl p-8">
           <AlertDialogHeader>
             <AlertDialogTitle className="text-xl font-bold font-headline">Permanently Delete Record?</AlertDialogTitle>
