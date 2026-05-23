@@ -41,6 +41,21 @@ export default function SmartEntrancePage() {
   const cachedMembersRef = useRef<any[]>([]);
   const timeoutRef = useRef<NodeJS.Timeout | null>(null);
 
+  // Robust UI Clear Effect
+  useEffect(() => {
+    if (scanResult) {
+      if (timeoutRef.current) clearTimeout(timeoutRef.current);
+      timeoutRef.current = setTimeout(() => {
+        setScanResult(null);
+        setIdentifiedMember(null);
+        isProcessingRef.current = false;
+      }, 3500); // 3.5s to allow animation and clear
+    }
+    return () => {
+      if (timeoutRef.current) clearTimeout(timeoutRef.current);
+    };
+  }, [scanResult]);
+
   // Local Cache Sync for instant lookup
   useEffect(() => {
     if (!db) return;
@@ -53,7 +68,6 @@ export default function SmartEntrancePage() {
     });
     return () => {
       unsubscribe();
-      if (timeoutRef.current) clearTimeout(timeoutRef.current);
     };
   }, [db]);
 
@@ -64,8 +78,8 @@ export default function SmartEntrancePage() {
     isProcessingRef.current = true;
     
     // Immediate UI Feedback
-    setScanResult('success');
     setIdentifiedMember(member);
+    setScanResult('success');
     
     if ('vibrate' in navigator) {
       navigator.vibrate(100);
@@ -79,15 +93,6 @@ export default function SmartEntrancePage() {
       time: new Date().toLocaleTimeString(),
       method: 'QR'
     }, ...prev].slice(0, 10));
-
-    // UI Auto-Reset Timer
-    if (timeoutRef.current) clearTimeout(timeoutRef.current);
-    timeoutRef.current = setTimeout(() => {
-      setScanResult(null);
-      setIdentifiedMember(null);
-      // Unlock for next scan after animation finishes
-      isProcessingRef.current = false; 
-    }, 3000);
 
     // Background operations (Non-blocking)
     Promise.all([
@@ -108,7 +113,7 @@ export default function SmartEntrancePage() {
         method: 'qr'
       })
     ]).catch(err => {
-      console.error("Background Sync Failure:", err);
+      console.warn("Background Sync Warning:", err);
     });
 
   }, [db]);
@@ -154,6 +159,7 @@ export default function SmartEntrancePage() {
               // Denied case
               isProcessingRef.current = true;
               setScanResult('failure');
+              // Failure reset is shorter
               setTimeout(() => {
                 setScanResult(null);
                 isProcessingRef.current = false;
@@ -208,7 +214,6 @@ export default function SmartEntrancePage() {
   useEffect(() => {
     return () => {
       stopScanner();
-      if (timeoutRef.current) clearTimeout(timeoutRef.current);
     };
   }, []);
 

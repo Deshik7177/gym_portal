@@ -1,4 +1,3 @@
-
 'use client';
 
 import { useState, useMemo, useRef } from 'react';
@@ -79,13 +78,6 @@ import {
   PopoverContent,
   PopoverTrigger,
 } from "@/components/ui/popover";
-import {
-  Select,
-  SelectContent,
-  SelectItem,
-  SelectTrigger,
-  SelectValue,
-} from "@/components/ui/select";
 import { cn } from '@/lib/utils';
 
 export default function MembersListPage() {
@@ -387,8 +379,9 @@ export default function MembersListPage() {
                 {memberQrToShow && (
                   <QRCodeCanvas 
                     value={generateMemberQrPayload(memberQrToShow.phone)} 
-                    size={256}
-                    level="H"
+                    size={512}
+                    level="M"
+                    includeMargin={true}
                   />
                 )}
              </div>
