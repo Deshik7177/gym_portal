@@ -39,7 +39,7 @@ export default function SmartEntrancePage() {
   const scannerRef = useRef<Html5Qrcode | null>(null);
   const isProcessingRef = useRef(false);
   const cachedMembersRef = useRef<any[]>([]);
-  const isComponentMounted = useRef(true);
+  const timeoutRef = useRef<NodeJS.Timeout | null>(null);
 
   // Local Cache Sync for instant lookup
   useEffect(() => {
@@ -53,14 +53,17 @@ export default function SmartEntrancePage() {
     });
     return () => {
       unsubscribe();
-      isComponentMounted.current = false;
+      if (timeoutRef.current) clearTimeout(timeoutRef.current);
     };
   }, [db]);
 
   const triggerAccess = useCallback(async (member: any) => {
     if (!db || !member || isProcessingRef.current) return;
     
+    // Lock processing
     isProcessingRef.current = true;
+    
+    // Immediate UI Feedback
     setScanResult('success');
     setIdentifiedMember(member);
     
@@ -70,16 +73,23 @@ export default function SmartEntrancePage() {
 
     const memberId = member.id || member.phone;
     
-    // UI Reset Timer - Decoupled from background sync for zero-latency feel
-    setTimeout(() => {
-      if (isComponentMounted.current) {
-        setScanResult(null);
-        setIdentifiedMember(null);
-        isProcessingRef.current = false; // Allow next scan
-      }
-    }, 2500);
+    // Log to local history for immediate display
+    setRecentLogs(prev => [{
+      name: member.fullName,
+      time: new Date().toLocaleTimeString(),
+      method: 'QR'
+    }, ...prev].slice(0, 10));
 
-    // Background operations - non-blocking for the UI
+    // UI Auto-Reset Timer
+    if (timeoutRef.current) clearTimeout(timeoutRef.current);
+    timeoutRef.current = setTimeout(() => {
+      setScanResult(null);
+      setIdentifiedMember(null);
+      // Unlock for next scan after animation finishes
+      isProcessingRef.current = false; 
+    }, 3000);
+
+    // Background operations (Non-blocking)
     Promise.all([
       addDoc(collection(db, 'attendance'), {
         memberId: memberId,
@@ -97,13 +107,9 @@ export default function SmartEntrancePage() {
         memberId: memberId,
         method: 'qr'
       })
-    ]).catch(err => console.error("Background Sync Failure:", err));
-
-    setRecentLogs(prev => [{
-      name: member.fullName,
-      time: new Date().toLocaleTimeString(),
-      method: 'QR'
-    }, ...prev].slice(0, 10));
+    ]).catch(err => {
+      console.error("Background Sync Failure:", err);
+    });
 
   }, [db]);
 
@@ -145,14 +151,13 @@ export default function SmartEntrancePage() {
             if (member && member.status === 'active') {
               triggerAccess(member);
             } else {
+              // Denied case
+              isProcessingRef.current = true;
               setScanResult('failure');
-              // Clear failure faster
               setTimeout(() => {
-                if (isComponentMounted.current) {
-                  setScanResult(null);
-                  isProcessingRef.current = false;
-                }
-              }, 1500);
+                setScanResult(null);
+                isProcessingRef.current = false;
+              }, 2000);
             }
           }
         },
@@ -182,6 +187,7 @@ export default function SmartEntrancePage() {
     } finally {
       setIsCameraActive(false);
       setTorchOn(false);
+      isProcessingRef.current = false;
     }
   };
 
@@ -201,8 +207,8 @@ export default function SmartEntrancePage() {
 
   useEffect(() => {
     return () => {
-      isComponentMounted.current = false;
       stopScanner();
+      if (timeoutRef.current) clearTimeout(timeoutRef.current);
     };
   }, []);
 
@@ -247,7 +253,7 @@ export default function SmartEntrancePage() {
             )}
 
             {scanResult === 'success' && identifiedMember && (
-              <div className="absolute inset-0 flex flex-col items-center justify-center z-[100] animate-in zoom-in duration-300 bg-black/90 backdrop-blur-3xl">
+              <div className="absolute inset-0 flex flex-col items-center justify-center z-[100] animate-in zoom-in duration-300 bg-black/95 backdrop-blur-3xl">
                 <div className="relative mb-8">
                    <div className="absolute inset-0 bg-primary/20 blur-[100px] rounded-full" />
                    <CheckCircle2 className="h-48 w-48 text-primary relative" />
@@ -261,7 +267,7 @@ export default function SmartEntrancePage() {
             )}
 
             {scanResult === 'failure' && (
-              <div className="absolute inset-0 flex flex-col items-center justify-center z-[100] animate-in zoom-in duration-300 bg-destructive/90 backdrop-blur-3xl">
+              <div className="absolute inset-0 flex flex-col items-center justify-center z-[100] animate-in zoom-in duration-300 bg-destructive/95 backdrop-blur-3xl">
                 <h2 className="text-7xl font-black font-headline text-white mb-2 tracking-tighter italic uppercase">Denied</h2>
                 <p className="text-xl text-white font-black uppercase tracking-widest opacity-60">Subscription Lapsed</p>
               </div>
