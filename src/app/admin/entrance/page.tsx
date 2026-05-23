@@ -11,7 +11,6 @@ import {
   Smartphone,
   Zap,
   Camera,
-  Search,
   AlertCircle
 } from 'lucide-react';
 import { collection, query, updateDoc, doc, serverTimestamp, onSnapshot, addDoc } from 'firebase/firestore';
@@ -59,7 +58,7 @@ export default function SmartEntrancePage() {
     };
   }, [db]);
 
-  const triggerAccess = useCallback((member: any) => {
+  const triggerAccess = useCallback(async (member: any) => {
     if (!db || !member || isProcessingRef.current) return;
     
     isProcessingRef.current = true;
@@ -72,25 +71,29 @@ export default function SmartEntrancePage() {
 
     const memberId = member.id || member.phone;
     
-    // Log attendance in background
-    addDoc(collection(db, 'attendance'), {
-      memberId: memberId,
-      memberName: member.fullName,
-      timestamp: serverTimestamp(),
-      method: 'qr',
-      latency: 0
-    });
-
-    updateDoc(doc(db, 'members', memberId), {
-      lastCheckIn: serverTimestamp()
-    });
-
-    addDoc(collection(db, 'gateControl'), {
-      command: 'OPEN',
-      timestamp: serverTimestamp(),
-      memberId: memberId,
-      method: 'qr'
-    });
+    // Execute all backend sync operations atomically in the background
+    try {
+      await Promise.all([
+        addDoc(collection(db, 'attendance'), {
+          memberId: memberId,
+          memberName: member.fullName,
+          timestamp: serverTimestamp(),
+          method: 'qr',
+          latency: 0
+        }),
+        updateDoc(doc(db, 'members', memberId), {
+          lastCheckIn: serverTimestamp()
+        }),
+        addDoc(collection(db, 'gateControl'), {
+          command: 'OPEN',
+          timestamp: serverTimestamp(),
+          memberId: memberId,
+          method: 'qr'
+        })
+      ]);
+    } catch (err) {
+      console.error("Critical Sync Failure:", err);
+    }
 
     setRecentLogs(prev => [{
       name: member.fullName,
@@ -114,11 +117,25 @@ export default function SmartEntrancePage() {
 
     try {
       setIsInitializing(true);
+      
+      // Production camera enumeration logic
+      const devices = await Html5Qrcode.getCameras();
+      if (!devices || devices.length === 0) {
+        throw new Error("No camera hardware found on this device.");
+      }
+
+      // Priority: Specific "back" label, otherwise default to first available
+      const preferredCamera = devices.find(d => 
+        d.label.toLowerCase().includes("back") || 
+        d.label.toLowerCase().includes("rear") ||
+        d.label.toLowerCase().includes("environment")
+      ) || devices[0];
+
       await scannerRef.current.start(
-        { facingMode: 'environment' },
+        preferredCamera.id,
         {
           fps: 15,
-          qrbox: { width: 280, height: 280 },
+          qrbox: { width: 320, height: 320 },
           formatsToSupport: [Html5QrcodeSupportedFormats.QR_CODE]
         },
         (decodedText) => {
@@ -138,20 +155,31 @@ export default function SmartEntrancePage() {
             }
           }
         },
-        () => {} // Frame error
+        () => {} // Frame-level analysis error (ignored for performance)
       );
+      
       setIsCameraActive(true);
       setIsInitializing(false);
-    } catch (err) {
-      console.error(err);
-      toast({ variant: "destructive", title: "Camera Error", description: "Failed to access hardware." });
+    } catch (err: any) {
+      console.error("Camera start failure:", err);
+      toast({ 
+        variant: "destructive", 
+        title: "Optical Pipeline Error", 
+        description: err.message || "Failed to initialize camera sensor." 
+      });
       setIsInitializing(false);
     }
   };
 
   const stopScanner = async () => {
-    if (scannerRef.current && scannerRef.current.isScanning) {
-      await scannerRef.current.stop();
+    try {
+      // Safe cleanup check to prevent race condition errors
+      if (scannerRef.current?.isScanning) {
+        await scannerRef.current.stop();
+      }
+    } catch (e) {
+      console.warn("Scanner shutdown warning:", e);
+    } finally {
       setIsCameraActive(false);
       setTorchOn(false);
     }
@@ -167,12 +195,13 @@ export default function SmartEntrancePage() {
         setTorchOn(state);
       }
     } catch (e) {
-      toast({ title: "Torch Not Supported" });
+      toast({ title: "Flash Control Not Available" });
     }
   };
 
   useEffect(() => {
     return () => {
+      isComponentMounted.current = false;
       stopScanner();
     };
   }, []);
@@ -201,7 +230,8 @@ export default function SmartEntrancePage() {
           </div>
 
           <div className="relative flex-1 bg-black flex items-center justify-center overflow-hidden">
-            <div id="qr-reader" className="w-full h-full object-cover" />
+            {/* Resolution-preserved video container (no object-cover to prevent geometry distortion) */}
+            <div id="qr-reader" className="w-full h-full" />
             
             {!isCameraActive && !isInitializing && (
               <div className="absolute inset-0 flex flex-col items-center justify-center gap-6 text-muted-foreground/10 bg-zinc-950">
@@ -213,7 +243,7 @@ export default function SmartEntrancePage() {
             {isInitializing && (
               <div className="absolute inset-0 flex flex-col items-center justify-center bg-black/80 backdrop-blur-xl z-50">
                  <Loader2 className="h-12 w-12 animate-spin text-primary mb-4" />
-                 <p className="text-xs font-black uppercase tracking-widest text-primary/60">Calibrating Hardware...</p>
+                 <p className="text-xs font-black uppercase tracking-widest text-primary/60">Enumerating Devices...</p>
               </div>
             )}
 
@@ -243,11 +273,11 @@ export default function SmartEntrancePage() {
              <div className="flex flex-col sm:flex-row items-center justify-between gap-6">
                 <div className="flex items-center gap-6">
                    <div>
-                      <p className="text-[10px] font-black text-muted-foreground uppercase tracking-[0.5em] mb-2">Scanner Mode</p>
+                      <p className="text-[10px] font-black text-muted-foreground uppercase tracking-[0.5em] mb-2">Sensor Status</p>
                       <div className="flex items-center gap-4">
                          <div className={cn("h-3 w-3 rounded-full", isCameraActive ? "bg-green-500 animate-pulse shadow-[0_0_10px_rgba(34,197,94,1)]" : "bg-zinc-800")} />
                          <span className="font-mono text-xs text-white/40 uppercase tracking-widest">
-                           {isCameraActive ? 'OPTICAL ENGINE ACTIVE' : 'SYSTEM STANDBY'}
+                           {isCameraActive ? 'OPTICAL ENGINE: LIVE' : 'SYSTEM: STANDBY'}
                          </span>
                       </div>
                    </div>
