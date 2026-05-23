@@ -41,7 +41,7 @@ function Calendar({
         day: "h-9 w-9 text-center text-sm p-0 relative flex items-center justify-center focus-within:relative focus-within:z-20",
         day_button: cn(
           buttonVariants({ variant: "ghost" }),
-          "h-9 w-9 p-0 font-normal aria-selected:opacity-100 hover:bg-primary/20 hover:text-primary transition-all"
+          "h-full w-full p-0 font-normal aria-selected:opacity-100 hover:bg-primary/20 hover:text-primary transition-all flex items-center justify-center"
         ),
         selected:
           "bg-primary text-primary-foreground hover:bg-primary hover:text-primary-foreground focus:bg-primary focus:text-primary-foreground font-bold rounded-md",
