@@ -16,11 +16,12 @@ import {
   WifiOff,
   Scan,
   ShieldCheck,
-  History
+  History,
+  BookOpen
 } from 'lucide-react';
 
 import { Button } from '@/components/ui/button';
-import { Sheet, SheetContent, SheetTrigger, SheetHeader, SheetTitle, SheetDescription } from '@/components/ui/sheet';
+import { Sheet, SheetContent, SheetTrigger, SheetHeader, SheetTitle, SheetDescription } from '@/sheet';
 import UserNav from '@/components/user-nav';
 import { Badge } from '@/components/ui/badge';
 import { cn } from '@/lib/utils';
@@ -66,6 +67,7 @@ export default function ReceptionLayout({ children }: { children: React.ReactNod
     { href: '/admin/sales', label: 'Sales Report', icon: BarChart3 },
     { href: '/admin/absent', label: 'Retention Alerts', icon: Clock },
     { href: '/admin/register', label: 'Registration', icon: UserPlus },
+    { href: '/admin/help', label: 'Operations Manual', icon: BookOpen },
   ];
 
   return (
