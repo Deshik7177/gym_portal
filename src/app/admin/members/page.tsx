@@ -1,4 +1,3 @@
-
 'use client';
 
 import { useState, useMemo, useRef } from 'react';
@@ -318,7 +317,7 @@ export default function MembersListPage() {
       </Card>
 
       {/* Member QR Dialog */}
-      <Dialog open={!!memberQrToShow} onOpenChange={(open) => !open && setMemberQrToShow(null)}>
+      <Dialog open={!!memberQrToShow} onOpenChange={(open) => { if (!open) setMemberQrToShow(null); }}>
         <DialogContent className="sm:max-w-md bg-zinc-900 border-white/10 rounded-3xl p-8">
           <DialogHeader className="items-center text-center">
             <div className="h-16 w-16 bg-primary/10 rounded-2xl flex items-center justify-center mb-4">
@@ -351,7 +350,7 @@ export default function MembersListPage() {
       </Dialog>
 
       {/* Add PT Session Dialog */}
-      <Dialog open={!!memberForPT} onOpenChange={(open) => !open && setMemberForPT(null)}>
+      <Dialog open={!!memberForPT} onOpenChange={(open) => { if (!open) setMemberForPT(null); }}>
         <DialogContent className="sm:max-w-md bg-zinc-900 border-white/10 rounded-3xl p-8">
           <DialogHeader>
             <DialogTitle className="text-2xl font-black font-headline tracking-tighter text-primary flex items-center gap-3">
@@ -427,7 +426,7 @@ export default function MembersListPage() {
         </DialogContent>
       </Dialog>
 
-      <AlertDialog open={!!memberToDelete} onOpenChange={(open) => !open && setMemberToDelete(null)}>
+      <AlertDialog open={!!memberToDelete} onOpenChange={(open) => { if (!open) setMemberToDelete(null); }}>
         <AlertDialogContent className="bg-zinc-900 border-white/10 rounded-3xl p-8">
           <AlertDialogHeader>
             <AlertDialogTitle className="text-xl font-bold font-headline text-primary">Permanently Delete Record?</AlertDialogTitle>
