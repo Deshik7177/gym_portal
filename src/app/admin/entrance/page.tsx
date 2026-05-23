@@ -1,3 +1,4 @@
+
 'use client';
 
 import { useState, useRef, useEffect, useCallback } from 'react';
@@ -51,6 +52,16 @@ export default function SmartEntrancePage() {
   const isComponentMounted = useRef(true);
   const scanStartTimeRef = useRef<number>(0);
   const lastQrScanRef = useRef<number>(0);
+  
+  // Refs to avoid loop restarts on state changes
+  const isProcessingRef = useRef(false);
+  const scanResultRef = useRef<string | null>(null);
+  const authModeRef = useRef<'face' | 'qr'>(authMode);
+  const cachedMembersRef = useRef<any[]>([]);
+
+  useEffect(() => {
+    authModeRef.current = authMode;
+  }, [authMode]);
 
   // Sync Member Cache
   useEffect(() => {
@@ -60,6 +71,7 @@ export default function SmartEntrancePage() {
     const unsubscribe = onSnapshot(q, (snapshot) => {
       const members = snapshot.docs.map(d => ({ id: d.id, ...d.data() }));
       setCachedMembers(members);
+      cachedMembersRef.current = members;
       setIsSyncing(false);
     });
     return () => {
@@ -101,60 +113,63 @@ export default function SmartEntrancePage() {
   };
 
   const triggerAccess = useCallback(async (member: any, method: 'face' | 'qr', score: number = 1) => {
-    if (!db || !member || isProcessing) return;
+    if (!db || !member || isProcessingRef.current) return;
     
-    const latency = performance.now() - scanStartTimeRef.current;
+    const latency = performance.now() - (scanStartTimeRef.current || performance.now());
     setLastLatency(Math.round(latency));
     
+    // Immediate Local Feedback
+    isProcessingRef.current = true;
+    scanResultRef.current = 'success';
     setIsProcessing(true);
     setScanResult('success');
     setIdentifiedMember(member);
 
-    try {
-      // 1. Log Attendance
-      addDoc(collection(db, 'attendance'), {
-        memberId: member.id,
-        memberName: member.fullName,
-        timestamp: serverTimestamp(),
-        method,
-        score,
-        latency: Math.round(latency)
-      });
+    // Async Background Tasks
+    const memberId = member.id || member.phone;
+    
+    addDoc(collection(db, 'attendance'), {
+      memberId: memberId,
+      memberName: member.fullName,
+      timestamp: serverTimestamp(),
+      method,
+      score,
+      latency: Math.round(latency)
+    }).catch(() => {});
 
-      // 2. Update Last Check-in
-      updateDoc(doc(db, 'members', member.id || member.phone), {
-        lastCheckIn: serverTimestamp()
-      });
+    updateDoc(doc(db, 'members', memberId), {
+      lastCheckIn: serverTimestamp()
+    }).catch(() => {});
 
-      // 3. Command Gate OPEN
-      addDoc(collection(db, 'gateControl'), {
-        command: 'OPEN',
-        timestamp: serverTimestamp(),
-        memberId: member.id || member.phone,
-        method
-      });
+    addDoc(collection(db, 'gateControl'), {
+      command: 'OPEN',
+      timestamp: serverTimestamp(),
+      memberId: memberId,
+      method
+    }).catch(() => {});
 
-      setRecentLogs(prev => [{
-        name: member.fullName,
-        time: new Date().toLocaleTimeString(),
-        method: method.toUpperCase()
-      }, ...prev].slice(0, 10));
-    } catch (e) {
-      console.error("Access trigger failed:", e);
-    }
+    setRecentLogs(prev => [{
+      name: member.fullName,
+      time: new Date().toLocaleTimeString(),
+      method: method.toUpperCase()
+    }, ...prev].slice(0, 10));
 
+    // Reset Kiosk after delay
     setTimeout(() => {
       if (isComponentMounted.current) {
         setScanResult(null);
+        scanResultRef.current = null;
         setIdentifiedMember(null);
         setIsProcessing(false);
+        isProcessingRef.current = false;
         setFeedback('WAITING FOR NEXT ENTRY');
+        scanStartTimeRef.current = 0;
       }
     }, 4000);
-  }, [db, isProcessing]);
+  }, [db]);
 
   const runHybridLoop = useCallback(async () => {
-    if (!videoRef.current || !isCameraActive || scanResult || isProcessing || !isComponentMounted.current) {
+    if (!videoRef.current || !isCameraActive || scanResultRef.current || isProcessingRef.current || !isComponentMounted.current) {
       scanLoopRef.current = requestAnimationFrame(runHybridLoop);
       return;
     }
@@ -170,8 +185,9 @@ export default function SmartEntrancePage() {
     }
 
     const now = performance.now();
+    const mode = authModeRef.current;
 
-    if (authMode === 'face' && modelsReady) {
+    if (mode === 'face' && modelsReady) {
       try {
         const detection = await faceapi.detectSingleFace(video, new faceapi.SsdMobilenetv1Options({ minConfidence: 0.6 }))
           .withFaceLandmarks()
@@ -179,11 +195,10 @@ export default function SmartEntrancePage() {
 
         if (detection && isComponentMounted.current) {
           setFeedback('FACE DETECTED - ANALYZING...');
-          const { bestMatch, distance } = findBestMatch(Array.from(detection.descriptor), cachedMembers);
+          const { bestMatch, distance } = findBestMatch(Array.from(detection.descriptor), cachedMembersRef.current);
           
           if (bestMatch && distance < 0.55) {
             triggerAccess(bestMatch, 'face', 1 - distance);
-            scanStartTimeRef.current = 0;
             return;
           } else {
             setFeedback('ID NOT FOUND - TRY QR OR RE-ALIGN');
@@ -194,18 +209,17 @@ export default function SmartEntrancePage() {
       } catch (e) {
         console.warn("Biometric loop skip:", e);
       }
-    } else if (authMode === 'qr') {
-      // Throttle QR scanning to ~5 times per second for CPU efficiency and better focus
-      if (now - lastQrScanRef.current > 200) {
+    } else if (mode === 'qr') {
+      // High-frequency polling (50ms) for instant response
+      if (now - lastQrScanRef.current > 50) {
         lastQrScanRef.current = now;
 
         if (canvasRef.current && isComponentMounted.current) {
           const canvas = canvasRef.current;
           const context = canvas.getContext('2d', { willReadFrequently: true });
           if (context) {
-            // High-performance QR Capture: Fixed target resolution
-            // Large images slow down jsQR significantly. 400px is the "sweet spot".
-            const targetWidth = 400;
+            // Optimized detection resolution (300px)
+            const targetWidth = 300;
             const scale = targetWidth / video.videoWidth;
             canvas.width = targetWidth;
             canvas.height = video.videoHeight * scale;
@@ -222,10 +236,9 @@ export default function SmartEntrancePage() {
               const validated = validateQrPayload(code.data);
               
               if (validated.valid) {
-                const member = cachedMembers.find(m => m.phone === validated.memberId || m.id === validated.memberId);
+                const member = cachedMembersRef.current.find(m => m.phone === validated.memberId || m.id === validated.memberId);
                 if (member) {
                   triggerAccess(member, 'qr');
-                  scanStartTimeRef.current = 0;
                   return;
                 } else {
                   setFeedback('NOT A REGISTERED MEMBER');
@@ -242,7 +255,7 @@ export default function SmartEntrancePage() {
     }
 
     scanLoopRef.current = requestAnimationFrame(runHybridLoop);
-  }, [authMode, isCameraActive, scanResult, isProcessing, modelsReady, cachedMembers, triggerAccess]);
+  }, [isCameraActive, modelsReady, triggerAccess]);
 
   useEffect(() => {
     if (isCameraActive) {
@@ -373,7 +386,9 @@ export default function SmartEntrancePage() {
                           variant="secondary" 
                           onClick={() => { 
                             setScanResult(null); 
+                            scanResultRef.current = null;
                             setIsProcessing(false);
+                            isProcessingRef.current = false;
                             setFeedback('SCANNER RESET');
                             scanStartTimeRef.current = 0;
                             lastQrScanRef.current = 0;
