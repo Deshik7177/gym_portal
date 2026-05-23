@@ -15,7 +15,6 @@ import {
   Wifi,
   WifiOff,
   Scan,
-  ExternalLink,
   ShieldCheck,
   History
 } from 'lucide-react';
@@ -101,11 +100,6 @@ export default function ReceptionLayout({ children }: { children: React.ReactNod
                <> <WifiOff className="h-3 w-3" /> Offline (Saving Locally) </>
              )}
            </Badge>
-           <Button asChild variant="ghost" size="sm" className="w-full justify-start text-[10px] text-muted-foreground hover:text-primary">
-              <a href="https://console.firebase.google.com/project/studio-1536246552-55579/firestore/data" target="_blank" rel="noopener noreferrer">
-                <ExternalLink className="mr-2 h-3 w-3" /> Firebase Console
-              </a>
-           </Button>
         </div>
         <nav className="flex flex-col gap-1 px-4 pb-6">
           <Link
