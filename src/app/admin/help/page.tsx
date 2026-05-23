@@ -77,11 +77,11 @@ export default function OperationsManualPage() {
             </div>
           </AccordionTrigger>
           <AccordionContent className="text-muted-foreground space-y-4 pt-2 pb-6">
-            <p>1. Navigate to <b>Registration</b> in the sidebar.</p>
-            <p>2. Enter their <b>Full Name</b> and <b>Phone Number</b>. Note: The phone number is their permanent ID for both QR and Face logic.</p>
-            <p>3. Choose <b>Active</b> for subscription-based members or <b>Fixed Term</b> for temporary passes.</p>
-            <p>4. Input the <b>Fee</b> collected. This automatically creates a record in the Sales Ledger.</p>
-            <p>5. Click <b>Register</b> to sync data to the cloud.</p>
+            <div className="text-sm">1. Navigate to <b>Registration</b> in the sidebar.</div>
+            <div className="text-sm">2. Enter their <b>Full Name</b> and <b>Phone Number</b>. Note: The phone number is their permanent ID for both QR and Face logic.</div>
+            <div className="text-sm">3. Choose <b>Active</b> for subscription-based members or <b>Fixed Term</b> for temporary passes.</div>
+            <div className="text-sm">4. Input the <b>Fee</b> collected. This automatically creates a record in the Sales Ledger.</div>
+            <div className="text-sm">5. Click <b>Register</b> to sync data to the cloud.</div>
           </AccordionContent>
         </AccordionItem>
 
@@ -98,9 +98,15 @@ export default function OperationsManualPage() {
             </div>
           </AccordionTrigger>
           <AccordionContent className="text-muted-foreground space-y-4 pt-2 pb-6">
-            <p><Badge className="bg-primary text-primary-foreground mr-2">FACE MODE</Badge> Instruct members to stand roughly 2-3 feet from the camera and look directly at the screen. The system identifies them automatically.</p>
-            <p><Badge variant="outline" className="text-blue-400 border-blue-400/20 mr-2">QR MODE</Badge> If lighting is poor, switch to QR Mode. Members must present their digital QR Passport from their phone.</p>
-            <p><b>Troubleshooting:</b> If a member is "Active" but denied, check their subscription end date in the <b>Members List</b>.</p>
+            <div className="flex items-start gap-2 text-sm">
+              <Badge className="bg-primary text-primary-foreground shrink-0">FACE MODE</Badge> 
+              <span>Instruct members to stand roughly 2-3 feet from the camera and look directly at the screen. The system identifies them automatically.</span>
+            </div>
+            <div className="flex items-start gap-2 text-sm">
+              <Badge variant="outline" className="text-blue-400 border-blue-400/20 shrink-0">QR MODE</Badge> 
+              <span>If lighting is poor, switch to QR Mode. Members must present their digital QR Passport from their phone.</span>
+            </div>
+            <div className="text-sm"><b>Troubleshooting:</b> If a member is &quot;Active&quot; but denied, check their subscription end date in the <b>Members List</b>.</div>
           </AccordionContent>
         </AccordionItem>
 
@@ -117,10 +123,10 @@ export default function OperationsManualPage() {
             </div>
           </AccordionTrigger>
           <AccordionContent className="text-muted-foreground space-y-4 pt-2 pb-6">
-            <p>1. Open the <b>Vault Directory</b> (Members List).</p>
-            <p>2. Locate the member and click the <b>More Horizontal</b> (three dots) button.</p>
-            <p>3. Select <b>Add PT Session</b>.</p>
-            <p>4. Enter the package price and validity dates. This will change their badge to <Badge className="bg-accent">PERSONAL</Badge> and notify trainers.</p>
+            <div className="text-sm">1. Open the <b>Vault Directory</b> (Members List).</div>
+            <div className="text-sm">2. Locate the member and click the <b>More Horizontal</b> (three dots) button.</div>
+            <div className="text-sm">3. Select <b>Add PT Session</b>.</div>
+            <div className="text-sm">4. Enter the package price and validity dates. This will change their badge to <Badge className="bg-accent">PERSONAL</Badge> and notify trainers.</div>
           </AccordionContent>
         </AccordionItem>
 
@@ -137,10 +143,10 @@ export default function OperationsManualPage() {
             </div>
           </AccordionTrigger>
           <AccordionContent className="text-muted-foreground space-y-4 pt-2 pb-6">
-            <p>Check the <b>Retention Alerts</b> every morning. We flag members based on two risk levels:</p>
+            <div className="text-sm">Check the <b>Retention Alerts</b> every morning. We flag members based on two risk levels:</div>
             <div className="pl-4 border-l-2 border-white/5 space-y-2 mt-2">
-              <p><span className="text-orange-400 font-bold">AT RISK (2-5 Days):</span> Send a polite SMS reminder via our templates.</p>
-              <p><span className="text-destructive font-bold">CRITICAL (&gt; 5 Days):</span> Call the member directly to check if they are facing any issues with the gym facilities.</p>
+              <div className="text-sm"><span className="text-orange-400 font-bold">AT RISK (2-5 Days):</span> Send a polite SMS reminder via our templates.</div>
+              <div className="text-sm"><span className="text-destructive font-bold">CRITICAL (&gt; 5 Days):</span> Call the member directly to check if they are facing any issues with the gym facilities.</div>
             </div>
           </AccordionContent>
         </AccordionItem>
