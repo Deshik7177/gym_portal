@@ -16,7 +16,8 @@ import {
   WifiOff,
   Scan,
   ExternalLink,
-  ShieldCheck
+  ShieldCheck,
+  History
 } from 'lucide-react';
 
 import { Button } from '@/components/ui/button';
@@ -62,6 +63,7 @@ export default function ReceptionLayout({ children }: { children: React.ReactNod
     { href: '/admin', label: 'Dashboard', icon: LayoutDashboard },
     { href: '/admin/members', label: 'Members List', icon: Users },
     { href: '/admin/entrance', label: 'Entrance Kiosk', icon: Scan },
+    { href: '/admin/attendance', label: 'Attendance Logs', icon: History },
     { href: '/admin/sales', label: 'Sales Report', icon: BarChart3 },
     { href: '/admin/absent', label: 'Retention Alerts', icon: Clock },
     { href: '/admin/register', label: 'Registration', icon: UserPlus },

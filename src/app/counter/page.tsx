@@ -1,8 +1,7 @@
-
 'use client';
 
 import { useState, useEffect } from 'react';
-import { doc, getDoc, serverTimestamp, updateDoc } from 'firebase/firestore';
+import { doc, getDoc, serverTimestamp, updateDoc, collection, addDoc } from 'firebase/firestore';
 import { useFirestore } from '@/firebase';
 import { 
   Search, 
@@ -96,9 +95,19 @@ export default function CounterPage() {
     if (!verifiedMember || !db) return;
     const docRef = doc(db, 'members', verifiedMember.id);
     
+    // 1. Update member document
     updateDoc(docRef, { 
       lastCheckIn: serverTimestamp(),
       updatedAt: serverTimestamp()
+    });
+
+    // 2. Log historical attendance
+    addDoc(collection(db, 'attendance'), {
+      memberId: verifiedMember.id,
+      memberName: verifiedMember.fullName,
+      timestamp: serverTimestamp(),
+      method: 'manual',
+      score: 1.0
     });
     
     setVerifiedMember(prev => ({ ...prev, authenticated: true }));
