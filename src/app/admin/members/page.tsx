@@ -15,9 +15,10 @@ import {
   Download,
   Filter,
   X,
-  UserCheck
+  UserCheck,
+  History
 } from 'lucide-react';
-import { collection, query, doc, deleteDoc, updateDoc, serverTimestamp, addDoc } from 'firebase/firestore';
+import { collection, query, doc, deleteDoc, updateDoc, serverTimestamp, addDoc, where, orderBy, limit } from 'firebase/firestore';
 import { useFirestore, useCollection } from '@/firebase';
 import Link from 'next/link';
 import { useRouter } from 'next/navigation';
@@ -99,6 +100,7 @@ export default function MembersListPage() {
   const [memberToDelete, setMemberToDelete] = useState<any>(null);
   const [memberForPT, setMemberForPT] = useState<any>(null);
   const [memberQrToShow, setMemberQrToShow] = useState<any>(null);
+  const [memberForHistory, setMemberForHistory] = useState<any>(null);
   const [isUpdatingPT, setIsUpdatingPT] = useState(false);
   const [isProcessingCheckIn, setIsProcessingCheckIn] = useState<string | null>(null);
   
@@ -113,6 +115,19 @@ export default function MembersListPage() {
 
   const membersRef = useMemo(() => db ? query(collection(db, 'members')) : null, [db]);
   const { data: members, loading } = useCollection<any>(membersRef);
+
+  // Individual Attendance History Query
+  const attendanceQuery = useMemo(() => {
+    if (!db || !memberForHistory) return null;
+    return query(
+      collection(db, 'attendance'),
+      where('memberId', '==', memberForHistory.phone),
+      orderBy('timestamp', 'desc'),
+      limit(10)
+    );
+  }, [db, memberForHistory]);
+
+  const { data: memberLogs, loading: logsLoading } = useCollection<any>(attendanceQuery);
 
   const filteredMembers = useMemo(() => {
     if (!members) return [];
@@ -352,6 +367,7 @@ export default function MembersListPage() {
                       <DropdownMenuContent align="end" className="w-56 bg-zinc-900 border-white/10 rounded-xl shadow-2xl">
                         <DropdownMenuLabel className="text-[10px] uppercase font-black tracking-widest opacity-40 p-4">Member Control</DropdownMenuLabel>
                         <DropdownMenuItem onSelect={() => handleManualCheckIn(member)} className="p-3 gap-3 rounded-lg mx-1 cursor-pointer text-green-500"><UserCheck className="h-4 w-4" /> Manual Check-In</DropdownMenuItem>
+                        <DropdownMenuItem onSelect={() => setMemberForHistory(member)} className="p-3 gap-3 rounded-lg mx-1 cursor-pointer"><History className="h-4 w-4 text-accent" /> View History</DropdownMenuItem>
                         <DropdownMenuItem onSelect={() => setMemberQrToShow(member)} className="p-3 gap-3 rounded-lg mx-1 cursor-pointer"><QrCode className="h-4 w-4 text-primary" /> View Entry QR</DropdownMenuItem>
                         <DropdownMenuItem onSelect={() => router.push(`/admin/register?edit=${member.phone}`)} className="p-3 gap-3 rounded-lg mx-1 cursor-pointer"><ArrowUpRight className="h-4 w-4" /> Edit Profile</DropdownMenuItem>
                         <DropdownMenuItem onSelect={() => setMemberForPT(member)} className="p-3 gap-3 rounded-lg mx-1 cursor-pointer"><CreditCard className="h-4 w-4" /> Add PT Session</DropdownMenuItem>
@@ -370,6 +386,71 @@ export default function MembersListPage() {
           </Table>
         </CardContent>
       </Card>
+
+      {/* Individual Attendance History Dialog */}
+      <Dialog open={!!memberForHistory} onOpenChange={(open) => !open && setMemberForHistory(null)}>
+        <DialogContent className="sm:max-w-lg bg-zinc-900 border-white/10 rounded-3xl p-6">
+          <DialogHeader className="mb-4">
+            <div className="flex items-center gap-3">
+              <div className="h-10 w-10 rounded-xl bg-accent/10 flex items-center justify-center">
+                <History className="h-5 w-5 text-accent" />
+              </div>
+              <div>
+                <DialogTitle className="text-xl font-black font-headline uppercase tracking-tight">Entry History</DialogTitle>
+                <DialogDescription className="text-[10px] font-bold uppercase tracking-widest opacity-60">{memberForHistory?.fullName}</DialogDescription>
+              </div>
+            </div>
+          </DialogHeader>
+          
+          <div className="max-h-[400px] overflow-auto rounded-xl border border-white/5 bg-black/20">
+             <Table>
+               <TableHeader className="bg-white/[0.02]">
+                 <TableRow className="border-white/5">
+                   <TableHead className="text-[9px] font-black uppercase tracking-widest pl-6">Time</TableHead>
+                   <TableHead className="text-[9px] font-black uppercase tracking-widest">Method</TableHead>
+                   <TableHead className="text-[9px] font-black uppercase tracking-widest text-right pr-6">Status</TableHead>
+                 </TableRow>
+               </TableHeader>
+               <TableBody>
+                 {logsLoading ? (
+                   <TableRow>
+                     <TableCell colSpan={3} className="h-32 text-center">
+                       <Loader2 className="h-5 w-5 animate-spin text-accent mx-auto" />
+                     </TableCell>
+                   </TableRow>
+                 ) : memberLogs && memberLogs.length > 0 ? memberLogs.map((log: any) => (
+                   <TableRow key={log.id} className="border-white/5 hover:bg-white/[0.01]">
+                      <TableCell className="pl-6 py-4">
+                        <div className="flex flex-col">
+                          <span className="text-xs font-bold">{log.timestamp ? format(log.timestamp.toDate(), 'MMM dd') : 'Recent'}</span>
+                          <span className="text-[10px] opacity-40 font-mono">{log.timestamp ? format(log.timestamp.toDate(), 'HH:mm:ss') : '--:--:--'}</span>
+                        </div>
+                      </TableCell>
+                      <TableCell>
+                        <Badge variant="outline" className="text-[9px] font-black uppercase py-0 px-2 h-5 border-white/10 opacity-60">
+                          {log.method || 'manual'}
+                        </Badge>
+                      </TableCell>
+                      <TableCell className="text-right pr-6">
+                         <span className="text-[10px] font-black text-green-500 uppercase">Verified</span>
+                      </TableCell>
+                   </TableRow>
+                 )) : (
+                   <TableRow>
+                     <TableCell colSpan={3} className="h-32 text-center text-muted-foreground text-xs italic font-medium uppercase tracking-widest opacity-20">No entry logs found</TableCell>
+                   </TableRow>
+                 )}
+               </TableBody>
+             </Table>
+          </div>
+          
+          <div className="mt-6">
+            <Button variant="outline" className="w-full h-12 rounded-xl border-white/10 hover:bg-white/5 uppercase font-black text-xs tracking-widest" onClick={() => setMemberForHistory(null)}>
+              Close Audit
+            </Button>
+          </div>
+        </DialogContent>
+      </Dialog>
 
       {/* Permanent Member Passport Dialog */}
       <Dialog open={!!memberQrToShow} onOpenChange={(open) => !open && setMemberQrToShow(null)}>
