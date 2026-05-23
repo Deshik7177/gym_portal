@@ -15,7 +15,8 @@ import {
   CreditCard,
   QrCode,
   Download,
-  Info
+  Info,
+  CheckCircle2
 } from 'lucide-react';
 import { collection, query, doc, deleteDoc, updateDoc, serverTimestamp, addDoc } from 'firebase/firestore';
 import { useFirestore, useCollection } from '@/firebase';
@@ -68,11 +69,19 @@ import {
   DialogFooter,
   DialogHeader,
   DialogTitle,
+} from "@/dialog"; // Note: Using the provided dialog alias if applicable, but standard shadcn is @/components/ui/dialog. Using standard path to be safe.
+import { 
+  Dialog as DialogUI,
+  DialogContent as DialogContentUI,
+  DialogDescription as DialogDescriptionUI,
+  DialogFooter as DialogFooterUI,
+  DialogHeader as DialogHeaderUI,
+  DialogTitle as DialogTitleUI,
 } from "@/components/ui/dialog";
 import { Label } from '@/components/ui/label';
 import { useToast } from '@/hooks/use-toast';
 import { errorEmitter } from '@/firebase/error-emitter';
-import { FirestorePermissionError } from '@/firebase/errors';
+import { FirestorePermissionError, type SecurityRuleContext } from '@/firebase/errors';
 import { Calendar } from "@/components/ui/calendar";
 import {
   Popover,
@@ -147,6 +156,52 @@ export default function MembersListPage() {
         title: "Export Success",
         description: "Member QR Passport saved to your device."
       });
+    }
+  };
+
+  const handleSavePT = async () => {
+    if (!db || !memberForPT) return;
+    if (!ptPrice || !ptStartDate || !ptEndDate) {
+      toast({ variant: "destructive", title: "Missing Data", description: "Please fill all PT session details." });
+      return;
+    }
+
+    setIsUpdatingPT(true);
+
+    const saleData = {
+      memberId: memberForPT.phone,
+      memberName: memberForPT.fullName,
+      amount: parseFloat(ptPrice) || 0,
+      date: new Date().toISOString().split('T')[0],
+      category: 'personal training',
+      description: `PT Package: ${format(ptStartDate, 'MMM dd')} to ${format(ptEndDate, 'MMM dd')}`,
+      createdAt: serverTimestamp()
+    };
+
+    try {
+      // 1. Record the Sale
+      await addDoc(collection(db, 'sales'), saleData);
+      
+      // 2. Update Member Type to personal
+      await updateDoc(doc(db, 'members', memberForPT.phone), {
+        type: 'personal',
+        updatedAt: serverTimestamp()
+      });
+
+      toast({ title: "PT Session Added", description: "Transaction and profile updated." });
+      setMemberForPT(null);
+      setPtPrice('');
+      setPtStartDate(undefined);
+      setPtEndDate(undefined);
+    } catch (e: any) {
+      const permissionError = new FirestorePermissionError({
+        path: `sales/new`,
+        operation: 'create',
+        requestResourceData: saleData,
+      } satisfies SecurityRuleContext);
+      errorEmitter.emit('permission-error', permissionError);
+    } finally {
+      setIsUpdatingPT(false);
     }
   };
 
@@ -267,15 +322,15 @@ export default function MembersListPage() {
       </Card>
 
       {/* Member QR Dialog */}
-      <Dialog open={!!memberQrToShow} onOpenChange={() => setMemberQrToShow(null)}>
-        <DialogContent className="sm:max-w-md bg-zinc-900 border-white/10 rounded-3xl p-8">
-          <DialogHeader className="items-center text-center">
+      <DialogUI open={!!memberQrToShow} onOpenChange={() => setMemberQrToShow(null)}>
+        <DialogContentUI className="sm:max-w-md bg-zinc-900 border-white/10 rounded-3xl p-8">
+          <DialogHeaderUI className="items-center text-center">
             <div className="h-16 w-16 bg-primary/10 rounded-2xl flex items-center justify-center mb-4">
               <QrCode className="h-8 w-8 text-primary" />
             </div>
-            <DialogTitle className="text-2xl font-black font-headline tracking-tighter">MEMBER PASSPORT</DialogTitle>
-            <DialogDescription className="text-xs font-bold uppercase tracking-widest opacity-60">Digital Key for {memberQrToShow?.fullName}</DialogDescription>
-          </DialogHeader>
+            <DialogTitleUI className="text-2xl font-black font-headline tracking-tighter">MEMBER PASSPORT</DialogTitleUI>
+            <DialogDescriptionUI className="text-xs font-bold uppercase tracking-widest opacity-60">Digital Key for {memberQrToShow?.fullName}</DialogDescriptionUI>
+          </DialogHeaderUI>
           <div className="flex flex-col items-center justify-center py-8 gap-8">
              <div ref={qrRef} className="bg-white p-6 rounded-3xl shadow-[0_0_50px_-12px_rgba(255,255,255,0.3)]">
                 {memberQrToShow && (
@@ -292,13 +347,90 @@ export default function MembersListPage() {
                 <p className="text-xs font-mono opacity-40">{memberQrToShow?.phone}</p>
              </div>
           </div>
-          <DialogFooter className="sm:justify-center">
+          <DialogFooterUI className="sm:justify-center">
             <Button className="w-full h-14 rounded-2xl font-black text-lg shadow-xl shadow-primary/20" onClick={handleExportQr}>
                <Download className="mr-2 h-5 w-5" /> EXPORT TO DEVICE
             </Button>
-          </DialogFooter>
-        </DialogContent>
-      </Dialog>
+          </DialogFooterUI>
+        </DialogContentUI>
+      </DialogUI>
+
+      {/* Add PT Session Dialog */}
+      <DialogUI open={!!memberForPT} onOpenChange={() => setMemberForPT(null)}>
+        <DialogContentUI className="sm:max-w-md bg-zinc-900 border-white/10 rounded-3xl p-8">
+          <DialogHeaderUI>
+            <DialogTitleUI className="text-2xl font-black font-headline tracking-tighter text-primary flex items-center gap-3">
+              <CreditCard className="h-6 w-6" /> ADD PT SESSION
+            </DialogTitleUI>
+            <DialogDescriptionUI className="text-xs font-bold uppercase tracking-widest opacity-60">For {memberForPT?.fullName}</DialogDescriptionUI>
+          </DialogHeaderUI>
+          <div className="space-y-6 py-6">
+            <div className="space-y-2">
+              <Label className="text-[10px] uppercase font-black tracking-widest opacity-40">Package Price (INR)</Label>
+              <div className="relative">
+                <span className="absolute left-4 top-1/2 -translate-y-1/2 text-primary font-black">₹</span>
+                <Input 
+                  type="number" 
+                  className="pl-8 h-12 bg-black/20 border-white/10 font-bold text-lg" 
+                  placeholder="0.00"
+                  value={ptPrice}
+                  onChange={(e) => setPtPrice(e.target.value)}
+                />
+              </div>
+            </div>
+
+            <div className="grid grid-cols-2 gap-4">
+              <div className="space-y-2">
+                <Label className="text-[10px] uppercase font-black tracking-widest opacity-40">Start Date</Label>
+                <Popover open={isPtStartDateOpen} onOpenChange={setIsPtStartDateOpen}>
+                  <PopoverTrigger asChild>
+                    <Button variant="outline" className="w-full h-12 justify-start font-bold bg-black/20 border-white/10">
+                      <CalendarIcon className="mr-2 h-4 w-4 text-primary" />
+                      {ptStartDate ? format(ptStartDate, "MMM dd") : "Pick"}
+                    </Button>
+                  </PopoverTrigger>
+                  <PopoverContent className="w-auto p-0" align="start">
+                    <Calendar
+                      mode="single"
+                      selected={ptStartDate}
+                      onSelect={(date) => { setPtStartDate(date); setIsPtStartDateOpen(false); }}
+                      disabled={(date) => date < today}
+                    />
+                  </PopoverContent>
+                </Popover>
+              </div>
+              <div className="space-y-2">
+                <Label className="text-[10px] uppercase font-black tracking-widest opacity-40">End Date</Label>
+                <Popover open={isPtEndDateOpen} onOpenChange={setIsPtEndDateOpen}>
+                  <PopoverTrigger asChild>
+                    <Button variant="outline" className="w-full h-12 justify-start font-bold bg-black/20 border-white/10">
+                      <CalendarIcon className="mr-2 h-4 w-4 text-primary" />
+                      {ptEndDate ? format(ptEndDate, "MMM dd") : "Pick"}
+                    </Button>
+                  </PopoverTrigger>
+                  <PopoverContent className="w-auto p-0" align="start">
+                    <Calendar
+                      mode="single"
+                      selected={ptEndDate}
+                      onSelect={(date) => { setPtEndDate(date); setIsPtEndDateOpen(false); }}
+                      disabled={(date) => date < (ptStartDate || today)}
+                    />
+                  </PopoverContent>
+                </Popover>
+              </div>
+            </div>
+          </div>
+          <DialogFooterUI>
+            <Button 
+              className="w-full h-14 rounded-2xl font-black text-lg shadow-xl shadow-primary/20" 
+              onClick={handleSavePT}
+              disabled={isUpdatingPT}
+            >
+              {isUpdatingPT ? <Loader2 className="h-5 w-5 animate-spin" /> : "CONFIRM & LOG SALE"}
+            </Button>
+          </DialogFooterUI>
+        </DialogContentUI>
+      </DialogUI>
 
       <AlertDialog open={!!memberToDelete} onOpenChange={() => setMemberToDelete(null)}>
         <AlertDialogContent className="bg-zinc-900 border-white/10 rounded-3xl p-8">
