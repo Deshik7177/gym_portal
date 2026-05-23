@@ -1,3 +1,4 @@
+
 'use client';
 
 import { useState, useMemo, useRef } from 'react';
@@ -194,7 +195,7 @@ export default function MembersListPage() {
     <div className="flex flex-col gap-6">
       <div className="flex flex-col md:flex-row justify-between items-start md:items-center gap-4">
         <div>
-          <h1 className="text-3xl font-bold font-headline uppercase tracking-tighter">Vault Directory</h1>
+          <h1 className="text-3xl font-bold font-headline uppercase tracking-tighter text-primary">Vault Directory</h1>
           <p className="text-muted-foreground text-xs font-bold tracking-widest uppercase opacity-60">Staff Control Panel</p>
         </div>
         <Button asChild className="h-12 px-8 rounded-xl font-bold">
@@ -281,17 +282,29 @@ export default function MembersListPage() {
                       </DropdownMenuTrigger>
                       <DropdownMenuContent align="end" className="w-56 bg-zinc-900 border-white/10 rounded-xl shadow-2xl">
                         <DropdownMenuLabel className="text-[10px] uppercase font-black tracking-widest opacity-40 p-4">Member Control</DropdownMenuLabel>
-                        <DropdownMenuItem onClick={() => setMemberQrToShow(member)} className="p-3 gap-3 rounded-lg mx-1 cursor-pointer">
+                        <DropdownMenuItem 
+                          onSelect={(e) => { e.preventDefault(); setTimeout(() => setMemberQrToShow(member), 10); }} 
+                          className="p-3 gap-3 rounded-lg mx-1 cursor-pointer"
+                        >
                           <QrCode className="h-4 w-4 text-primary" /> View Entry QR
                         </DropdownMenuItem>
-                        <DropdownMenuItem onClick={() => router.push(`/admin/register?edit=${member.phone}`)} className="p-3 gap-3 rounded-lg mx-1 cursor-pointer">
+                        <DropdownMenuItem 
+                          onSelect={() => router.push(`/admin/register?edit=${member.phone}`)} 
+                          className="p-3 gap-3 rounded-lg mx-1 cursor-pointer"
+                        >
                           <ArrowUpRight className="h-4 w-4" /> Edit Profile
                         </DropdownMenuItem>
-                        <DropdownMenuItem onClick={() => setMemberForPT(member)} className="p-3 gap-3 rounded-lg mx-1 cursor-pointer">
+                        <DropdownMenuItem 
+                          onSelect={(e) => { e.preventDefault(); setTimeout(() => setMemberForPT(member), 10); }} 
+                          className="p-3 gap-3 rounded-lg mx-1 cursor-pointer"
+                        >
                           <CreditCard className="h-4 w-4" /> Add PT Session
                         </DropdownMenuItem>
                         <DropdownMenuSeparator className="bg-white/5" />
-                        <DropdownMenuItem className="p-3 gap-3 rounded-lg mx-1 text-destructive cursor-pointer" onClick={() => setMemberToDelete(member)}>
+                        <DropdownMenuItem 
+                          className="p-3 gap-3 rounded-lg mx-1 text-destructive cursor-pointer" 
+                          onSelect={(e) => { e.preventDefault(); setTimeout(() => setMemberToDelete(member), 10); }}
+                        >
                           <Trash2 className="h-4 w-4" /> Terminate Record
                         </DropdownMenuItem>
                       </DropdownMenuContent>
@@ -417,7 +430,7 @@ export default function MembersListPage() {
       <AlertDialog open={!!memberToDelete} onOpenChange={(open) => !open && setMemberToDelete(null)}>
         <AlertDialogContent className="bg-zinc-900 border-white/10 rounded-3xl p-8">
           <AlertDialogHeader>
-            <AlertDialogTitle className="text-xl font-bold font-headline">Permanently Delete Record?</AlertDialogTitle>
+            <AlertDialogTitle className="text-xl font-bold font-headline text-primary">Permanently Delete Record?</AlertDialogTitle>
             <AlertDialogDescription>
               This will remove all biometric and transaction data for <b>{memberToDelete?.fullName}</b>. This action is irreversible.
             </AlertDialogDescription>

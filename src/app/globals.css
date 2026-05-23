@@ -11,35 +11,6 @@
     --card-foreground: 0 0% 93%;
     --popover: 0 0% 11%;
     --popover-foreground: 0 0% 93%;
-    /* Increased brightness for better accessibility contrast */
-    --primary: 45 60% 60%;
-    --primary-foreground: 0 0% 4%;
-    --secondary: 0 0% 11%;
-    --secondary-foreground: 0 0% 93%;
-    --muted: 0 0% 11%;
-    --muted-foreground: 0 0% 60%;
-    --accent: 45 60% 60%;
-    --accent-foreground: 0 0% 4%;
-    --destructive: 353 81% 55%;
-    --destructive-foreground: 0 0% 98%;
-    --border: 45 60% 60% / 0.3;
-    --input: 45 60% 60% / 0.3;
-    --ring: 45 60% 60%;
-    --chart-1: 45 60% 60%;
-    --chart-2: 210 22% 49%;
-    --chart-3: 0 0% 93%;
-    --chart-4: 43 74% 66%;
-    --chart-5: 27 87% 67%;
-    --radius: 0.75rem;
-  }
-
-  .dark {
-    --background: 0 0% 4%;
-    --foreground: 0 0% 93%;
-    --card: 0 0% 8%;
-    --card-foreground: 0 0% 93%;
-    --popover: 0 0% 11%;
-    --popover-foreground: 0 0% 93%;
     --primary: 45 60% 60%;
     --primary-foreground: 0 0% 4%;
     --secondary: 0 0% 11%;
@@ -68,5 +39,11 @@
   }
   body {
     @apply bg-background text-foreground antialiased;
+    /* Safeguard against Radix UI pointer-events stuck state */
+    pointer-events: auto !important;
+  }
+  /* Ensure dialogs and popovers remain clickable regardless of body state */
+  [role="dialog"], [role="alertdialog"], .popover-content {
+    pointer-events: auto !important;
   }
 }

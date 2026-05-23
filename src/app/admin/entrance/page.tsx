@@ -1,3 +1,4 @@
+
 'use client';
 
 import { useState, useRef, useEffect, useCallback } from 'react';
@@ -5,15 +6,12 @@ import {
   Camera, 
   Scan, 
   CheckCircle2, 
-  XCircle, 
   Loader2, 
   RefreshCw,
   QrCode,
   Zap,
   History,
-  AlertCircle,
   Cloud,
-  ChevronRight,
   ShieldCheck
 } from 'lucide-react';
 import { collection, query, updateDoc, doc, serverTimestamp, onSnapshot, addDoc } from 'firebase/firestore';
@@ -29,7 +27,6 @@ import { Card, CardContent, CardHeader, CardTitle } from '@/components/ui/card';
 import { Badge } from '@/components/ui/badge';
 import { useToast } from '@/hooks/use-toast';
 import { Table, TableBody, TableCell, TableRow } from '@/components/ui/table';
-import { Progress } from '@/components/ui/progress';
 
 export default function SmartEntrancePage() {
   const db = useFirestore();
@@ -50,6 +47,7 @@ export default function SmartEntrancePage() {
   const videoRef = useRef<HTMLVideoElement>(null);
   const canvasRef = useRef<HTMLCanvasElement>(null);
   const scanLoopRef = useRef<number | null>(null);
+  const isComponentMounted = useRef(true);
 
   // Sync Member Cache
   useEffect(() => {
@@ -61,13 +59,18 @@ export default function SmartEntrancePage() {
       setCachedMembers(members);
       setIsSyncing(false);
     });
-    return () => unsubscribe();
+    return () => {
+      unsubscribe();
+      isComponentMounted.current = false;
+    };
   }, [db]);
 
   useEffect(() => {
     loadFaceModels().then(() => {
-      setModelsReady(true);
-      setFeedback('SYSTEM READY');
+      if (isComponentMounted.current) {
+        setModelsReady(true);
+        setFeedback('SYSTEM READY');
+      }
     });
     if (isCameraActive) startCamera();
     else stopCamera();
@@ -101,44 +104,50 @@ export default function SmartEntrancePage() {
     setScanResult('success');
     setIdentifiedMember(member);
 
-    // 1. Log Attendance
-    addDoc(collection(db, 'attendance'), {
-      memberId: member.id,
-      memberName: member.fullName,
-      timestamp: serverTimestamp(),
-      method,
-      score
-    });
+    try {
+      // 1. Log Attendance
+      addDoc(collection(db, 'attendance'), {
+        memberId: member.id,
+        memberName: member.fullName,
+        timestamp: serverTimestamp(),
+        method,
+        score
+      });
 
-    // 2. Update Last Check-in
-    updateDoc(doc(db, 'members', member.id), {
-      lastCheckIn: serverTimestamp()
-    });
+      // 2. Update Last Check-in
+      updateDoc(doc(db, 'members', member.id), {
+        lastCheckIn: serverTimestamp()
+      });
 
-    // 3. Command Gate OPEN
-    addDoc(collection(db, 'gateControl'), {
-      command: 'OPEN',
-      timestamp: serverTimestamp(),
-      memberId: member.id,
-      method
-    });
+      // 3. Command Gate OPEN
+      addDoc(collection(db, 'gateControl'), {
+        command: 'OPEN',
+        timestamp: serverTimestamp(),
+        memberId: member.id,
+        method
+      });
 
-    setRecentLogs(prev => [{
-      name: member.fullName,
-      time: new Date().toLocaleTimeString(),
-      method: method.toUpperCase()
-    }, ...prev].slice(0, 10));
+      setRecentLogs(prev => [{
+        name: member.fullName,
+        time: new Date().toLocaleTimeString(),
+        method: method.toUpperCase()
+      }, ...prev].slice(0, 10));
+    } catch (e) {
+      console.error("Access trigger failed:", e);
+    }
 
     setTimeout(() => {
-      setScanResult(null);
-      setIdentifiedMember(null);
-      setIsProcessing(false);
-      setFeedback('WAITING FOR NEXT ENTRY');
+      if (isComponentMounted.current) {
+        setScanResult(null);
+        setIdentifiedMember(null);
+        setIsProcessing(false);
+        setFeedback('WAITING FOR NEXT ENTRY');
+      }
     }, 4000);
   }, [db, isProcessing]);
 
   const runHybridLoop = useCallback(async () => {
-    if (!videoRef.current || !isCameraActive || scanResult || isProcessing) {
+    if (!videoRef.current || !isCameraActive || scanResult || isProcessing || !isComponentMounted.current) {
       scanLoopRef.current = requestAnimationFrame(runHybridLoop);
       return;
     }
@@ -155,7 +164,7 @@ export default function SmartEntrancePage() {
           .withFaceLandmarks()
           .withFaceDescriptor();
 
-        if (detection) {
+        if (detection && isComponentMounted.current) {
           setFeedback('FACE DETECTED - ANALYZING...');
           const { bestMatch, distance } = findBestMatch(Array.from(detection.descriptor), cachedMembers);
           
@@ -165,18 +174,17 @@ export default function SmartEntrancePage() {
           } else {
             setFeedback('ID NOT FOUND - TRY QR OR RE-ALIGN');
           }
-        } else {
+        } else if (isComponentMounted.current) {
           setFeedback('SEARCHING FOR FACE...');
         }
       } catch (e) {
         console.warn("Biometric loop skip:", e);
       }
     } else if (authMode === 'qr') {
-      if (canvasRef.current) {
+      if (canvasRef.current && isComponentMounted.current) {
         const canvas = canvasRef.current;
         const context = canvas.getContext('2d', { willReadFrequently: true });
         if (context) {
-          // Optimized scanning resolution for zero latency
           const scale = 0.7; 
           canvas.width = video.videoWidth * scale;
           canvas.height = video.videoHeight * scale;
@@ -187,7 +195,7 @@ export default function SmartEntrancePage() {
             inversionAttempts: "dontInvert",
           });
           
-          if (code) {
+          if (code && isComponentMounted.current) {
             setFeedback('QR TOKEN RECOGNIZED');
             const validated = validateQrPayload(code.data);
             if (validated) {
@@ -201,7 +209,7 @@ export default function SmartEntrancePage() {
             } else {
               setFeedback('INVALID QR FORMAT');
             }
-          } else {
+          } else if (isComponentMounted.current) {
             setFeedback('PRESENT QR TO SCANNER');
           }
         }
@@ -352,13 +360,13 @@ export default function SmartEntrancePage() {
         </Card>
 
         <div className="lg:col-span-4 flex flex-col gap-6">
-          <Card className="flex-1 overflow-hidden border-none shadow-2xl bg-black/40 backdrop-blur-xl rounded-3xl">
+          <Card className="flex-1 overflow-auto border-none shadow-2xl bg-black/40 backdrop-blur-xl rounded-3xl">
             <CardHeader className="bg-white/[0.02] border-b border-white/5 py-6 px-8">
               <CardTitle className="text-[10px] uppercase tracking-[0.5em] font-black flex items-center gap-3 text-primary">
                   <History className="h-4 w-4" /> ACCESS LOGS
               </CardTitle>
             </CardHeader>
-            <CardContent className="p-0 overflow-auto max-h-[500px]">
+            <CardContent className="p-0 max-h-[500px]">
               <Table>
                   <TableBody>
                     {recentLogs.length > 0 ? recentLogs.map((log, i) => (
@@ -380,38 +388,8 @@ export default function SmartEntrancePage() {
               </Table>
             </CardContent>
           </Card>
-
-          <Card className="bg-primary/5 border border-primary/20 rounded-3xl p-8 space-y-6">
-              <h4 className="text-[10px] font-black uppercase tracking-[0.5em] text-primary/60">Real-time Telemetry</h4>
-              <div className="space-y-4">
-                  <div className="flex justify-between items-center">
-                     <span className="text-[10px] font-bold text-muted-foreground uppercase tracking-widest">Cached Profiles</span>
-                     <span className="text-sm font-black text-white">{cachedMembers.length}</span>
-                  </div>
-                  <div className="flex justify-between items-center">
-                     <span className="text-[10px] font-bold text-muted-foreground uppercase tracking-widest">QR Engine</span>
-                     <Badge variant="outline" className="text-[10px] border-green-500/20 text-green-500 font-bold">OPTIMIZED</Badge>
-                  </div>
-                  <div className="flex justify-between items-center">
-                     <span className="text-[10px] font-bold text-muted-foreground uppercase tracking-widest">Face Model</span>
-                     <span className="text-[10px] font-mono text-primary/60">SSD-MOBILENET-V1</span>
-                  </div>
-              </div>
-              <p className="text-[10px] leading-relaxed text-muted-foreground opacity-40 italic pt-4 border-t border-white/5">
-                Authentication methods are strictly isolated. Manual mode switching ensures maximum reliability in all lighting conditions.
-              </p>
-          </Card>
         </div>
       </div>
-      <style jsx global>{`
-        @keyframes scan-line {
-          0% { top: 30%; }
-          100% { top: 70%; }
-        }
-        .animate-scan-line {
-          animation: scan-line 2s ease-in-out infinite alternate;
-        }
-      `}</style>
     </div>
   );
 }
