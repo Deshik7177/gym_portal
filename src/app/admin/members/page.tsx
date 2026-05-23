@@ -1,7 +1,6 @@
-
 'use client';
 
-import { useState, useMemo } from 'react';
+import { useState, useMemo, useRef } from 'react';
 import { 
   Search, 
   UserCircle, 
@@ -23,7 +22,7 @@ import { useFirestore, useCollection } from '@/firebase';
 import Link from 'next/link';
 import { useRouter } from 'next/navigation';
 import { format, isWithinInterval, startOfDay, parseISO } from 'date-fns';
-import { QRCodeSVG } from 'qrcode.react';
+import { QRCodeCanvas } from 'qrcode.react';
 import { generateMemberQrPayload } from '@/lib/qr-logic';
 
 import { Badge } from '@/components/ui/badge';
@@ -102,6 +101,8 @@ export default function MembersListPage() {
   const [isPtStartDateOpen, setIsPtStartDateOpen] = useState(false);
   const [isPtEndDateOpen, setIsPtEndDateOpen] = useState(false);
 
+  const qrRef = useRef<HTMLDivElement>(null);
+
   const today = useMemo(() => startOfDay(new Date()), []);
 
   const membersRef = useMemo(() => db ? query(collection(db, 'members')) : null, [db]);
@@ -133,22 +134,20 @@ export default function MembersListPage() {
       });
   };
 
-  const handleAddPT = () => {
-    if (!db || !memberForPT || !ptStartDate || !ptEndDate) return;
-    setIsUpdatingPT(true);
-    const updateData = {
-      type: 'personal',
-      price: parseFloat(ptPrice) || memberForPT.price,
-      startDate: format(ptStartDate, 'yyyy-MM-dd'),
-      endDate: format(ptEndDate, 'yyyy-MM-dd'),
-      updatedAt: serverTimestamp(),
-    };
-    updateDoc(doc(db, 'members', memberForPT.phone), updateData)
-      .then(() => {
-        setMemberForPT(null);
-        toast({ title: "PT Added" });
-      })
-      .finally(() => setIsUpdatingPT(false));
+  const handleExportQr = () => {
+    if (!memberQrToShow || !qrRef.current) return;
+    const canvas = qrRef.current.querySelector('canvas');
+    if (canvas) {
+      const url = canvas.toDataURL("image/png");
+      const link = document.createElement("a");
+      link.download = `ThriveFit_QR_${memberQrToShow.fullName.replace(/\s+/g, '_')}.png`;
+      link.href = url;
+      link.click();
+      toast({
+        title: "Export Success",
+        description: "Member QR Passport saved to your device."
+      });
+    }
   };
 
   if (loading) return <div className="flex h-60 w-full items-center justify-center"><Loader2 className="h-8 w-8 animate-spin text-primary" /></div>;
@@ -278,11 +277,11 @@ export default function MembersListPage() {
             <DialogDescription className="text-xs font-bold uppercase tracking-widest opacity-60">Digital Key for {memberQrToShow?.fullName}</DialogDescription>
           </DialogHeader>
           <div className="flex flex-col items-center justify-center py-8 gap-8">
-             <div className="bg-white p-6 rounded-3xl shadow-[0_0_50px_-12px_rgba(255,255,255,0.3)]">
+             <div ref={qrRef} className="bg-white p-6 rounded-3xl shadow-[0_0_50px_-12px_rgba(255,255,255,0.3)]">
                 {memberQrToShow && (
-                  <QRCodeSVG 
+                  <QRCodeCanvas 
                     value={generateMemberQrPayload(memberQrToShow.phone)} 
-                    size={200}
+                    size={256}
                     level="H"
                     includeMargin={false}
                   />
@@ -294,7 +293,7 @@ export default function MembersListPage() {
              </div>
           </div>
           <DialogFooter className="sm:justify-center">
-            <Button className="w-full h-14 rounded-2xl font-black text-lg shadow-xl shadow-primary/20" onClick={() => setMemberQrToShow(null)}>
+            <Button className="w-full h-14 rounded-2xl font-black text-lg shadow-xl shadow-primary/20" onClick={handleExportQr}>
                <Download className="mr-2 h-5 w-5" /> EXPORT TO DEVICE
             </Button>
           </DialogFooter>
