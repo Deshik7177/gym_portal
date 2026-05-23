@@ -5,7 +5,7 @@
  * QR Logic Service - Permanent ID Edition
  * 
  * Generates unique, static QR payloads for members.
- * These IDs never change and are optimized for zero-latency scanning.
+ * These IDs are permanent and optimized for zero-latency scanning.
  */
 
 /**
@@ -15,6 +15,7 @@
  * @returns A unique string to be rendered as a QR code.
  */
 export function generateMemberQrPayload(memberId: string) {
+  // We use a fixed prefix to distinguish our gym's IDs from other QR codes
   return `TFIT-${memberId}`;
 }
 
@@ -29,6 +30,7 @@ export function validateQrPayload(payload: string) {
       return { valid: false, reason: 'INVALID_FORMAT' };
     }
     
+    // Extract the member's unique ID (phone number) from the payload
     const memberId = payload.replace('TFIT-', '');
     
     return {
