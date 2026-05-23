@@ -140,7 +140,7 @@ export default function OperationsManualPage() {
             <p>Check the <b>Retention Alerts</b> every morning. We flag members based on two risk levels:</p>
             <div className="pl-4 border-l-2 border-white/5 space-y-2 mt-2">
               <p><span className="text-orange-400 font-bold">AT RISK (2-5 Days):</span> Send a polite SMS reminder via our templates.</p>
-              <p><span className="text-destructive font-bold">CRITICAL (> 5 Days):</span> Call the member directly to check if they are facing any issues with the gym facilities.</p>
+              <p><span className="text-destructive font-bold">CRITICAL (&gt; 5 Days):</span> Call the member directly to check if they are facing any issues with the gym facilities.</p>
             </div>
           </AccordionContent>
         </AccordionItem>
