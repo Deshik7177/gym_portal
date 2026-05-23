@@ -1,3 +1,4 @@
+
 'use client';
 
 import { useState, useMemo } from 'react';
@@ -13,6 +14,8 @@ import {
   Plus, 
   Calendar as CalendarIcon,
   CreditCard,
+  QrCode,
+  Download,
   Info
 } from 'lucide-react';
 import { collection, query, doc, deleteDoc, updateDoc, serverTimestamp, addDoc } from 'firebase/firestore';
@@ -20,6 +23,8 @@ import { useFirestore, useCollection } from '@/firebase';
 import Link from 'next/link';
 import { useRouter } from 'next/navigation';
 import { format, isWithinInterval, startOfDay, parseISO } from 'date-fns';
+import { QRCodeSVG } from 'qrcode.react';
+import { generateMemberQrPayload } from '@/lib/qr-logic';
 
 import { Badge } from '@/components/ui/badge';
 import { Button } from '@/components/ui/button';
@@ -68,7 +73,7 @@ import {
 import { Label } from '@/components/ui/label';
 import { useToast } from '@/hooks/use-toast';
 import { errorEmitter } from '@/firebase/error-emitter';
-import { FirestorePermissionError, type SecurityRuleContext } from '@/firebase/errors';
+import { FirestorePermissionError } from '@/firebase/errors';
 import { Calendar } from "@/components/ui/calendar";
 import {
   Popover,
@@ -87,6 +92,7 @@ export default function MembersListPage() {
   // Action States
   const [memberToDelete, setMemberToDelete] = useState<any>(null);
   const [memberForPT, setMemberForPT] = useState<any>(null);
+  const [memberQrToShow, setMemberQrToShow] = useState<any>(null);
   const [isUpdatingPT, setIsUpdatingPT] = useState(false);
   
   // PT Dialog States
@@ -110,63 +116,26 @@ export default function MembersListPage() {
   }, [members, searchTerm]);
 
   const stats = useMemo(() => {
-    if (!members) return { total: 0, group: 0, personal: 0, active: 0, nonActive: 0 };
+    if (!members) return { total: 0, active: 0, personal: 0 };
     return {
       total: members.length,
-      group: members.filter(m => m.type === 'group').length,
-      personal: members.filter(m => m.type === 'personal').length,
       active: members.filter(m => m.status === 'active').length,
-      nonActive: members.filter(m => m.status === 'non-active').length
+      personal: members.filter(m => m.type === 'personal').length,
     };
   }, [members]);
 
   const handleDeleteMember = () => {
     if (!db || !memberToDelete) return;
-
-    const docRef = doc(db, 'members', memberToDelete.phone);
-    deleteDoc(docRef)
+    deleteDoc(doc(db, 'members', memberToDelete.phone))
       .then(() => {
-        toast({ title: "Member Deleted", description: `${memberToDelete.fullName} has been removed.` });
+        toast({ title: "Member Removed" });
         setMemberToDelete(null);
-      })
-      .catch(async (e) => {
-        const permissionError = new FirestorePermissionError({
-          path: docRef.path,
-          operation: 'delete',
-        });
-        errorEmitter.emit('permission-error', permissionError);
       });
   };
 
-  const isDateDisabled = (date: Date) => {
-    if (startOfDay(date) < today) return true;
-    if (!memberForPT || memberForPT.status !== 'non-active') return false;
-    
-    try {
-      const start = startOfDay(parseISO(memberForPT.startDate));
-      const end = startOfDay(parseISO(memberForPT.endDate));
-      return !isWithinInterval(startOfDay(date), { start, end });
-    } catch (e) {
-      return false;
-    }
-  };
-
   const handleAddPT = () => {
-    if (!db || !memberForPT) return;
-    
-    if (!ptStartDate || !ptEndDate) {
-      toast({ variant: "destructive", title: "Dates Required", description: "Please select start and end dates for PT." });
-      return;
-    }
-
-    if (ptEndDate < ptStartDate) {
-      toast({ variant: "destructive", title: "Invalid Dates", description: "End date cannot be before start date." });
-      return;
-    }
-
+    if (!db || !memberForPT || !ptStartDate || !ptEndDate) return;
     setIsUpdatingPT(true);
-
-    const docRef = doc(db, 'members', memberForPT.phone);
     const updateData = {
       type: 'personal',
       price: parseFloat(ptPrice) || memberForPT.price,
@@ -174,341 +143,180 @@ export default function MembersListPage() {
       endDate: format(ptEndDate, 'yyyy-MM-dd'),
       updatedAt: serverTimestamp(),
     };
-
-    updateDoc(docRef, updateData)
+    updateDoc(doc(db, 'members', memberForPT.phone), updateData)
       .then(() => {
-        const saleData = {
-          memberId: memberForPT.phone,
-          memberName: memberForPT.fullName,
-          amount: parseFloat(ptPrice) || 0,
-          date: new Date().toISOString().split('T')[0],
-          category: 'personal training',
-          description: `PT Package: ${format(ptStartDate, 'MMM dd')} to ${format(ptEndDate, 'MMM dd')}`,
-          createdAt: serverTimestamp()
-        };
-        
-        addDoc(collection(db, 'sales'), saleData).catch(async (err) => {
-          errorEmitter.emit('permission-error', new FirestorePermissionError({
-            path: 'sales',
-            operation: 'create',
-            requestResourceData: saleData,
-          }));
-        });
-
-        toast({ 
-          title: "PT Membership Added", 
-          description: `${memberForPT.fullName} is now enrolled in Personal Training.` 
-        });
         setMemberForPT(null);
-        setPtPrice('');
-        setPtStartDate(undefined);
-        setPtEndDate(undefined);
-      })
-      .catch(async (e) => {
-        const permissionError = new FirestorePermissionError({
-          path: docRef.path,
-          operation: 'update',
-          requestResourceData: updateData,
-        } satisfies SecurityRuleContext);
-        errorEmitter.emit('permission-error', permissionError);
+        toast({ title: "PT Added" });
       })
       .finally(() => setIsUpdatingPT(false));
   };
 
-  if (loading) {
-    return (
-      <div className="flex h-60 w-full items-center justify-center">
-        <Loader2 className="h-8 w-8 animate-spin text-primary" />
-      </div>
-    );
-  }
+  if (loading) return <div className="flex h-60 w-full items-center justify-center"><Loader2 className="h-8 w-8 animate-spin text-primary" /></div>;
 
   return (
     <div className="flex flex-col gap-6">
       <div className="flex flex-col md:flex-row justify-between items-start md:items-center gap-4">
         <div>
-          <h1 className="text-3xl font-bold font-headline">Member Directory</h1>
-          <p className="text-muted-foreground">Manage all registered gym members.</p>
+          <h1 className="text-3xl font-bold font-headline uppercase tracking-tighter">Vault Directory</h1>
+          <p className="text-muted-foreground text-xs font-bold tracking-widest uppercase opacity-60">Staff Control Panel</p>
         </div>
-        <Button asChild>
-          <Link href="/admin/register">
-            Register New Member
-          </Link>
+        <Button asChild className="h-12 px-8 rounded-xl font-bold">
+          <Link href="/admin/register"><Plus className="mr-2 h-4 w-4" /> Enroll New Member</Link>
         </Button>
       </div>
 
       <div className="grid gap-4 md:grid-cols-3">
-         <Card className="border-l-4 border-l-primary">
+         <Card className="bg-primary/5 border-primary/10 shadow-none">
             <CardHeader className="pb-2">
-                <CardTitle className="text-sm font-medium flex items-center justify-between">
-                   Total Members
-                   <Users className="h-4 w-4 text-muted-foreground" />
-                </CardTitle>
+                <CardTitle className="text-[10px] font-black uppercase tracking-[0.3em] opacity-40">Total Capacity</CardTitle>
             </CardHeader>
             <CardContent>
-                <div className="text-3xl font-bold">{stats.total}</div>
-                <p className="text-xs text-muted-foreground">Database count</p>
+                <div className="text-3xl font-black">{stats.total}</div>
             </CardContent>
          </Card>
-         <Card>
+         <Card className="bg-green-500/5 border-green-500/10 shadow-none">
             <CardHeader className="pb-2">
-                <CardTitle className="text-sm font-medium flex items-center justify-between">
-                  Group Training
-                  <Users className="h-4 w-4 text-primary" />
-                </CardTitle>
+                <CardTitle className="text-[10px] font-black uppercase tracking-[0.3em] opacity-40">Active Sync</CardTitle>
             </CardHeader>
             <CardContent>
-                <div className="text-3xl font-bold">{stats.group}</div>
-                <p className="text-xs text-muted-foreground">Active group subs</p>
+                <div className="text-3xl font-black text-green-500">{stats.active}</div>
             </CardContent>
          </Card>
-         <Card>
+         <Card className="bg-accent/5 border-accent/10 shadow-none">
             <CardHeader className="pb-2">
-                <CardTitle className="text-sm font-medium flex items-center justify-between">
-                  Personal Training
-                  <User className="h-4 w-4 text-accent" />
-                </CardTitle>
+                <CardTitle className="text-[10px] font-black uppercase tracking-[0.3em] opacity-40">PT Coverage</CardTitle>
             </CardHeader>
             <CardContent>
-                <div className="text-3xl font-bold">{stats.personal}</div>
-                <p className="text-xs text-muted-foreground">Personal training sessions</p>
+                <div className="text-3xl font-black text-accent">{stats.personal}</div>
             </CardContent>
          </Card>
       </div>
 
-      <Card>
-        <CardHeader className="flex flex-col md:flex-row md:items-center gap-4">
-          <div className="relative flex-1 max-w-sm">
-            <Search className="absolute left-2.5 top-2.5 h-4 w-4 text-muted-foreground" />
+      <Card className="border-none bg-card/40 backdrop-blur-xl shadow-2xl rounded-2xl overflow-hidden">
+        <CardHeader className="border-b border-white/5 py-6">
+          <div className="relative max-w-md">
+            <Search className="absolute left-3.5 top-1/2 -translate-y-1/2 h-4 w-4 text-muted-foreground" />
             <Input
-              placeholder="Search by name or phone..."
-              className="pl-8"
+              placeholder="Search member ID or name..."
+              className="pl-10 h-11 bg-black/20 border-white/5 focus:border-primary/50 rounded-xl"
               value={searchTerm}
               onChange={(e) => setSearchTerm(e.target.value)}
             />
           </div>
-          <div className="flex gap-2 ml-auto">
-            <Badge variant="outline" className="h-8">Active: {stats.active}</Badge>
-            <Badge variant="outline" className="h-8">Non-Active: {stats.nonActive}</Badge>
-          </div>
         </CardHeader>
-        <CardContent>
+        <CardContent className="p-0">
           <Table>
-            <TableHeader>
-              <TableRow>
-                <TableHead>Member</TableHead>
-                <TableHead>Phone / ID</TableHead>
-                <TableHead>Status</TableHead>
-                <TableHead>Category</TableHead>
-                <TableHead>Valid Until</TableHead>
-                <TableHead className="text-right">Actions</TableHead>
+            <TableHeader className="bg-white/[0.02]">
+              <TableRow className="border-white/5">
+                <TableHead className="pl-8 font-black uppercase text-[9px] tracking-[0.3em]">Member</TableHead>
+                <TableHead className="font-black uppercase text-[9px] tracking-[0.3em]">Phone ID</TableHead>
+                <TableHead className="font-black uppercase text-[9px] tracking-[0.3em]">Status</TableHead>
+                <TableHead className="font-black uppercase text-[9px] tracking-[0.3em]">Category</TableHead>
+                <TableHead className="text-right pr-8 font-black uppercase text-[9px] tracking-[0.3em]">Control</TableHead>
               </TableRow>
             </TableHeader>
             <TableBody>
-              {filteredMembers.length > 0 ? (
-                filteredMembers.map((member) => (
-                  <TableRow key={member.phone}>
-                    <TableCell>
-                      <div className="flex items-center gap-3">
-                        <div className="h-8 w-8 rounded-full bg-muted flex items-center justify-center overflow-hidden">
-                          {member.photoData ? (
-                            <img src={member.photoData} className="w-full h-full object-cover" />
-                          ) : (
-                            <UserCircle className="h-6 w-6 text-muted-foreground" />
-                          )}
-                        </div>
-                        <span className="font-medium">{member.fullName}</span>
+              {filteredMembers.map((member) => (
+                <TableRow key={member.phone} className="border-white/5 hover:bg-white/[0.02] transition-colors">
+                  <TableCell className="pl-8">
+                    <div className="flex items-center gap-4 py-2">
+                      <div className="h-10 w-10 rounded-full bg-primary/10 flex items-center justify-center overflow-hidden border border-primary/20">
+                        {member.photoData ? <img src={member.photoData} className="w-full h-full object-cover" /> : <User className="h-5 w-5 text-primary" />}
                       </div>
-                    </TableCell>
-                    <TableCell className="font-mono text-xs">{member.phone}</TableCell>
-                    <TableCell>
-                      <Badge variant={member.status === 'active' ? 'default' : 'secondary'}>
-                        {member.status === 'active' ? 'Active' : 'Non-Active'}
-                      </Badge>
-                    </TableCell>
-                    <TableCell className="capitalize">
-                      <div className="flex items-center gap-2">
-                        <span className={`text-[10px] px-2 py-0.5 rounded-full font-bold uppercase ${member.type === 'group' ? 'bg-primary/10 text-primary' : 'bg-accent/10 text-accent'}`}>
-                          {member.type}
-                        </span>
-                        {member.type !== 'personal' && (
-                          <Button 
-                            variant="ghost" 
-                            size="icon" 
-                            className="h-6 w-6 rounded-full bg-accent/5 hover:bg-accent/20 text-accent"
-                            onClick={() => setMemberForPT(member)}
-                            title="Add Personal Training"
-                          >
-                            <Plus className="h-3 w-3" />
-                          </Button>
-                        )}
-                      </div>
-                    </TableCell>
-                    <TableCell className="text-xs text-muted-foreground">
-                      {member.status === 'active' ? 'Ongoing' : member.endDate || 'N/A'}
-                    </TableCell>
-                    <TableCell className="text-right">
-                      <DropdownMenu>
-                        <DropdownMenuTrigger asChild>
-                          <Button variant="ghost" size="icon">
-                            <MoreHorizontal className="h-4 w-4" />
-                          </Button>
-                        </DropdownMenuTrigger>
-                        <DropdownMenuContent align="end">
-                          <DropdownMenuLabel>Actions</DropdownMenuLabel>
-                          <DropdownMenuItem onClick={() => router.push(`/admin/register?edit=${member.phone}`)}>
-                            <ArrowUpRight className="mr-2 h-4 w-4" /> Edit Profile
-                          </DropdownMenuItem>
-                          <DropdownMenuItem onClick={() => setMemberForPT(member)}>
-                            <CreditCard className="mr-2 h-4 w-4" /> Add PT Session
-                          </DropdownMenuItem>
-                          <DropdownMenuSeparator />
-                          <DropdownMenuItem className="text-destructive focus:text-destructive" onClick={() => setMemberToDelete(member)}>
-                            <Trash2 className="mr-2 h-4 w-4" /> Delete Member
-                          </DropdownMenuItem>
-                        </DropdownMenuContent>
-                      </DropdownMenu>
-                    </TableCell>
-                  </TableRow>
-                ))
-              ) : (
-                <TableRow>
-                  <TableCell colSpan={6} className="h-24 text-center text-muted-foreground">
-                    No members found in directory.
+                      <span className="font-bold text-sm tracking-tight">{member.fullName}</span>
+                    </div>
+                  </TableCell>
+                  <TableCell className="font-mono text-xs opacity-40 tracking-tighter">{member.phone}</TableCell>
+                  <TableCell>
+                    <Badge variant={member.status === 'active' ? 'default' : 'secondary'} className={cn("rounded-sm px-2 text-[9px] font-black uppercase tracking-widest border-none", member.status === 'active' ? "bg-green-500/20 text-green-500" : "bg-white/5 text-white/40")}>
+                      {member.status}
+                    </Badge>
+                  </TableCell>
+                  <TableCell>
+                     <Badge variant="outline" className={cn("rounded-sm border-none bg-primary/10 text-primary text-[9px] font-black uppercase tracking-widest")}>{member.type}</Badge>
+                  </TableCell>
+                  <TableCell className="text-right pr-8">
+                    <DropdownMenu>
+                      <DropdownMenuTrigger asChild>
+                        <Button variant="ghost" size="icon" className="rounded-xl hover:bg-white/5">
+                          <MoreHorizontal className="h-4 w-4" />
+                        </Button>
+                      </DropdownMenuTrigger>
+                      <DropdownMenuContent align="end" className="w-56 bg-zinc-900 border-white/10 rounded-xl shadow-2xl">
+                        <DropdownMenuLabel className="text-[10px] uppercase font-black tracking-widest opacity-40 p-4">Member Control</DropdownMenuLabel>
+                        <DropdownMenuItem onClick={() => setMemberQrToShow(member)} className="p-3 gap-3 rounded-lg mx-1 cursor-pointer">
+                          <QrCode className="h-4 w-4 text-primary" /> View Entry QR
+                        </DropdownMenuItem>
+                        <DropdownMenuItem onClick={() => router.push(`/admin/register?edit=${member.phone}`)} className="p-3 gap-3 rounded-lg mx-1 cursor-pointer">
+                          <ArrowUpRight className="h-4 w-4" /> Edit Profile
+                        </DropdownMenuItem>
+                        <DropdownMenuItem onClick={() => setMemberForPT(member)} className="p-3 gap-3 rounded-lg mx-1 cursor-pointer">
+                          <CreditCard className="h-4 w-4" /> Add PT Session
+                        </DropdownMenuItem>
+                        <DropdownMenuSeparator className="bg-white/5" />
+                        <DropdownMenuItem className="p-3 gap-3 rounded-lg mx-1 text-destructive cursor-pointer" onClick={() => setMemberToDelete(member)}>
+                          <Trash2 className="h-4 w-4" /> Terminate Record
+                        </DropdownMenuItem>
+                      </DropdownMenuContent>
+                    </DropdownMenu>
                   </TableCell>
                 </TableRow>
-              )}
+              ))}
             </TableBody>
           </Table>
         </CardContent>
       </Card>
 
-      <AlertDialog open={!!memberToDelete} onOpenChange={() => setMemberToDelete(null)}>
-        <AlertDialogContent>
-          <AlertDialogHeader>
-            <AlertDialogTitle>Are you absolutely sure?</AlertDialogTitle>
-            <AlertDialogDescription>
-              This will permanently delete <b>{memberToDelete?.fullName}</b> and all their records. This action cannot be undone.
-            </AlertDialogDescription>
-          </AlertDialogHeader>
-          <AlertDialogFooter>
-            <AlertDialogCancel>Cancel</AlertDialogCancel>
-            <AlertDialogAction onClick={handleDeleteMember} className="bg-destructive hover:bg-destructive/90">
-              Delete Forever
-            </AlertDialogAction>
-          </AlertDialogFooter>
-        </AlertDialogContent>
-      </AlertDialog>
-
-      <Dialog open={!!memberForPT} onOpenChange={() => setMemberForPT(null)}>
-        <DialogContent className="sm:max-w-[425px]" onOpenAutoFocus={(e) => e.preventDefault()}>
-          <DialogHeader>
-            <DialogTitle>Add Personal Training</DialogTitle>
-            <DialogDescription>
-              Upgrade <b>{memberForPT?.fullName}</b> to Personal Training membership.
-            </DialogDescription>
+      {/* Member QR Dialog */}
+      <Dialog open={!!memberQrToShow} onOpenChange={() => setMemberQrToShow(null)}>
+        <DialogContent className="sm:max-w-md bg-zinc-900 border-white/10 rounded-3xl p-8">
+          <DialogHeader className="items-center text-center">
+            <div className="h-16 w-16 bg-primary/10 rounded-2xl flex items-center justify-center mb-4">
+              <QrCode className="h-8 w-8 text-primary" />
+            </div>
+            <DialogTitle className="text-2xl font-black font-headline tracking-tighter">MEMBER PASSPORT</DialogTitle>
+            <DialogDescription className="text-xs font-bold uppercase tracking-widest opacity-60">Digital Key for {memberQrToShow?.fullName}</DialogDescription>
           </DialogHeader>
-
-          {memberForPT?.status === 'non-active' && (
-            <Alert className="bg-accent/10 border-accent/20">
-              <Info className="h-4 w-4 text-accent" />
-              <AlertDescription className="text-xs italic">
-                Dates restricted to membership period: <br/>
-                <b>{memberForPT.startDate}</b> to <b>{memberForPT.endDate}</b>
-              </AlertDescription>
-            </Alert>
-          )}
-
-          <div className="grid gap-4 py-4">
-            <div className="grid gap-2">
-              <Label>PT Package Price (INR)</Label>
-              <div className="relative">
-                <span className="absolute left-3 top-2.5 text-muted-foreground">₹</span>
-                <Input 
-                  type="number" 
-                  className="pl-7" 
-                  placeholder="0.00" 
-                  value={ptPrice}
-                  onChange={(e) => setPtPrice(e.target.value)}
-                />
-              </div>
-            </div>
-            <div className="grid grid-cols-2 gap-4">
-              <div className="grid gap-2 flex flex-col">
-                <Label className="text-xs uppercase font-bold text-muted-foreground flex items-center gap-1 mb-1.5">
-                  <CalendarIcon className="h-3 w-3" /> Start
-                </Label>
-                <Popover open={isPtStartDateOpen} onOpenChange={setIsPtStartDateOpen}>
-                  <PopoverTrigger asChild>
-                    <Button
-                      variant={"outline"}
-                      className={cn(
-                        "w-full justify-start text-left font-normal",
-                        !ptStartDate && "text-muted-foreground"
-                      )}
-                    >
-                      {ptStartDate ? format(ptStartDate, "PPP") : <span>Pick a date</span>}
-                    </Button>
-                  </PopoverTrigger>
-                  <PopoverContent className="w-auto p-0 z-[60]" align="start">
-                    <Calendar
-                      mode="single"
-                      selected={ptStartDate}
-                      onSelect={(date) => {
-                        if (date) {
-                          setPtStartDate(date);
-                          setIsPtStartDateOpen(false);
-                        }
-                      }}
-                      disabled={isDateDisabled}
-                      initialFocus
-                    />
-                  </PopoverContent>
-                </Popover>
-              </div>
-              <div className="grid gap-2 flex flex-col">
-                <Label className="text-xs uppercase font-bold text-muted-foreground flex items-center gap-1 mb-1.5">
-                  <CalendarIcon className="h-3 w-3" /> End
-                </Label>
-                <Popover open={isPtEndDateOpen} onOpenChange={setIsPtEndDateOpen}>
-                  <PopoverTrigger asChild>
-                    <Button
-                      variant={"outline"}
-                      className={cn(
-                        "w-full justify-start text-left font-normal",
-                        !ptEndDate && "text-muted-foreground"
-                      )}
-                    >
-                      {ptEndDate ? format(ptEndDate, "PPP") : <span>Pick a date</span>}
-                    </Button>
-                  </PopoverTrigger>
-                  <PopoverContent className="w-auto p-0 z-[60]" align="start">
-                    <Calendar
-                      mode="single"
-                      selected={ptEndDate}
-                      onSelect={(date) => {
-                        if (date) {
-                          setPtEndDate(date);
-                          setIsPtEndDateOpen(false);
-                        }
-                      }}
-                      disabled={(date) => isDateDisabled(date) || (ptStartDate ? date < ptStartDate : false)}
-                      initialFocus
-                    />
-                  </PopoverContent>
-                </Popover>
-              </div>
-            </div>
+          <div className="flex flex-col items-center justify-center py-8 gap-8">
+             <div className="bg-white p-6 rounded-3xl shadow-[0_0_50px_-12px_rgba(255,255,255,0.3)]">
+                {memberQrToShow && (
+                  <QRCodeSVG 
+                    value={generateMemberQrPayload(memberQrToShow.phone)} 
+                    size={200}
+                    level="H"
+                    includeMargin={false}
+                  />
+                )}
+             </div>
+             <div className="text-center space-y-2">
+                <p className="text-[10px] font-black text-muted-foreground uppercase tracking-[0.4em]">Secure Dynamic Token</p>
+                <p className="text-xs font-mono opacity-40">{memberQrToShow?.phone}</p>
+             </div>
           </div>
-          <DialogFooter>
-            <Button variant="outline" onClick={() => setMemberForPT(null)}>Cancel</Button>
-            <Button onClick={handleAddPT} disabled={isUpdatingPT}>
-              {isUpdatingPT ? <Loader2 className="h-4 w-4 animate-spin mr-2" /> : <Plus className="h-4 w-4 mr-2" />}
-              Assign PT
+          <DialogFooter className="sm:justify-center">
+            <Button className="w-full h-14 rounded-2xl font-black text-lg shadow-xl shadow-primary/20" onClick={() => setMemberQrToShow(null)}>
+               <Download className="mr-2 h-5 w-5" /> EXPORT TO DEVICE
             </Button>
           </DialogFooter>
         </DialogContent>
       </Dialog>
+
+      <AlertDialog open={!!memberToDelete} onOpenChange={() => setMemberToDelete(null)}>
+        <AlertDialogContent className="bg-zinc-900 border-white/10 rounded-3xl p-8">
+          <AlertDialogHeader>
+            <AlertDialogTitle className="text-xl font-bold font-headline">Permanently Delete Record?</AlertDialogTitle>
+            <AlertDialogDescription>
+              This will remove all biometric and transaction data for <b>{memberToDelete?.fullName}</b>. This action is irreversible.
+            </AlertDialogDescription>
+          </AlertDialogHeader>
+          <AlertDialogFooter className="mt-6">
+            <AlertDialogCancel className="rounded-xl h-12">Cancel</AlertDialogCancel>
+            <AlertDialogAction onClick={handleDeleteMember} className="bg-destructive hover:bg-destructive/90 rounded-xl h-12">
+              Confirm Deletion
+            </AlertDialogAction>
+          </AlertDialogFooter>
+        </AlertDialogContent>
+      </AlertDialog>
     </div>
   );
 }

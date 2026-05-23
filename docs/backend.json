@@ -3,7 +3,7 @@
   "entities": {
     "Member": {
       "title": "Member",
-      "description": "A gym member profile with local face embeddings.",
+      "description": "A gym member profile with local face embeddings and QR tokens.",
       "type": "object",
       "properties": {
         "fullName": { "type": "string" },
@@ -12,19 +12,40 @@
         "type": { "type": "string", "enum": ["group", "personal"] },
         "startDate": { "type": "string", "format": "date" },
         "endDate": { "type": "string", "format": "date" },
-        "countOfDays": { "type": "number" },
+        "qrToken": { "type": "string", "description": "Secure dynamic QR payload" },
         "price": { "type": "number" },
-        "photoData": { "type": "string", "description": "Base64 photo data" },
+        "photoData": { "type": "string" },
         "faceEmbedding": { 
           "type": "array", 
-          "items": { "type": "number" }, 
-          "description": "128D face descriptor vector for local matching" 
+          "items": { "type": "number" }
         },
-        "description": { "type": "string" },
         "lastCheckIn": { "type": "string", "format": "date-time" },
         "createdAt": { "type": "string", "format": "date-time" }
       },
       "required": ["fullName", "phone", "status", "price"]
+    },
+    "GateControl": {
+      "title": "Gate Control",
+      "description": "Real-time commands for the physical gate relay.",
+      "type": "object",
+      "properties": {
+        "command": { "type": "string", "enum": ["OPEN", "CLOSE"] },
+        "timestamp": { "type": "string", "format": "date-time" },
+        "memberId": { "type": "string" },
+        "method": { "type": "string", "enum": ["face", "qr"] }
+      }
+    },
+    "Attendance": {
+      "title": "Attendance Log",
+      "description": "Historical record of entry attempts.",
+      "type": "object",
+      "properties": {
+        "memberId": { "type": "string" },
+        "memberName": { "type": "string" },
+        "timestamp": { "type": "string", "format": "date-time" },
+        "method": { "type": "string", "enum": ["face", "qr"] },
+        "score": { "type": "number" }
+      }
     },
     "Sale": {
       "title": "Sale",
@@ -35,10 +56,8 @@
         "memberName": { "type": "string" },
         "amount": { "type": "number" },
         "date": { "type": "string", "format": "date" },
-        "category": { "type": "string", "enum": ["membership", "personal training", "other"] },
-        "description": { "type": "string" }
-      },
-      "required": ["memberId", "amount", "date", "category"]
+        "category": { "type": "string", "enum": ["membership", "personal training", "other"] }
+      }
     }
   },
   "auth": {
@@ -47,11 +66,19 @@
   "firestore": {
     "/members/{phone}": {
       "schema": "#/backend/entities/Member",
-      "description": "Collection of gym members indexed by phone number."
+      "description": "Gym members indexed by phone."
+    },
+    "/gateControl/{commandId}": {
+      "schema": "#/backend/entities/GateControl",
+      "description": "Real-time gate command queue."
+    },
+    "/attendance/{logId}": {
+      "schema": "#/backend/entities/Attendance",
+      "description": "Historical entry logs."
     },
     "/sales/{saleId}": {
       "schema": "#/backend/entities/Sale",
-      "description": "Collection of sales transactions."
+      "description": "Transaction history."
     }
   }
 }
