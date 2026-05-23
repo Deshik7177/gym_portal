@@ -1,4 +1,3 @@
-
 'use client';
 
 import { useState, useRef, useEffect, useCallback } from 'react';
@@ -11,6 +10,8 @@ import {
   RefreshCw,
   AlertCircle,
   Loader2,
+  Camera,
+  Scan
 } from 'lucide-react';
 import { collection, query, updateDoc, doc, serverTimestamp, onSnapshot, addDoc } from 'firebase/firestore';
 import { useFirestore } from '@/firebase';
@@ -30,7 +31,7 @@ export default function SmartEntrancePage() {
   
   const [isCameraActive, setIsCameraActive] = useState(false);
   const [isProcessing, setIsProcessing] = useState(false);
-  const [feedback, setFeedback] = useState<string>('INITIALIZING...');
+  const [feedback, setFeedback] = useState<string>('READY TO SCAN');
   const [facingMode, setFacingMode] = useState<'user' | 'environment'>('environment');
   const [identifiedMember, setIdentifiedMember] = useState<any>(null);
   const [scanResult, setScanResult] = useState<'success' | 'failure' | null>(null);
@@ -40,13 +41,12 @@ export default function SmartEntrancePage() {
 
   const videoRef = useRef<HTMLVideoElement>(null);
   const canvasRef = useRef<HTMLCanvasElement>(null);
-  const scanLoopRef = useRef<number | null>(null);
   const isComponentMounted = useRef(true);
   
   const isProcessingRef = useRef(false);
   const cachedMembersRef = useRef<any[]>([]);
 
-  // Local Cache Sync - This ensures zero-latency lookup
+  // Local Cache Sync for instant lookup
   useEffect(() => {
     if (!db) return;
     setIsSyncing(true);
@@ -90,7 +90,6 @@ export default function SmartEntrancePage() {
       (videoRef.current.srcObject as MediaStream).getTracks().forEach(t => t.stop());
       videoRef.current.srcObject = null;
     }
-    if (scanLoopRef.current) cancelAnimationFrame(scanLoopRef.current);
   };
 
   useEffect(() => {
@@ -111,7 +110,7 @@ export default function SmartEntrancePage() {
 
     const memberId = member.id || member.phone;
     
-    // Log attendance
+    // Log attendance in background
     addDoc(collection(db, 'attendance'), {
       memberId: memberId,
       memberName: member.fullName,
@@ -120,12 +119,10 @@ export default function SmartEntrancePage() {
       latency: Math.round(latency)
     });
 
-    // Update member record
     updateDoc(doc(db, 'members', memberId), {
       lastCheckIn: serverTimestamp()
     });
 
-    // Pulse gate command
     addDoc(collection(db, 'gateControl'), {
       command: 'OPEN',
       timestamp: serverTimestamp(),
@@ -145,82 +142,69 @@ export default function SmartEntrancePage() {
         setIdentifiedMember(null);
         setIsProcessing(false);
         isProcessingRef.current = false;
-        setFeedback('READY');
+        setFeedback('READY TO SCAN');
       }
-    }, 2500);
+    }, 3000);
   }, [db]);
 
-  const runScanLoop = useCallback(async () => {
-    if (!videoRef.current || !isCameraActive || isProcessingRef.current || !isComponentMounted.current) {
-      scanLoopRef.current = requestAnimationFrame(runScanLoop);
-      return;
-    }
+  const captureAndScan = async () => {
+    if (!videoRef.current || isProcessingRef.current || !canvasRef.current) return;
 
     const video = videoRef.current;
-    if (video.readyState < 2 || video.videoWidth === 0) {
-      scanLoopRef.current = requestAnimationFrame(runScanLoop);
-      return;
-    }
+    if (video.readyState < 2) return;
 
-    if (canvasRef.current && isComponentMounted.current) {
-      const canvas = canvasRef.current;
-      const context = canvas.getContext('2d', { willReadFrequently: true });
-      
-      if (context) {
-        const startTime = performance.now();
+    const canvas = canvasRef.current;
+    const context = canvas.getContext('2d', { willReadFrequently: true });
+    
+    if (!context) return;
 
-        // High-fidelity full-frame scan
-        // We use a fixed width of 640 to maintain detail while reducing computation
-        const scale = 640 / video.videoWidth;
-        canvas.width = 640;
-        canvas.height = video.videoHeight * scale;
-        
-        // Disable smoothing to keep QR edges sharp
-        context.imageSmoothingEnabled = false;
-        
-        // Draw video frame to canvas
-        context.drawImage(video, 0, 0, canvas.width, canvas.height);
-        
-        // Get raw image data for decoding
-        const imageData = context.getImageData(0, 0, canvas.width, canvas.height);
-        
-        // Use jsQR to decode
-        const code = jsQR(imageData.data, imageData.width, imageData.height, {
-          inversionAttempts: "attemptBoth",
-        });
-        
-        if (code && code.data && isComponentMounted.current) {
-          const validated = validateQrPayload(code.data);
-          
-          if (validated.valid) {
-            const member = cachedMembersRef.current.find(m => 
-              m.phone === validated.memberId || m.id === validated.memberId
-            );
+    setIsProcessing(true);
+    setFeedback('ANALYZING...');
+    const startTime = performance.now();
 
-            if (member && member.status === 'active') {
-              triggerAccess(member, startTime);
-              return; // Stop scanning until reset
-            } else {
-              setFeedback(member ? 'EXPIRED MEMBERSHIP' : 'INVALID PASSPORT');
-            }
-          }
+    // High-fidelity capture
+    const scale = 640 / video.videoWidth;
+    canvas.width = 640;
+    canvas.height = video.videoHeight * scale;
+    context.imageSmoothingEnabled = false;
+    context.drawImage(video, 0, 0, canvas.width, canvas.height);
+    
+    const imageData = context.getImageData(0, 0, canvas.width, canvas.height);
+    const code = jsQR(imageData.data, imageData.width, imageData.height, {
+      inversionAttempts: "attemptBoth",
+    });
+
+    if (code && code.data) {
+      const validated = validateQrPayload(code.data);
+      if (validated.valid) {
+        const member = cachedMembersRef.current.find(m => 
+          m.phone === validated.memberId || m.id === validated.memberId
+        );
+
+        if (member && member.status === 'active') {
+          triggerAccess(member, startTime);
+          return;
         } else {
-          setFeedback('WAITING FOR PASSPORT');
+          setFeedback(member ? 'EXPIRED MEMBERSHIP' : 'INVALID PASSPORT');
+          setScanResult('failure');
         }
+      } else {
+        setFeedback('INVALID QR FORMAT');
+        setScanResult('failure');
       }
+    } else {
+      setFeedback('NO QR CODE DETECTED');
+      setScanResult('failure');
     }
 
-    scanLoopRef.current = requestAnimationFrame(runScanLoop);
-  }, [isCameraActive, triggerAccess]);
-
-  useEffect(() => {
-    if (isCameraActive) {
-      scanLoopRef.current = requestAnimationFrame(runScanLoop);
-    }
-    return () => {
-      if (scanLoopRef.current) cancelAnimationFrame(scanLoopRef.current);
-    };
-  }, [isCameraActive, runScanLoop]);
+    // Reset processing state after a short delay if no success
+    setTimeout(() => {
+      if (isComponentMounted.current) {
+        setIsProcessing(false);
+        setScanResult(null);
+      }
+    }, 1500);
+  };
 
   return (
     <div className="max-w-7xl mx-auto space-y-6 pb-20">
@@ -251,7 +235,7 @@ export default function SmartEntrancePage() {
                 autoPlay 
                 muted 
                 playsInline 
-                className={cn("w-full h-full object-cover transition-all duration-300", (scanResult === 'success' || isProcessing) ? "scale-110 blur-xl opacity-20" : "scale-100 opacity-90")} 
+                className={cn("w-full h-full object-cover transition-all duration-300", (scanResult === 'success') ? "scale-110 blur-xl opacity-20" : "scale-100 opacity-90")} 
               />
             ) : (
               <div className="flex flex-col items-center gap-6 text-muted-foreground/10">
@@ -262,10 +246,12 @@ export default function SmartEntrancePage() {
             
             {isCameraActive && !scanResult && (
               <div className="absolute bottom-12 left-1/2 -translate-x-1/2 w-full max-w-sm px-6">
-                <div className="bg-black/80 backdrop-blur-2xl border border-white/10 rounded-2xl p-6 shadow-2xl">
-                  <h3 className="text-xl font-headline font-bold text-white mb-2 uppercase tracking-tight text-center">{feedback}</h3>
+                <div className="bg-black/80 backdrop-blur-2xl border border-white/10 rounded-2xl p-6 shadow-2xl text-center">
+                  <h3 className={cn("text-xl font-headline font-bold mb-2 uppercase tracking-tight", isProcessing ? "text-primary" : "text-white")}>
+                    {feedback}
+                  </h3>
                   <div className="h-1 w-full bg-white/5 rounded-full overflow-hidden">
-                    <div className="h-full bg-primary w-full animate-pulse" />
+                    <div className={cn("h-full bg-primary w-full", isProcessing ? "animate-pulse" : "opacity-20")} />
                   </div>
                 </div>
               </div>
@@ -292,7 +278,7 @@ export default function SmartEntrancePage() {
                     <div className="absolute -top-1 -right-1 w-12 h-12 border-t-4 border-r-4 border-primary rounded-tr-xl" />
                     <div className="absolute -bottom-1 -left-1 w-12 h-12 border-b-4 border-l-4 border-primary rounded-bl-xl" />
                     <div className="absolute -bottom-1 -right-1 w-12 h-12 border-b-4 border-r-4 border-primary rounded-br-xl" />
-                    <div className="absolute top-1/2 left-0 right-0 h-0.5 bg-primary/30 animate-pulse shadow-[0_0_15px_rgba(var(--primary),0.5)]" />
+                    <div className={cn("absolute top-1/2 left-0 right-0 h-0.5 bg-primary/30 shadow-[0_0_15px_rgba(var(--primary),0.5)]", !isProcessing && "animate-pulse")} />
                  </div>
               </div>
             )}
@@ -302,25 +288,33 @@ export default function SmartEntrancePage() {
              <div className="flex flex-col sm:flex-row items-center justify-between gap-6">
                 <div className="flex items-center gap-6">
                    <div>
-                      <p className="text-[10px] font-black text-muted-foreground uppercase tracking-[0.5em] mb-2">Scanner Status</p>
+                      <p className="text-[10px] font-black text-muted-foreground uppercase tracking-[0.5em] mb-2">Scanner Mode</p>
                       <div className="flex items-center gap-4">
-                         <div className="h-3 w-3 rounded-full bg-green-500 animate-pulse shadow-[0_0_10px_rgba(34,197,94,1)]" />
-                         <span className="font-mono text-xs text-white/40 uppercase tracking-widest">OPTICAL ENGINE ONLINE</span>
-                      </div>
-                   </div>
-                   <div className="h-10 w-px bg-white/5 hidden sm:block" />
-                   <div className="hidden sm:block">
-                      <p className="text-[10px] font-black text-muted-foreground uppercase tracking-[0.5em] mb-2">Gate Status</p>
-                      <div className="flex items-center gap-2">
-                         <span className="font-mono text-xs text-primary uppercase tracking-widest">READY FOR TRIGGER</span>
+                         <div className={cn("h-3 w-3 rounded-full", isCameraActive ? "bg-green-500 animate-pulse shadow-[0_0_10px_rgba(34,197,94,1)]" : "bg-zinc-800")} />
+                         <span className="font-mono text-xs text-white/40 uppercase tracking-widest">
+                           {isCameraActive ? 'OPTICAL SENSORS ACTIVE' : 'SENSORS OFFLINE'}
+                         </span>
                       </div>
                    </div>
                 </div>
-                {!isCameraActive && (
-                  <Button size="lg" onClick={() => setIsCameraActive(true)} className="w-full sm:px-16 font-black h-16 text-xl rounded-2xl shadow-2xl shadow-primary/20 uppercase">
-                      Start Scanning
-                  </Button>
-                )}
+                
+                <div className="flex gap-4 w-full sm:w-auto">
+                  {!isCameraActive ? (
+                    <Button size="lg" onClick={() => setIsCameraActive(true)} className="flex-1 sm:px-12 font-black h-16 text-xl rounded-2xl shadow-2xl shadow-primary/20 uppercase">
+                        <Camera className="mr-3 h-6 w-6" /> Start Camera
+                    </Button>
+                  ) : (
+                    <Button 
+                      size="lg" 
+                      onClick={captureAndScan} 
+                      disabled={isProcessing}
+                      className="flex-1 sm:px-16 font-black h-16 text-xl rounded-2xl shadow-2xl shadow-primary/40 bg-white text-black hover:bg-white/90 uppercase"
+                    >
+                      {isProcessing ? <Loader2 className="h-6 w-6 animate-spin" /> : <Scan className="mr-3 h-6 w-6" />}
+                      Analyze Frame
+                    </Button>
+                  )}
+                </div>
              </div>
           </CardContent>
         </Card>
@@ -360,7 +354,7 @@ export default function SmartEntrancePage() {
              <AlertCircle className="h-5 w-5 text-primary mt-0.5" />
              <div className="space-y-1">
                 <p className="text-[10px] font-black uppercase tracking-widest text-primary">Scanning Tip</p>
-                <p className="text-[11px] text-muted-foreground leading-relaxed">Hold your phone steady about 6-10 inches from the camera lens for optimal detection.</p>
+                <p className="text-[11px] text-muted-foreground leading-relaxed">Align the QR code within the central square and tap <b>Analyze Frame</b>. Ensure there is no direct glare on the screen.</p>
              </div>
           </div>
         </div>
