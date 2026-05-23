@@ -15,7 +15,8 @@ import {
   Download,
   Filter,
   X,
-  RefreshCw
+  RefreshCw,
+  UserCheck
 } from 'lucide-react';
 import { collection, query, doc, deleteDoc, updateDoc, serverTimestamp, addDoc } from 'firebase/firestore';
 import { useFirestore, useCollection } from '@/firebase';
@@ -103,6 +104,7 @@ export default function MembersListPage() {
   const [memberQrToShow, setMemberQrToShow] = useState<any>(null);
   const [isUpdatingPT, setIsUpdatingPT] = useState(false);
   const [dynamicQrPayload, setDynamicQrPayload] = useState('');
+  const [isProcessingCheckIn, setIsProcessingCheckIn] = useState<string | null>(null);
   
   // PT Dialog States
   const [ptPrice, setPtPrice] = useState('');
@@ -162,6 +164,45 @@ export default function MembersListPage() {
         toast({ title: "Member Removed" });
         setMemberToDelete(null);
       });
+  };
+
+  const handleManualCheckIn = async (member: any) => {
+    if (!db || isProcessingCheckIn) return;
+    
+    setIsProcessingCheckIn(member.phone);
+    
+    try {
+      const timestamp = serverTimestamp();
+      
+      // 1. Update Member
+      updateDoc(doc(db, 'members', member.phone), {
+        lastCheckIn: timestamp,
+        updatedAt: timestamp
+      });
+
+      // 2. Log Attendance
+      addDoc(collection(db, 'attendance'), {
+        memberId: member.phone,
+        memberName: member.fullName,
+        timestamp: timestamp,
+        method: 'manual',
+        score: 1.0,
+        staffAction: true
+      });
+
+      toast({
+        title: "Check-In Recorded",
+        description: `Manual attendance logged for ${member.fullName}.`
+      });
+    } catch (e: any) {
+      toast({
+        variant: "destructive",
+        title: "Check-In Failed",
+        description: "Could not record attendance."
+      });
+    } finally {
+      setIsProcessingCheckIn(null);
+    }
   };
 
   const handleExportQr = () => {
@@ -354,11 +395,17 @@ export default function MembersListPage() {
                     <DropdownMenu>
                       <DropdownMenuTrigger asChild>
                         <Button variant="ghost" size="icon" className="rounded-xl hover:bg-white/5">
-                          <MoreHorizontal className="h-4 w-4" />
+                          {isProcessingCheckIn === member.phone ? <Loader2 className="h-4 w-4 animate-spin text-primary" /> : <MoreHorizontal className="h-4 w-4" />}
                         </Button>
                       </DropdownMenuTrigger>
                       <DropdownMenuContent align="end" className="w-56 bg-zinc-900 border-white/10 rounded-xl shadow-2xl">
                         <DropdownMenuLabel className="text-[10px] uppercase font-black tracking-widest opacity-40 p-4">Member Control</DropdownMenuLabel>
+                        <DropdownMenuItem 
+                          onSelect={() => handleManualCheckIn(member)}
+                          className="p-3 gap-3 rounded-lg mx-1 cursor-pointer text-green-500"
+                        >
+                          <UserCheck className="h-4 w-4" /> Manual Check-In
+                        </DropdownMenuItem>
                         <DropdownMenuItem 
                           onSelect={(e) => { e.preventDefault(); setTimeout(() => setMemberQrToShow(member), 10); }} 
                           className="p-3 gap-3 rounded-lg mx-1 cursor-pointer"
