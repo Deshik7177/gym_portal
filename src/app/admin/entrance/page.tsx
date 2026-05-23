@@ -12,7 +12,7 @@ import {
   History,
   Cloud,
   ShieldCheck,
-  AlertCircle
+  Timer
 } from 'lucide-react';
 import { collection, query, updateDoc, doc, serverTimestamp, onSnapshot, addDoc } from 'firebase/firestore';
 import { useFirestore } from '@/firebase';
@@ -43,11 +43,13 @@ export default function SmartEntrancePage() {
   const [recentLogs, setRecentLogs] = useState<any[]>([]);
   const [cachedMembers, setCachedMembers] = useState<any[]>([]);
   const [isSyncing, setIsSyncing] = useState(false);
+  const [lastLatency, setLastLatency] = useState<number>(0);
 
   const videoRef = useRef<HTMLVideoElement>(null);
   const canvasRef = useRef<HTMLCanvasElement>(null);
   const scanLoopRef = useRef<number | null>(null);
   const isComponentMounted = useRef(true);
+  const scanStartTimeRef = useRef<number>(0);
 
   // Sync Member Cache
   useEffect(() => {
@@ -100,6 +102,9 @@ export default function SmartEntrancePage() {
   const triggerAccess = useCallback(async (member: any, method: 'face' | 'qr', score: number = 1) => {
     if (!db || !member || isProcessing) return;
     
+    const latency = performance.now() - scanStartTimeRef.current;
+    setLastLatency(Math.round(latency));
+    
     setIsProcessing(true);
     setScanResult('success');
     setIdentifiedMember(member);
@@ -111,7 +116,8 @@ export default function SmartEntrancePage() {
         memberName: member.fullName,
         timestamp: serverTimestamp(),
         method,
-        score
+        score,
+        latency: Math.round(latency)
       });
 
       // 2. Update Last Check-in
@@ -158,6 +164,10 @@ export default function SmartEntrancePage() {
       return;
     }
 
+    if (scanStartTimeRef.current === 0) {
+      scanStartTimeRef.current = performance.now();
+    }
+
     if (authMode === 'face' && modelsReady) {
       try {
         const detection = await faceapi.detectSingleFace(video, new faceapi.SsdMobilenetv1Options({ minConfidence: 0.6 }))
@@ -170,6 +180,7 @@ export default function SmartEntrancePage() {
           
           if (bestMatch && distance < 0.55) {
             triggerAccess(bestMatch, 'face', 1 - distance);
+            scanStartTimeRef.current = 0;
             return;
           } else {
             setFeedback('ID NOT FOUND - TRY QR OR RE-ALIGN');
@@ -203,6 +214,7 @@ export default function SmartEntrancePage() {
               const member = cachedMembers.find(m => m.phone === validated.memberId || m.id === validated.memberId);
               if (member) {
                 triggerAccess(member, 'qr');
+                scanStartTimeRef.current = 0;
                 return;
               } else {
                 setFeedback('INVALID QR TOKEN');
@@ -299,8 +311,11 @@ export default function SmartEntrancePage() {
                    <div className="absolute inset-0 bg-primary/20 blur-[100px] animate-pulse rounded-full" />
                    <CheckCircle2 className="h-56 w-56 text-primary relative drop-shadow-[0_0_50px_rgba(var(--primary),0.8)]" />
                 </div>
-                <h2 className="text-8xl font-black font-headline text-white mb-2 tracking-tighter italic">WELCOME</h2>
-                <p className="text-4xl text-primary font-black uppercase tracking-tight border-b-4 border-primary pb-2">{identifiedMember.fullName}</p>
+                <h2 className="text-8xl font-black font-headline text-white mb-2 tracking-tighter italic uppercase">Welcome</h2>
+                <p className="text-4xl text-primary font-black uppercase tracking-tight border-b-4 border-primary pb-2 mb-4">{identifiedMember.fullName}</p>
+                <Badge variant="outline" className="bg-white/10 border-white/20 text-white font-mono text-[10px] tracking-widest px-4 py-1">
+                  <Timer className="h-3 w-3 mr-2 text-primary" /> VERIFIED IN {lastLatency}ms
+                </Badge>
               </div>
             )}
 
@@ -348,6 +363,7 @@ export default function SmartEntrancePage() {
                             setScanResult(null); 
                             setIsProcessing(false);
                             setFeedback('SCANNER RESET');
+                            scanStartTimeRef.current = 0;
                           }}
                           className="flex-1 h-16 rounded-2xl font-bold bg-white/5 hover:bg-white/10"
                         >
