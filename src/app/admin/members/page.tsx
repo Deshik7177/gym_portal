@@ -17,13 +17,14 @@ import {
   X,
   UserCheck,
   History,
-  ShieldAlert
+  ShieldAlert,
+  CalendarDays
 } from 'lucide-react';
 import { collection, query, doc, deleteDoc, updateDoc, serverTimestamp, addDoc, where, orderBy, limit } from 'firebase/firestore';
 import { useFirestore, useCollection, useProfile } from '@/firebase';
 import Link from 'next/link';
 import { useRouter } from 'next/navigation';
-import { format, startOfDay, isToday } from 'date-fns';
+import { format, startOfDay, isToday, parseISO } from 'date-fns';
 import { QRCodeCanvas } from 'qrcode.react';
 import { generateMemberQrPayload } from '@/lib/qr-logic';
 
@@ -258,6 +259,15 @@ export default function MembersListPage() {
 
   if (loading || profileLoading) return <div className="flex h-60 w-full items-center justify-center"><Loader2 className="h-8 w-8 animate-spin text-primary" /></div>;
 
+  // Helpers for PT date restrictions
+  const ptLimits = useMemo(() => {
+    if (!memberForPT) return null;
+    return {
+      start: memberForPT.startDate ? parseISO(memberForPT.startDate) : today,
+      end: memberForPT.endDate ? parseISO(memberForPT.endDate) : undefined
+    };
+  }, [memberForPT, today]);
+
   return (
     <div className="flex flex-col gap-6">
       <div className="flex flex-col md:flex-row justify-between items-start md:items-center gap-4">
@@ -358,9 +368,9 @@ export default function MembersListPage() {
             <TableHeader className="bg-white/[0.02]">
               <TableRow className="border-white/5">
                 <TableHead className="pl-8 font-black uppercase text-[9px] tracking-[0.3em]">Member</TableHead>
+                <TableHead className="font-black uppercase text-[9px] tracking-[0.3em]">Category & Status</TableHead>
+                <TableHead className="font-black uppercase text-[9px] tracking-[0.3em]">Membership Term</TableHead>
                 <TableHead className="font-black uppercase text-[9px] tracking-[0.3em]">Phone ID</TableHead>
-                <TableHead className="font-black uppercase text-[9px] tracking-[0.3em]">Status</TableHead>
-                <TableHead className="font-black uppercase text-[9px] tracking-[0.3em]">Category</TableHead>
                 <TableHead className="text-right pr-8 font-black uppercase text-[9px] tracking-[0.3em]">Control</TableHead>
               </TableRow>
             </TableHeader>
@@ -375,15 +385,32 @@ export default function MembersListPage() {
                       <span className="font-bold text-sm tracking-tight">{member.fullName}</span>
                     </div>
                   </TableCell>
+                  <TableCell>
+                    <div className="flex flex-col gap-1.5">
+                      <div className="flex items-center gap-2">
+                        <Badge variant={member.status === 'active' ? 'default' : 'secondary'} className={cn("rounded-sm px-2 text-[8px] font-black uppercase tracking-widest border-none h-4", member.status === 'active' ? "bg-green-500/20 text-green-500" : "bg-white/5 text-white/40")}>
+                          {member.status}
+                        </Badge>
+                        <Badge variant="outline" className={cn("rounded-sm border-none bg-primary/10 text-primary text-[8px] font-black uppercase tracking-widest h-4")}>{member.type}</Badge>
+                      </div>
+                    </div>
+                  </TableCell>
+                  <TableCell>
+                    <div className="flex items-center gap-3 text-[10px] font-bold">
+                       <div className="flex flex-col">
+                          <span className="text-muted-foreground uppercase text-[8px] opacity-40">Starts</span>
+                          <span className="text-white/80">{member.startDate ? format(parseISO(member.startDate), 'MMM dd, yyyy') : 'N/A'}</span>
+                       </div>
+                       <div className="w-px h-6 bg-white/5" />
+                       <div className="flex flex-col">
+                          <span className="text-muted-foreground uppercase text-[8px] opacity-40">Ends</span>
+                          <span className={cn(member.endDate && parseISO(member.endDate) < today ? "text-destructive" : "text-white/80")}>
+                            {member.endDate ? format(parseISO(member.endDate), 'MMM dd, yyyy') : 'N/A'}
+                          </span>
+                       </div>
+                    </div>
+                  </TableCell>
                   <TableCell className="font-mono text-xs opacity-40 tracking-tighter">{member.phone}</TableCell>
-                  <TableCell>
-                    <Badge variant={member.status === 'active' ? 'default' : 'secondary'} className={cn("rounded-sm px-2 text-[9px] font-black uppercase tracking-widest border-none", member.status === 'active' ? "bg-green-500/20 text-green-500" : "bg-white/5 text-white/40")}>
-                      {member.status}
-                    </Badge>
-                  </TableCell>
-                  <TableCell>
-                     <Badge variant="outline" className={cn("rounded-sm border-none bg-primary/10 text-primary text-[9px] font-black uppercase tracking-widest")}>{member.type}</Badge>
-                  </TableCell>
                   <TableCell className="text-right pr-8">
                     <DropdownMenu>
                       <DropdownMenuTrigger asChild>
@@ -419,6 +446,7 @@ export default function MembersListPage() {
         </CardContent>
       </Card>
 
+      {/* Entry History Dialog */}
       <Dialog open={!!memberForHistory} onOpenChange={(open) => !open && setMemberForHistory(null)}>
         <DialogContent className="sm:max-w-lg bg-zinc-900 border-white/10 rounded-3xl p-6">
           <DialogHeader className="mb-4">
@@ -483,6 +511,7 @@ export default function MembersListPage() {
         </DialogContent>
       </Dialog>
 
+      {/* QR Passport Dialog */}
       <Dialog open={!!memberQrToShow} onOpenChange={(open) => !open && setMemberQrToShow(null)}>
         <DialogContent className="sm:max-w-md bg-zinc-900 border-white/10 rounded-3xl p-6">
           <div className="flex flex-col items-center text-center gap-4">
@@ -513,6 +542,7 @@ export default function MembersListPage() {
         </DialogContent>
       </Dialog>
 
+      {/* PT Session Dialog with Restricted Dates */}
       <Dialog open={!!memberForPT} onOpenChange={(open) => !open && setMemberForPT(null)}>
         <DialogContent className="sm:max-w-md bg-zinc-900 border-white/10 rounded-3xl p-8">
           <DialogHeader>
@@ -521,6 +551,21 @@ export default function MembersListPage() {
             </DialogTitle>
             <DialogDescription className="text-xs font-bold uppercase tracking-widest opacity-60">For {memberForPT?.fullName}</DialogDescription>
           </DialogHeader>
+
+          {memberForPT && (
+            <div className="bg-primary/5 border border-primary/10 p-3 rounded-xl mb-4 flex items-center gap-3">
+               <CalendarDays className="h-4 w-4 text-primary" />
+               <div className="text-[10px]">
+                  <p className="font-black uppercase tracking-widest opacity-40">Membership Window</p>
+                  <p className="font-bold text-white/80">
+                    {memberForPT.startDate ? format(parseISO(memberForPT.startDate), 'MMM dd, yyyy') : 'N/A'} 
+                    <span className="mx-2">→</span>
+                    {memberForPT.endDate ? format(parseISO(memberForPT.endDate), 'MMM dd, yyyy') : 'N/A'}
+                  </p>
+               </div>
+            </div>
+          )}
+
           <div className="space-y-6 py-6">
             <div className="space-y-2">
               <Label className="text-[10px] uppercase font-black tracking-widest opacity-40">Package Price (INR)</Label>
@@ -539,7 +584,21 @@ export default function MembersListPage() {
                       {ptStartDate ? format(ptStartDate, "MMM dd") : "Pick"}
                     </Button>
                   </PopoverTrigger>
-                  <PopoverContent className="w-auto p-0" align="start"><Calendar mode="single" selected={ptStartDate} onSelect={(date) => { setPtStartDate(date); setIsPtStartDateOpen(false); }} disabled={(date) => date < today} /></PopoverContent>
+                  <PopoverContent className="w-auto p-0" align="start">
+                    <Calendar 
+                      mode="single" 
+                      selected={ptStartDate} 
+                      onSelect={(date) => { setPtStartDate(date); setIsPtStartDateOpen(false); }} 
+                      disabled={(date) => {
+                        if (!ptLimits) return false;
+                        // PT must be within membership start/end AND >= today
+                        const isBeforeMembership = date < ptLimits.start;
+                        const isAfterMembership = ptLimits.end ? date > ptLimits.end : false;
+                        const isBeforeToday = date < today;
+                        return isBeforeMembership || isAfterMembership || isBeforeToday;
+                      }}
+                    />
+                  </PopoverContent>
                 </Popover>
               </div>
               <div className="space-y-2">
@@ -551,7 +610,20 @@ export default function MembersListPage() {
                       {ptEndDate ? format(ptEndDate, "MMM dd") : "Pick"}
                     </Button>
                   </PopoverTrigger>
-                  <PopoverContent className="w-auto p-0" align="start"><Calendar mode="single" selected={ptEndDate} onSelect={(date) => { setPtEndDate(date); setIsPtEndDateOpen(false); }} disabled={(date) => date < (ptStartDate || today)} /></PopoverContent>
+                  <PopoverContent className="w-auto p-0" align="start">
+                    <Calendar 
+                      mode="single" 
+                      selected={ptEndDate} 
+                      onSelect={(date) => { setPtEndDate(date); setIsPtEndDateOpen(false); }} 
+                      disabled={(date) => {
+                        if (!ptLimits) return false;
+                        // PT end must be within membership AND >= PT start
+                        const isBeforePtStart = date < (ptStartDate || today);
+                        const isAfterMembership = ptLimits.end ? date > ptLimits.end : false;
+                        return isBeforePtStart || isAfterMembership;
+                      }}
+                    />
+                  </PopoverContent>
                 </Popover>
               </div>
             </div>
