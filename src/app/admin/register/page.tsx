@@ -3,7 +3,7 @@
 import { useState, useEffect, Suspense, useMemo } from 'react';
 import { useSearchParams, useRouter } from 'next/navigation';
 import { Search, CheckCircle2, Loader2, Info, Calendar as CalendarIcon, Clock, FileText } from 'lucide-react';
-import { doc, setDoc, getDoc, serverTimestamp, collection, addDoc } from 'firebase/firestore';
+import { doc, setDoc, getDoc, serverTimestamp } from 'firebase/firestore';
 import { useFirestore } from '@/firebase';
 import { errorEmitter } from '@/firebase/error-emitter';
 import { FirestorePermissionError, type SecurityRuleContext } from '@/firebase/errors';
@@ -162,12 +162,10 @@ function RegisterForm() {
           updatedAt: serverTimestamp()
         };
 
-        // If it's a new registration, we also set the createdAt
         if (!isEditMode) {
           (saleData as any).createdAt = serverTimestamp();
         }
 
-        // Use setDoc with a fixed ID to overwrite instead of creating duplicates
         setDoc(doc(db, 'sales', saleId), saleData, { merge: true })
           .catch((err) => {
              console.warn("Sale log failed, but member saved:", err);
@@ -178,7 +176,11 @@ function RegisterForm() {
           description: "Records have been updated in the cloud ledger." 
         });
         
-        if (!isEditMode) resetForm();
+        if (isEditMode) {
+          router.push('/admin/members');
+        } else {
+          resetForm();
+        }
         setLoading(false);
       })
       .catch(async (err: any) => {
