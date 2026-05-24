@@ -13,6 +13,10 @@ export interface UserProfile {
   name: string;
 }
 
+/**
+ * Core RBAC Hook
+ * Fetches the user's role from Firestore based on their Auth UID.
+ */
 export function useProfile() {
   const { user, loading: userLoading } = useUser();
   const db = useFirestore();
