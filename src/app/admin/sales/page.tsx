@@ -1,4 +1,3 @@
-
 'use client';
 
 import { useState, useMemo } from 'react';
@@ -14,9 +13,11 @@ import {
   TrendingUp,
   History,
   Trash2,
-  MoreHorizontal
+  MoreHorizontal,
+  Edit3,
+  CheckCircle2
 } from 'lucide-react';
-import { collection, query, orderBy, doc, deleteDoc } from 'firebase/firestore';
+import { collection, query, orderBy, doc, deleteDoc, updateDoc, serverTimestamp } from 'firebase/firestore';
 import { useFirestore, useCollection, useProfile } from '@/firebase';
 import { format, startOfDay, endOfDay, parseISO } from 'date-fns';
 
@@ -54,9 +55,21 @@ import {
   DropdownMenuItem,
   DropdownMenuTrigger,
 } from '@/components/ui/dropdown-menu';
+import {
+  Dialog,
+  DialogContent,
+  DialogDescription,
+  DialogFooter,
+  DialogHeader,
+  DialogTitle,
+} from "@/components/ui/dialog";
+import { Label } from '@/components/ui/label';
+import { Textarea } from '@/components/ui/textarea';
 import { cn } from '@/lib/utils';
 import { Badge } from '@/components/ui/badge';
 import { useToast } from '@/hooks/use-toast';
+import { errorEmitter } from '@/firebase/error-emitter';
+import { FirestorePermissionError } from '@/firebase/errors';
 
 export default function SalesReportPage() {
   const db = useFirestore();
@@ -70,6 +83,13 @@ export default function SalesReportPage() {
   const [dateTo, setDateTo] = useState<Date | undefined>(undefined);
   const [isFromOpen, setIsFromOpen] = useState(false);
   const [isToOpen, setIsToOpen] = useState(false);
+
+  // Edit Sale State
+  const [editingSale, setEditingSale] = useState<any>(null);
+  const [editAmount, setEditAmount] = useState('');
+  const [editCategory, setEditCategory] = useState('');
+  const [editDescription, setEditDescription] = useState('');
+  const [isSaving, setIsSaving] = useState(false);
 
   const salesRef = useMemo(() => {
     if (!db) return null;
@@ -108,6 +128,39 @@ export default function SalesReportPage() {
       toast({ title: "Transaction Voided", description: "The entry has been removed from the ledger." });
     } catch (e: any) {
       toast({ variant: "destructive", title: "Action Denied", description: "Only admins can void transactions." });
+    }
+  };
+
+  const handleOpenEdit = (sale: any) => {
+    setEditingSale(sale);
+    setEditAmount(sale.amount?.toString() || '');
+    setEditCategory(sale.category || '');
+    setEditDescription(sale.description || '');
+  };
+
+  const handleSaveEdit = async () => {
+    if (!db || !editingSale || !isAdmin) return;
+    setIsSaving(true);
+    
+    const updateData = {
+      amount: parseFloat(editAmount) || 0,
+      category: editCategory,
+      description: editDescription,
+      updatedAt: serverTimestamp()
+    };
+
+    try {
+      await updateDoc(doc(db, 'sales', editingSale.id), updateData);
+      toast({ title: "Transaction Updated", description: "Changes saved to the ledger." });
+      setEditingSale(null);
+    } catch (e: any) {
+      errorEmitter.emit('permission-error', new FirestorePermissionError({
+        path: `sales/${editingSale.id}`,
+        operation: 'update',
+        requestResourceData: updateData
+      }));
+    } finally {
+      setIsSaving(false);
     }
   };
 
@@ -291,8 +344,11 @@ export default function SalesReportPage() {
                                       <MoreHorizontal className="h-3 w-3" />
                                    </Button>
                                  </DropdownMenuTrigger>
-                                 <DropdownMenuContent align="end" className="bg-zinc-900 border-white/10">
-                                   <DropdownMenuItem onSelect={() => handleDeleteSale(sale.id)} className="text-destructive gap-2">
+                                 <DropdownMenuContent align="end" className="bg-zinc-900 border-white/10 rounded-xl">
+                                   <DropdownMenuItem onSelect={() => handleOpenEdit(sale)} className="gap-2 cursor-pointer">
+                                     <Edit3 className="h-3 w-3 text-primary" /> Edit Transaction
+                                   </DropdownMenuItem>
+                                   <DropdownMenuItem onSelect={() => handleDeleteSale(sale.id)} className="text-destructive gap-2 cursor-pointer">
                                      <Trash2 className="h-3 w-3" /> Void Transaction
                                    </DropdownMenuItem>
                                  </DropdownMenuContent>
@@ -334,6 +390,65 @@ export default function SalesReportPage() {
           </CardContent>
         </Card>
       </div>
+
+      {/* Admin Edit Dialog */}
+      <Dialog open={!!editingSale} onOpenChange={(open) => !open && setEditingSale(null)}>
+        <DialogContent className="sm:max-w-md bg-zinc-900 border-white/10 rounded-3xl p-8">
+          <DialogHeader>
+            <DialogTitle className="text-2xl font-black font-headline tracking-tighter text-primary flex items-center gap-3">
+              <Edit3 className="h-6 w-6" /> EDIT TRANSACTION
+            </DialogTitle>
+            <DialogDescription className="text-xs font-bold uppercase tracking-widest opacity-60">
+              Update record for {editingSale?.memberName}
+            </DialogDescription>
+          </DialogHeader>
+          <div className="space-y-6 py-6">
+            <div className="space-y-2">
+              <Label className="text-[10px] uppercase font-black tracking-widest opacity-40">Amount (INR)</Label>
+              <div className="relative">
+                <span className="absolute left-4 top-1/2 -translate-y-1/2 text-primary font-black">₹</span>
+                <Input 
+                  type="number" 
+                  className="pl-8 h-12 bg-black/20 border-white/10 font-bold text-lg" 
+                  value={editAmount} 
+                  onChange={(e) => setEditAmount(e.target.value)} 
+                />
+              </div>
+            </div>
+            <div className="space-y-2">
+              <Label className="text-[10px] uppercase font-black tracking-widest opacity-40">Category</Label>
+              <Select value={editCategory} onValueChange={setEditCategory}>
+                <SelectTrigger className="h-12 bg-black/20 border-white/10">
+                  <SelectValue />
+                </SelectTrigger>
+                <SelectContent>
+                  <SelectItem value="membership">Membership</SelectItem>
+                  <SelectItem value="personal training">Personal Training</SelectItem>
+                  <SelectItem value="other">Other</SelectItem>
+                </SelectContent>
+              </Select>
+            </div>
+            <div className="space-y-2">
+              <Label className="text-[10px] uppercase font-black tracking-widest opacity-40">Audit Memo</Label>
+              <Textarea 
+                className="bg-black/20 border-white/10 min-h-[80px]" 
+                value={editDescription} 
+                onChange={(e) => setEditDescription(e.target.value)} 
+              />
+            </div>
+          </div>
+          <DialogFooter>
+            <Button className="w-full h-14 rounded-2xl font-black text-lg shadow-xl shadow-primary/20" onClick={handleSaveEdit} disabled={isSaving}>
+              {isSaving ? <Loader2 className="h-5 w-5 animate-spin" /> : (
+                <>
+                  <CheckCircle2 className="mr-2 h-5 w-5" />
+                  COMMIT CHANGES
+                </>
+              )}
+            </Button>
+          </DialogFooter>
+        </DialogContent>
+      </Dialog>
     </div>
   );
 }
