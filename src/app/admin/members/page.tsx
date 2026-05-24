@@ -152,6 +152,15 @@ export default function MembersListPage() {
     };
   }, [members]);
 
+  // Helpers for PT date restrictions (Moved up to follow Rules of Hooks)
+  const ptLimits = useMemo(() => {
+    if (!memberForPT) return null;
+    return {
+      start: memberForPT.startDate ? parseISO(memberForPT.startDate) : today,
+      end: memberForPT.endDate ? parseISO(memberForPT.endDate) : undefined
+    };
+  }, [memberForPT, today]);
+
   const handleDeleteMember = () => {
     if (!db || !memberToDelete || !isAdmin) return;
     deleteDoc(doc(db, 'members', memberToDelete.phone))
@@ -258,15 +267,6 @@ export default function MembersListPage() {
   };
 
   if (loading || profileLoading) return <div className="flex h-60 w-full items-center justify-center"><Loader2 className="h-8 w-8 animate-spin text-primary" /></div>;
-
-  // Helpers for PT date restrictions
-  const ptLimits = useMemo(() => {
-    if (!memberForPT) return null;
-    return {
-      start: memberForPT.startDate ? parseISO(memberForPT.startDate) : today,
-      end: memberForPT.endDate ? parseISO(memberForPT.endDate) : undefined
-    };
-  }, [memberForPT, today]);
 
   return (
     <div className="flex flex-col gap-6">
