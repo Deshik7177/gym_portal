@@ -121,6 +121,43 @@ export default function SalesReportPage() {
     return filteredSales.reduce((acc, s) => acc + (s.amount || 0), 0);
   }, [filteredSales]);
 
+  const handleExport = () => {
+    if (filteredSales.length === 0) {
+      toast({ title: "No data to export", description: "Adjust your filters to include transactions." });
+      return;
+    }
+
+    // CSV structure
+    const headers = ["Date", "Member Name", "Category", "Amount", "Description"];
+    const rows = filteredSales.map(s => [
+      s.date || '',
+      `"${s.memberName || ''}"`, // Wrap in quotes for CSV safety
+      s.category || '',
+      s.amount || 0,
+      `"${(s.description || '').replace(/"/g, '""')}"` // Escape quotes and wrap
+    ]);
+
+    const csvContent = [
+      headers.join(','),
+      ...rows.map(row => row.join(','))
+    ].join('\n');
+
+    const blob = new Blob([csvContent], { type: 'text/csv;charset=utf-8;' });
+    const url = URL.createObjectURL(blob);
+    const link = document.createElement("a");
+    link.setAttribute("href", url);
+    link.setAttribute("download", `ThriveFit_Sales_${format(new Date(), 'yyyy-MM-dd')}.csv`);
+    link.style.visibility = 'hidden';
+    document.body.appendChild(link);
+    link.click();
+    document.body.removeChild(link);
+    
+    toast({ 
+      title: "Export Successful", 
+      description: `Ledger with ${filteredSales.length} entries has been downloaded.` 
+    });
+  };
+
   const handleDeleteSale = async (saleId: string) => {
     if (!db || !isAdmin) return;
     try {
@@ -198,7 +235,7 @@ export default function SalesReportPage() {
             <span className="text-[9px] font-black text-primary/60 uppercase tracking-widest mb-1">Total Settled Revenue</span>
             <span className="text-4xl font-black text-white tabular-nums">₹{totalRevenue.toLocaleString()}</span>
           </div>
-          <Button variant="default" className="h-12 px-6 font-bold shadow-xl shadow-primary/10">
+          <Button onClick={handleExport} variant="default" className="h-12 px-6 font-bold shadow-xl shadow-primary/10">
             <Download className="mr-2 h-4 w-4" /> EXPORT
           </Button>
         </div>
