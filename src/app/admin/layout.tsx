@@ -17,8 +17,7 @@ import {
   WifiOff,
   Scan,
   ShieldCheck,
-  History,
-  ShieldHalf
+  History
 } from 'lucide-react';
 
 import { Button } from '@/components/ui/button';
@@ -70,10 +69,6 @@ export default function ReceptionLayout({ children }: { children: React.ReactNod
     { href: '/admin/absent', label: 'Retention Alerts', icon: Clock },
     { href: '/admin/register', label: 'Registration', icon: UserPlus },
   ];
-
-  if (isAdmin) {
-    navItems.push({ href: '/admin/users', label: 'System Users', icon: ShieldHalf });
-  }
 
   return (
     <div className="flex min-h-screen w-full flex-col bg-background/95">
