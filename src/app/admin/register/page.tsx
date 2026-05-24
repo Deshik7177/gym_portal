@@ -369,10 +369,10 @@ function RegisterForm() {
               </div>
               <div className="space-y-2">
                 <Label className="text-xs uppercase font-bold text-muted-foreground tracking-widest flex items-center gap-2">
-                  <FileText className="h-3 w-3" /> Notes / Package Details
+                  <FileText className="h-3 w-3" /> Package Details / Special Notes
                 </Label>
                 <Textarea 
-                  placeholder="e.g. 3 Months + 1 Month Free, etc." 
+                  placeholder="e.g. 3 Months + 1 Month Free, Festive Discount, etc." 
                   className="min-h-[48px] resize-none"
                   value={description}
                   onChange={(e) => setDescription(e.target.value)}

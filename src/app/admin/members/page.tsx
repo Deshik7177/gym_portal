@@ -18,7 +18,8 @@ import {
   UserCheck,
   History,
   ShieldAlert,
-  CalendarDays
+  CalendarDays,
+  FileText
 } from 'lucide-react';
 import { collection, query, doc, deleteDoc, updateDoc, serverTimestamp, addDoc, where, orderBy, limit } from 'firebase/firestore';
 import { useFirestore, useCollection, useProfile } from '@/firebase';
@@ -152,7 +153,7 @@ export default function MembersListPage() {
     };
   }, [members]);
 
-  // Helpers for PT date restrictions (Moved up to follow Rules of Hooks)
+  // Helpers for PT date restrictions
   const ptLimits = useMemo(() => {
     if (!memberForPT) return null;
     return {
@@ -368,7 +369,7 @@ export default function MembersListPage() {
             <TableHeader className="bg-white/[0.02]">
               <TableRow className="border-white/5">
                 <TableHead className="pl-8 font-black uppercase text-[9px] tracking-[0.3em]">Member</TableHead>
-                <TableHead className="font-black uppercase text-[9px] tracking-[0.3em]">Category & Status</TableHead>
+                <TableHead className="font-black uppercase text-[9px] tracking-[0.3em]">Package & Status</TableHead>
                 <TableHead className="font-black uppercase text-[9px] tracking-[0.3em]">Membership Term</TableHead>
                 <TableHead className="font-black uppercase text-[9px] tracking-[0.3em]">Phone ID</TableHead>
                 <TableHead className="text-right pr-8 font-black uppercase text-[9px] tracking-[0.3em]">Control</TableHead>
@@ -393,6 +394,11 @@ export default function MembersListPage() {
                         </Badge>
                         <Badge variant="outline" className={cn("rounded-sm border-none bg-primary/10 text-primary text-[8px] font-black uppercase tracking-widest h-4")}>{member.type}</Badge>
                       </div>
+                      {member.description && (
+                        <p className="text-[9px] text-muted-foreground italic flex items-center gap-1 max-w-[180px] truncate">
+                          <FileText className="h-2.5 w-2.5 shrink-0 opacity-50" /> {member.description}
+                        </p>
+                      )}
                     </div>
                   </TableCell>
                   <TableCell>
