@@ -76,7 +76,7 @@ import {
   DialogFooter,
   DialogHeader,
   DialogTitle,
-} from "@/components/ui/dialog";
+} from "@/dialog";
 import { Label } from '@/components/ui/label';
 import { useToast } from '@/hooks/use-toast';
 import { errorEmitter } from '@/firebase/error-emitter';
@@ -300,7 +300,7 @@ export default function MembersListPage() {
       {!isAdmin && (
         <div className="bg-orange-500/10 border border-orange-500/20 p-4 rounded-xl flex items-center gap-3">
            <ShieldAlert className="h-5 w-5 text-orange-500" />
-           <p className="text-xs font-bold text-orange-500 uppercase tracking-widest">Limited View: Edit/Delete Restricted to Admins</p>
+           <p className="text-xs font-bold text-orange-500 uppercase tracking-widest">Limited View: Edit Profile/Delete Restricted to Admins</p>
         </div>
       )}
 
@@ -396,12 +396,12 @@ export default function MembersListPage() {
                         <DropdownMenuItem onSelect={() => handleManualCheckIn(member)} className="p-3 gap-3 rounded-lg mx-1 cursor-pointer text-green-500"><UserCheck className="h-4 w-4" /> Manual Check-In</DropdownMenuItem>
                         <DropdownMenuItem onSelect={() => setMemberForHistory(member)} className="p-3 gap-3 rounded-lg mx-1 cursor-pointer"><History className="h-4 w-4 text-accent" /> View History</DropdownMenuItem>
                         <DropdownMenuItem onSelect={() => setMemberQrToShow(member)} className="p-3 gap-3 rounded-lg mx-1 cursor-pointer"><QrCode className="h-4 w-4 text-primary" /> View Entry QR</DropdownMenuItem>
+                        <DropdownMenuItem onSelect={() => setMemberForPT(member)} className="p-3 gap-3 rounded-lg mx-1 cursor-pointer"><CreditCard className="h-4 w-4" /> Add PT Session</DropdownMenuItem>
                         
                         {isAdmin && (
                           <>
-                            <DropdownMenuItem onSelect={() => router.push(`/admin/register?edit=${member.phone}`)} className="p-3 gap-3 rounded-lg mx-1 cursor-pointer"><ArrowUpRight className="h-4 w-4" /> Edit Profile</DropdownMenuItem>
-                            <DropdownMenuItem onSelect={() => setMemberForPT(member)} className="p-3 gap-3 rounded-lg mx-1 cursor-pointer"><CreditCard className="h-4 w-4" /> Add PT Session</DropdownMenuItem>
                             <DropdownMenuSeparator className="bg-white/5" />
+                            <DropdownMenuItem onSelect={() => router.push(`/admin/register?edit=${member.phone}`)} className="p-3 gap-3 rounded-lg mx-1 cursor-pointer"><ArrowUpRight className="h-4 w-4" /> Edit Profile</DropdownMenuItem>
                             <DropdownMenuItem className="p-3 gap-3 rounded-lg mx-1 text-destructive cursor-pointer" onSelect={() => setMemberToDelete(member)}><Trash2 className="h-4 w-4" /> Terminate Record</DropdownMenuItem>
                           </>
                         )}
