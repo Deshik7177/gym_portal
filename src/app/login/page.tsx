@@ -52,33 +52,33 @@ export default function ReceptionLoginPage() {
           <Link href="/" className="mb-2">
             <Logo className="scale-125" />
           </Link>
-          <h1 className="text-3xl font-bold font-headline mt-4 text-primary">Staff Access</h1>
+          <h1 className="text-3xl font-bold font-headline mt-4 text-primary uppercase tracking-tighter italic">Portal Access</h1>
           <p className="text-muted-foreground text-sm max-w-[280px]">
-            Authorized personnel only. Please enter your credentials to manage Thrive Fit.
+            Authorized personnel only. Please enter your credentials to manage the facility.
           </p>
         </div>
         
         <Card className="border-primary/20 shadow-2xl bg-card/50 backdrop-blur-sm">
           <CardHeader className="space-y-1">
-            <CardTitle className="text-xl flex items-center gap-2 text-primary">
+            <CardTitle className="text-xl flex items-center gap-2 text-primary font-headline italic uppercase tracking-tighter">
               <Lock className="h-4 w-4" />
-              Secure Login
+              Secure Authentication
             </CardTitle>
             <CardDescription>
-              Access the front-desk management system.
+              Access the operational command center.
             </CardDescription>
           </CardHeader>
           <CardContent>
             <form onSubmit={handleLogin} className="grid gap-4">
               <div className="grid gap-2">
-                <Label htmlFor="email" className="text-xs uppercase tracking-wider font-bold text-muted-foreground">Work Email</Label>
+                <Label htmlFor="email" className="text-[10px] uppercase tracking-[0.3em] font-black text-muted-foreground">Work Identifier</Label>
                 <div className="relative">
                   <User className="absolute left-3 top-3 h-4 w-4 text-muted-foreground" />
                   <Input 
                     id="email" 
                     type="email" 
-                    placeholder="admin@thrivefit.com" 
-                    className="pl-10" 
+                    placeholder="name@thrivefit.com" 
+                    className="pl-10 h-11 bg-black/20 border-white/10" 
                     value={email}
                     onChange={(e) => setEmail(e.target.value)}
                     required 
@@ -87,14 +87,12 @@ export default function ReceptionLoginPage() {
               </div>
               <div className="grid gap-2">
                 <div className="flex items-center">
-                  <Label htmlFor="password" className="text-xs uppercase tracking-wider font-bold text-muted-foreground">Password</Label>
-                  <Link href="#" className="ml-auto inline-block text-xs underline underline-offset-4 hover:text-primary">
-                    Forgot?
-                  </Link>
+                  <Label htmlFor="password" className="text-[10px] uppercase tracking-[0.3em] font-black text-muted-foreground">Security Token</Label>
                 </div>
                 <Input 
                   id="password" 
                   type="password" 
+                  className="h-11 bg-black/20 border-white/10"
                   value={password}
                   onChange={(e) => setPassword(e.target.value)}
                   required 
@@ -102,20 +100,26 @@ export default function ReceptionLoginPage() {
               </div>
               
               <div className="space-y-4 pt-2">
-                <Button type="submit" className="w-full h-11 text-base font-semibold" disabled={loading}>
-                  {loading ? <Loader2 className="mr-2 h-4 w-4 animate-spin" /> : 'Access Portal'}
+                <Button type="submit" className="w-full h-12 text-sm font-black uppercase tracking-widest shadow-xl shadow-primary/20" disabled={loading}>
+                  {loading ? <Loader2 className="mr-2 h-4 w-4 animate-spin" /> : 'Enter System'}
                 </Button>
                 
-                <div className="p-3 rounded-lg bg-primary/5 border border-primary/10 text-[11px] space-y-1">
-                  <p className="font-bold text-primary uppercase tracking-tighter">Demo Credentials:</p>
-                  <p className="text-muted-foreground">Email: <span className="text-foreground font-mono">admin@thrivefit.com</span></p>
-                  <p className="text-muted-foreground">Pass: <span className="text-foreground font-mono">password123</span></p>
-                  <p className="italic opacity-60">*Ensure these are created in your Firebase Console</p>
+                <div className="p-4 rounded-xl bg-primary/5 border border-primary/10 space-y-3">
+                  <p className="text-[9px] font-black text-primary uppercase tracking-[0.4em]">Internal Directory Hints</p>
+                  
+                  <div className="space-y-2">
+                    <div className="flex flex-col">
+                      <span className="text-[10px] font-bold text-white/40 uppercase tracking-widest">Admin Command:</span>
+                      <code className="text-[11px] text-primary">admin@thrivefit.com</code>
+                    </div>
+                    <div className="flex flex-col">
+                      <span className="text-[10px] font-bold text-white/40 uppercase tracking-widest">Staff Unit:</span>
+                      <code className="text-[11px] text-primary">staff@thrivefit.com</code>
+                    </div>
+                  </div>
+                  
+                  <p className="text-[9px] italic opacity-40 font-medium">Note: Ensure corresponding documents exist in /users collection with role: "admin" or "staff".</p>
                 </div>
-                
-                <p className="text-[10px] text-center text-muted-foreground">
-                  By logging in, you agree to the internal security protocols.
-                </p>
               </div>
             </form>
           </CardContent>
