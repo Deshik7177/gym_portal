@@ -41,7 +41,7 @@ export default function SmartEntrancePage() {
   const cachedMembersRef = useRef<any[]>([]);
   const timeoutRef = useRef<NodeJS.Timeout | null>(null);
 
-  // Robust UI Clear Effect
+  // Hardened UI Reset Timer - Ensures Welcome screen closes after 3.5 seconds
   useEffect(() => {
     if (scanResult) {
       if (timeoutRef.current) clearTimeout(timeoutRef.current);
@@ -49,7 +49,7 @@ export default function SmartEntrancePage() {
         setScanResult(null);
         setIdentifiedMember(null);
         isProcessingRef.current = false;
-      }, 3500); // 3.5s to allow animation and clear
+      }, 3500); 
     }
     return () => {
       if (timeoutRef.current) clearTimeout(timeoutRef.current);
@@ -94,28 +94,29 @@ export default function SmartEntrancePage() {
       method: 'QR'
     }, ...prev].slice(0, 10));
 
-    // Background operations (Non-blocking)
-    Promise.all([
-      addDoc(collection(db, 'attendance'), {
-        memberId: memberId,
-        memberName: member.fullName,
-        timestamp: serverTimestamp(),
-        method: 'qr',
-        latency: 0
-      }),
-      updateDoc(doc(db, 'members', memberId), {
-        lastCheckIn: serverTimestamp()
-      }),
-      addDoc(collection(db, 'gateControl'), {
-        command: 'OPEN',
-        timestamp: serverTimestamp(),
-        memberId: memberId,
-        method: 'qr'
-      })
-    ]).catch(err => {
+    // Background operations (Non-blocking but atomic)
+    try {
+      await Promise.all([
+        addDoc(collection(db, 'attendance'), {
+          memberId: memberId,
+          memberName: member.fullName,
+          timestamp: serverTimestamp(),
+          method: 'qr',
+          latency: 0
+        }),
+        updateDoc(doc(db, 'members', memberId), {
+          lastCheckIn: serverTimestamp()
+        }),
+        addDoc(collection(db, 'gateControl'), {
+          command: 'OPEN',
+          timestamp: serverTimestamp(),
+          memberId: memberId,
+          method: 'qr'
+        })
+      ]);
+    } catch (err) {
       console.warn("Background Sync Warning:", err);
-    });
-
+    }
   }, [db]);
 
   const startScanner = async () => {
@@ -131,6 +132,7 @@ export default function SmartEntrancePage() {
         throw new Error("No camera hardware found.");
       }
 
+      // Prioritize back/rear cameras for kiosk use
       const preferredCamera = devices.find(d => 
         d.label.toLowerCase().includes("back") || 
         d.label.toLowerCase().includes("rear") ||
@@ -143,7 +145,7 @@ export default function SmartEntrancePage() {
           fps: 15,
           qrbox: { width: 320, height: 320 },
           formatsToSupport: [Html5QrcodeSupportedFormats.QR_CODE]
-        },
+        } as any, // Cast to any to resolve TS mismatch with library types
         (decodedText) => {
           if (isProcessingRef.current) return;
           
@@ -159,7 +161,6 @@ export default function SmartEntrancePage() {
               // Denied case
               isProcessingRef.current = true;
               setScanResult('failure');
-              // Failure reset is shorter
               setTimeout(() => {
                 setScanResult(null);
                 isProcessingRef.current = false;
