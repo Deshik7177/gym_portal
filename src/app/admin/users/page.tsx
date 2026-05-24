@@ -1,5 +1,18 @@
 
-import { MoreHorizontal, PlusCircle } from 'lucide-react';
+'use client';
+
+import { useMemo, useState } from 'react';
+import { 
+  ShieldCheck, 
+  ShieldAlert, 
+  UserCog, 
+  Loader2, 
+  CheckCircle2, 
+  Info,
+  UserPlus
+} from 'lucide-react';
+import { collection, query, doc, updateDoc, serverTimestamp } from 'firebase/firestore';
+import { useFirestore, useCollection, useProfile } from '@/firebase';
 
 import { Badge } from '@/components/ui/badge';
 import { Button } from '@/components/ui/button';
@@ -11,13 +24,6 @@ import {
   CardTitle,
 } from '@/components/ui/card';
 import {
-  DropdownMenu,
-  DropdownMenuContent,
-  DropdownMenuItem,
-  DropdownMenuLabel,
-  DropdownMenuTrigger,
-} from '@/components/ui/dropdown-menu';
-import {
   Table,
   TableBody,
   TableCell,
@@ -26,104 +32,135 @@ import {
   TableRow,
 } from '@/components/ui/table';
 import {
-  Tabs,
-  TabsContent,
-  TabsList,
-  TabsTrigger,
-} from '@/components/ui/tabs';
+  Select,
+  SelectContent,
+  SelectItem,
+  SelectTrigger,
+  SelectValue,
+} from '@/components/ui/select';
+import { Alert, AlertDescription, AlertTitle } from '@/components/ui/alert';
+import { useToast } from '@/hooks/use-toast';
+import { cn } from '@/lib/utils';
 
+export default function SystemUsersPage() {
+  const db = useFirestore();
+  const { toast } = useToast();
+  const { isAdmin, loading: profileLoading } = useProfile();
+  const [updatingId, setUpdatingId] = useState<string | null>(null);
 
-const users = [
-    { id: 'USR001', name: 'John Doe', email: 'john.d@example.com', status: 'Active', plan: 'Annual Gold', expiry: '2025-05-15' },
-    { id: 'USR002', name: 'Jane Smith', email: 'jane.s@example.com', status: 'Expired', plan: 'Monthly Basic', expiry: '2024-04-30' },
-    { id: 'USR003', name: 'Mike Johnson', email: 'mike.j@example.com', status: 'Active', plan: 'Quarterly Pro', expiry: '2024-08-20' },
-    { id: 'USR004', name: 'Emily Brown', email: 'emily.b@example.com', status: 'Suspended', plan: 'Annual Gold', expiry: '2025-01-10' },
-    { id: 'USR005', name: 'Chris Wilson', email: 'chris.w@example.com', status: 'Active', plan: 'Monthly Basic', expiry: '2024-06-25' },
-];
+  const usersRef = useMemo(() => db ? query(collection(db, 'users')) : null, [db]);
+  const { data: users, loading: usersLoading } = useCollection<any>(usersRef);
 
-export default function AdminUsersPage() {
-  return (
-    <Tabs defaultValue="all">
-    <div className="flex items-center">
-      <TabsList>
-        <TabsTrigger value="all">All</TabsTrigger>
-        <TabsTrigger value="active">Active</TabsTrigger>
-        <TabsTrigger value="expired">Expired</TabsTrigger>
-        <TabsTrigger value="suspended" className="hidden sm:flex">
-          Suspended
-        </TabsTrigger>
-      </TabsList>
-      <div className="ml-auto flex items-center gap-2">
-        <Button size="sm" variant="outline" className="h-8 gap-1">
-          <PlusCircle className="h-3.5 w-3.5" />
-          <span className="sr-only sm:not-sr-only sm:whitespace-nowrap">
-            Add User
-          </span>
-        </Button>
+  const handleUpdateRole = async (uid: string, newRole: 'admin' | 'staff') => {
+    if (!db || !isAdmin) return;
+    setUpdatingId(uid);
+    try {
+      await updateDoc(doc(db, 'users', uid), {
+        role: newRole,
+        updatedAt: serverTimestamp()
+      });
+      toast({ title: "Role Updated", description: `Permission changed to ${newRole}.` });
+    } catch (e) {
+      toast({ variant: "destructive", title: "Access Denied", description: "Could not update user role." });
+    } finally {
+      setUpdatingId(null);
+    }
+  };
+
+  if (!isAdmin && !profileLoading) {
+    return (
+      <div className="flex flex-col items-center justify-center h-96 gap-4">
+        <ShieldAlert className="h-12 w-12 text-destructive" />
+        <h2 className="text-xl font-bold uppercase tracking-tighter">Access Forbidden</h2>
+        <p className="text-muted-foreground text-sm">System user management is restricted to Administrators.</p>
       </div>
-    </div>
-    <TabsContent value="all">
-    <Card>
-      <CardHeader>
-        <CardTitle>Members</CardTitle>
-        <CardDescription>
-          Manage your gym members and view their details.
-        </CardDescription>
-      </CardHeader>
-      <CardContent>
-        <div className="overflow-x-auto">
+    );
+  }
+
+  if (profileLoading || usersLoading) {
+    return (
+      <div className="flex h-60 w-full items-center justify-center">
+        <Loader2 className="h-8 w-8 animate-spin text-primary" />
+      </div>
+    );
+  }
+
+  return (
+    <div className="flex flex-col gap-6 max-w-5xl mx-auto">
+      <div className="flex flex-col gap-1">
+        <h1 className="text-3xl font-bold font-headline uppercase tracking-tighter text-primary">System Access Control</h1>
+        <p className="text-muted-foreground text-xs font-bold tracking-widest uppercase opacity-60">Staff & Admin Management</p>
+      </div>
+
+      <Alert className="bg-primary/5 border-primary/20">
+        <Info className="h-4 w-4 text-primary" />
+        <AlertTitle className="text-primary font-bold">Account Creation Guide</AlertTitle>
+        <AlertDescription className="text-xs">
+          To add a new member of your team: 
+          1. Create their email/password account in the <b>Firebase Console</b>. 
+          2. After they log in for the first time, their profile will appear here. 
+          3. Use this panel to assign them <b>Admin</b> or <b>Staff</b> privileges.
+        </AlertDescription>
+      </Alert>
+
+      <Card className="border-none bg-card/40 backdrop-blur-xl shadow-2xl rounded-2xl overflow-hidden">
+        <CardHeader className="bg-white/[0.02] border-b border-white/5 py-6 px-8">
+           <CardTitle className="text-sm font-black uppercase tracking-widest flex items-center gap-2">
+             <UserCog className="h-4 w-4 text-primary" /> Registered Personnel
+           </CardTitle>
+           <CardDescription>Manage internal roles and facility permissions.</CardDescription>
+        </CardHeader>
+        <CardContent className="p-0">
           <Table>
-            <TableHeader>
-              <TableRow>
-                <TableHead>Member ID</TableHead>
-                <TableHead className="hidden sm:table-cell">Name</TableHead>
-                <TableHead>Status</TableHead>
-                <TableHead className="hidden md:table-cell">Plan</TableHead>
-                <TableHead className="hidden md:table-cell">Expiry Date</TableHead>
-                <TableHead>
-                  <span className="sr-only">Actions</span>
-                </TableHead>
+            <TableHeader className="bg-white/[0.01]">
+              <TableRow className="border-white/5">
+                <TableHead className="pl-8 font-black uppercase text-[9px] tracking-[0.3em]">User Name</TableHead>
+                <TableHead className="font-black uppercase text-[9px] tracking-[0.3em]">Work Email</TableHead>
+                <TableHead className="font-black uppercase text-[9px] tracking-[0.3em]">System Role</TableHead>
+                <TableHead className="text-right pr-8 font-black uppercase text-[9px] tracking-[0.3em]">Action</TableHead>
               </TableRow>
             </TableHeader>
             <TableBody>
-              {users.map((user) => (
-                <TableRow key={user.id}>
-                  <TableCell className="font-medium">{user.id}</TableCell>
-                  <TableCell className="hidden sm:table-cell">{user.name}</TableCell>
+              {users && users.length > 0 ? users.map((u: any) => (
+                <TableRow key={u.id} className="border-white/5 hover:bg-white/[0.01] transition-colors">
+                  <TableCell className="pl-8 font-bold text-sm">{u.name || 'Anonymous User'}</TableCell>
+                  <TableCell className="text-xs opacity-60 font-mono">{u.email}</TableCell>
                   <TableCell>
-                    <Badge 
-                      variant={user.status === 'Active' ? 'default' : user.status === 'Expired' ? 'destructive' : 'secondary'}
-                      className={user.status === 'Active' ? 'bg-[#2E7D32] hover:bg-[#2E7D32]/80 text-white' : ''}
-                    >
-                      {user.status}
+                    <Badge variant={u.role === 'admin' ? 'default' : 'outline'} className={cn(
+                      "text-[9px] font-black uppercase tracking-widest border-none px-2",
+                      u.role === 'admin' ? "bg-primary/20 text-primary" : "bg-white/5 text-white/40"
+                    )}>
+                      {u.role === 'admin' ? <ShieldCheck className="h-2.5 w-2.5 mr-1" /> : null}
+                      {u.role}
                     </Badge>
                   </TableCell>
-                  <TableCell className="hidden md:table-cell">{user.plan}</TableCell>
-                  <TableCell className="hidden md:table-cell">{user.expiry}</TableCell>
-                  <TableCell>
-                    <DropdownMenu>
-                      <DropdownMenuTrigger asChild>
-                        <Button aria-haspopup="true" size="icon" variant="ghost">
-                          <MoreHorizontal className="h-4 w-4" />
-                          <span className="sr-only">Toggle menu</span>
-                        </Button>
-                      </DropdownMenuTrigger>
-                      <DropdownMenuContent align="end">
-                        <DropdownMenuLabel>Actions</DropdownMenuLabel>
-                        <DropdownMenuItem>Edit</DropdownMenuItem>
-                        <DropdownMenuItem>Suspend</DropdownMenuItem>
-                        <DropdownMenuItem>View Details</DropdownMenuItem>
-                      </DropdownMenuContent>
-                    </DropdownMenu>
+                  <TableCell className="text-right pr-8">
+                    <Select 
+                      disabled={updatingId === u.id} 
+                      value={u.role} 
+                      onValueChange={(val: any) => handleUpdateRole(u.id, val)}
+                    >
+                      <SelectTrigger className="h-8 w-32 bg-black/20 border-white/5 text-[10px] font-black uppercase tracking-widest">
+                        <SelectValue />
+                      </SelectTrigger>
+                      <SelectContent>
+                        <SelectItem value="staff">Staff</SelectItem>
+                        <SelectItem value="admin">Administrator</SelectItem>
+                      </SelectContent>
+                    </Select>
                   </TableCell>
                 </TableRow>
-              ))}
+              )) : (
+                <TableRow>
+                   <TableCell colSpan={4} className="h-32 text-center text-muted-foreground italic uppercase tracking-widest opacity-20 text-xs">
+                     No users registered in cloud ledger
+                   </TableCell>
+                </TableRow>
+              )}
             </TableBody>
           </Table>
-        </div>
-      </CardContent>
-    </Card>
-    </TabsContent>
-    </Tabs>
+        </CardContent>
+      </Card>
+    </div>
   );
 }

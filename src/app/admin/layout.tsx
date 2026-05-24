@@ -1,9 +1,10 @@
+
 'use client';
 
 import { useEffect, useState } from 'react';
 import Link from 'next/link';
 import { useRouter, usePathname } from 'next/navigation';
-import { useUser } from '@/firebase';
+import { useUser, useProfile } from '@/firebase';
 import {
   Users,
   BarChart3,
@@ -16,7 +17,8 @@ import {
   WifiOff,
   Scan,
   ShieldCheck,
-  History
+  History,
+  ShieldHalf
 } from 'lucide-react';
 
 import { Button } from '@/components/ui/button';
@@ -27,6 +29,7 @@ import { cn } from '@/lib/utils';
 
 export default function ReceptionLayout({ children }: { children: React.ReactNode }) {
   const { user, loading } = useUser();
+  const { isAdmin, loading: profileLoading } = useProfile();
   const router = useRouter();
   const pathname = usePathname();
   const [isOnline, setIsOnline] = useState(true);
@@ -48,7 +51,7 @@ export default function ReceptionLayout({ children }: { children: React.ReactNod
     };
   }, [user, loading, router]);
 
-  if (loading) {
+  if (loading || (user && profileLoading)) {
     return (
       <div className="flex h-screen w-full items-center justify-center bg-background">
         <Loader2 className="h-8 w-8 animate-spin text-primary" />
@@ -67,6 +70,10 @@ export default function ReceptionLayout({ children }: { children: React.ReactNod
     { href: '/admin/absent', label: 'Retention Alerts', icon: Clock },
     { href: '/admin/register', label: 'Registration', icon: UserPlus },
   ];
+
+  if (isAdmin) {
+    navItems.push({ href: '/admin/users', label: 'System Users', icon: ShieldHalf });
+  }
 
   return (
     <div className="flex min-h-screen w-full flex-col bg-background/95">
