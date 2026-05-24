@@ -2,7 +2,7 @@
 
 import { useState, useEffect, Suspense, useMemo } from 'react';
 import { useSearchParams, useRouter } from 'next/navigation';
-import { Search, CheckCircle2, Loader2, Info, Calendar as CalendarIcon, Clock } from 'lucide-react';
+import { Search, CheckCircle2, Loader2, Info, Calendar as CalendarIcon, Clock, FileText } from 'lucide-react';
 import { doc, setDoc, getDoc, serverTimestamp, collection, addDoc } from 'firebase/firestore';
 import { useFirestore } from '@/firebase';
 import { errorEmitter } from '@/firebase/error-emitter';
@@ -22,6 +22,7 @@ import {
 import { Input } from '@/components/ui/input';
 import { Label } from '@/components/ui/label';
 import { RadioGroup, RadioGroupItem } from '@/components/ui/radio-group';
+import { Textarea } from '@/components/ui/textarea';
 import { useToast } from '@/hooks/use-toast';
 import { Badge } from '@/components/ui/badge';
 import { Alert, AlertDescription, AlertTitle } from '@/components/ui/alert';
@@ -119,8 +120,8 @@ function RegisterForm() {
     e.preventDefault();
     if (!db) return;
 
-    if (durationStatus === 'non-active' && (!startDate || !endDate)) {
-      toast({ variant: "destructive", title: "Dates Required", description: "Please provide start and end dates for fixed-term membership." });
+    if (!startDate || !endDate) {
+      toast({ variant: "destructive", title: "Dates Required", description: "Please provide start and end dates for the membership term." });
       return;
     }
 
@@ -135,7 +136,7 @@ function RegisterForm() {
       description: description || '',
       startDate: startDate ? format(startDate, 'yyyy-MM-dd') : null,
       endDate: endDate ? format(endDate, 'yyyy-MM-dd') : null,
-      countOfDays: durationStatus === 'non-active' ? totalDays : null,
+      countOfDays: totalDays,
       updatedAt: serverTimestamp(),
     };
 
@@ -153,7 +154,7 @@ function RegisterForm() {
           amount: parseFloat(price) || 0,
           date: new Date().toISOString().split('T')[0],
           category: 'membership',
-          description: isEditMode ? `Update: Group Membership` : `New: Group Membership`,
+          description: description || (isEditMode ? `Update: Group Membership` : `New: Group Membership`),
           createdAt: serverTimestamp()
         };
         addDoc(collection(db, 'sales'), saleData);
@@ -256,100 +257,111 @@ function RegisterForm() {
               </RadioGroup>
             </div>
 
-            {durationStatus === 'non-active' && (
-              <div className="space-y-4 pt-2 animate-in fade-in slide-in-from-top-2">
-                <div className="grid grid-cols-1 md:grid-cols-2 gap-6">
-                  <div className="space-y-2 flex flex-col">
-                    <Label className="flex items-center gap-2 mb-1.5">
-                      <CalendarIcon className="h-4 w-4 text-primary" />
-                      Start Date
-                    </Label>
-                    <Popover open={isStartDateOpen} onOpenChange={setIsStartDateOpen}>
-                      <PopoverTrigger asChild>
-                        <Button
-                          type="button"
-                          variant={"outline"}
-                          className={cn(
-                            "w-full justify-start text-left font-normal h-10",
-                            !startDate && "text-muted-foreground"
-                          )}
-                        >
-                          {startDate ? format(startDate, "PPP") : <span>Pick a date</span>}
-                        </Button>
-                      </PopoverTrigger>
-                      <PopoverContent className="w-auto p-0 z-[60]" align="start">
-                        <Calendar
-                          mode="single"
-                          selected={startDate}
-                          onSelect={(date) => {
-                            if (date) {
-                              setStartDate(date);
-                              setIsStartDateOpen(false);
-                            }
-                          }}
-                          disabled={(date) => date < today}
-                          initialFocus
-                        />
-                      </PopoverContent>
-                    </Popover>
-                  </div>
-                  <div className="space-y-2 flex flex-col">
-                    <Label className="flex items-center gap-2 mb-1.5">
-                      <CalendarIcon className="h-4 w-4 text-primary" />
-                      End Date
-                    </Label>
-                    <Popover open={isEndDateOpen} onOpenChange={setIsEndDateOpen}>
-                      <PopoverTrigger asChild>
-                        <Button
-                          type="button"
-                          variant={"outline"}
-                          className={cn(
-                            "w-full justify-start text-left font-normal h-10",
-                            !endDate && "text-muted-foreground"
-                          )}
-                        >
-                          {endDate ? format(endDate, "PPP") : <span>Pick a date</span>}
-                        </Button>
-                      </PopoverTrigger>
-                      <PopoverContent className="w-auto p-0 z-[60]" align="start">
-                        <Calendar
-                          mode="single"
-                          selected={endDate}
-                          onSelect={(date) => {
-                            if (date) {
-                              setEndDate(date);
-                              setIsEndDateOpen(false);
-                            }
-                          }}
-                          disabled={(date) => date < (startDate || today)}
-                          initialFocus
-                        />
-                      </PopoverContent>
-                    </Popover>
-                  </div>
+            <div className="space-y-4 pt-2">
+              <div className="grid grid-cols-1 md:grid-cols-2 gap-6">
+                <div className="space-y-2 flex flex-col">
+                  <Label className="flex items-center gap-2 mb-1.5">
+                    <CalendarIcon className="h-4 w-4 text-primary" />
+                    Start Date
+                  </Label>
+                  <Popover open={isStartDateOpen} onOpenChange={setIsStartDateOpen}>
+                    <PopoverTrigger asChild>
+                      <Button
+                        type="button"
+                        variant={"outline"}
+                        className={cn(
+                          "w-full justify-start text-left font-normal h-10",
+                          !startDate && "text-muted-foreground"
+                        )}
+                      >
+                        {startDate ? format(startDate, "PPP") : <span>Pick a date</span>}
+                      </Button>
+                    </PopoverTrigger>
+                    <PopoverContent className="w-auto p-0 z-[60]" align="start">
+                      <Calendar
+                        mode="single"
+                        selected={startDate}
+                        onSelect={(date) => {
+                          if (date) {
+                            setStartDate(date);
+                            setIsStartDateOpen(false);
+                          }
+                        }}
+                        disabled={(date) => date < today}
+                        initialFocus
+                      />
+                    </PopoverContent>
+                  </Popover>
                 </div>
-                
-                {startDate && endDate && (
-                  <div className="bg-primary/10 border border-primary/20 p-4 rounded-xl flex items-center justify-between">
-                    <div className="flex items-center gap-3">
-                      <Clock className="h-5 w-5 text-primary" />
-                      <div>
-                        <p className="text-[10px] uppercase font-bold text-muted-foreground">Membership Duration</p>
-                        <p className="text-lg font-bold text-primary">{totalDays} Total Days</p>
-                      </div>
-                    </div>
-                    <Badge variant="outline" className="h-6">Fixed Term</Badge>
-                  </div>
-                )}
+                <div className="space-y-2 flex flex-col">
+                  <Label className="flex items-center gap-2 mb-1.5">
+                    <CalendarIcon className="h-4 w-4 text-primary" />
+                    End Date
+                  </Label>
+                  <Popover open={isEndDateOpen} onOpenChange={setIsEndDateOpen}>
+                    <PopoverTrigger asChild>
+                      <Button
+                        type="button"
+                        variant={"outline"}
+                        className={cn(
+                          "w-full justify-start text-left font-normal h-10",
+                          !endDate && "text-muted-foreground"
+                        )}
+                      >
+                        {endDate ? format(endDate, "PPP") : <span>Pick a date</span>}
+                      </Button>
+                    </PopoverTrigger>
+                    <PopoverContent className="w-auto p-0 z-[60]" align="start">
+                      <Calendar
+                        mode="single"
+                        selected={endDate}
+                        onSelect={(date) => {
+                          if (date) {
+                            setEndDate(date);
+                            setIsEndDateOpen(false);
+                          }
+                        }}
+                        disabled={(date) => date < (startDate || today)}
+                        initialFocus
+                      />
+                    </PopoverContent>
+                  </Popover>
+                </div>
               </div>
-            )}
-
-            <div className="space-y-2 pt-2">
-                <Label className="text-xs uppercase font-bold text-muted-foreground tracking-widest">Fee (INR)</Label>
-                <div className="relative">
-                  <span className="absolute left-4 top-1/2 -translate-y-1/2 text-muted-foreground font-bold">₹</span>
-                  <Input type="number" className="pl-8 h-12 text-xl font-bold" value={price} onChange={(e) => setPrice(e.target.value)} required placeholder="0.00" />
+              
+              {startDate && endDate && (
+                <div className="bg-primary/10 border border-primary/20 p-4 rounded-xl flex items-center justify-between">
+                  <div className="flex items-center gap-3">
+                    <Clock className="h-5 w-5 text-primary" />
+                    <div>
+                      <p className="text-[10px] uppercase font-bold text-muted-foreground">Membership Duration</p>
+                      <p className="text-lg font-bold text-primary">{totalDays} Total Days</p>
+                    </div>
+                  </div>
+                  <Badge variant="outline" className="h-6 uppercase">{durationStatus}</Badge>
                 </div>
+              )}
+            </div>
+
+            <div className="grid grid-cols-1 md:grid-cols-2 gap-6">
+              <div className="space-y-2">
+                  <Label className="text-xs uppercase font-bold text-muted-foreground tracking-widest">Fee (INR)</Label>
+                  <div className="relative">
+                    <span className="absolute left-4 top-1/2 -translate-y-1/2 text-muted-foreground font-bold">₹</span>
+                    <Input type="number" className="pl-8 h-12 text-xl font-bold" value={price} onChange={(e) => setPrice(e.target.value)} required placeholder="0.00" />
+                  </div>
+              </div>
+              <div className="space-y-2">
+                <Label className="text-xs uppercase font-bold text-muted-foreground tracking-widest flex items-center gap-2">
+                  <FileText className="h-3 w-3" /> Notes / Package Details
+                </Label>
+                <Textarea 
+                  placeholder="e.g. 3 Months + 1 Month Free, Personal Training bundle, etc." 
+                  className="min-h-[48px] resize-none"
+                  value={description}
+                  onChange={(e) => setDescription(e.target.value)}
+                />
+              </div>
             </div>
           </CardContent>
           <CardFooter className="bg-muted/10 border-t p-6">

@@ -1,4 +1,3 @@
-
 {
   "entities": {
     "Member": {
@@ -14,6 +13,7 @@
         "endDate": { "type": "string", "format": "date" },
         "qrToken": { "type": "string", "description": "Unique permanent QR payload" },
         "price": { "type": "number" },
+        "description": { "type": "string", "description": "Details about the opted package" },
         "photoData": { "type": "string" },
         "lastCheckIn": { "type": "string", "format": "date-time" },
         "createdAt": { "type": "string", "format": "date-time" }
@@ -52,7 +52,8 @@
         "memberName": { "type": "string" },
         "amount": { "type": "number" },
         "date": { "type": "string", "format": "date" },
-        "category": { "type": "string", "enum": ["membership", "personal training", "other"] }
+        "category": { "type": "string", "enum": ["membership", "personal training", "other"] },
+        "description": { "type": "string" }
       }
     }
   },
