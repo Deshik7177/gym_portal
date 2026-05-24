@@ -17,6 +17,7 @@ import { useFirestore } from '@/firebase';
 import { Html5Qrcode, Html5QrcodeSupportedFormats } from 'html5-qrcode';
 import { cn } from '@/lib/utils';
 import { validateQrPayload } from '@/lib/qr-logic';
+import { isToday } from 'date-fns';
 
 import { Button } from '@/components/ui/button';
 import { Card, CardContent } from '@/components/ui/card';
@@ -41,7 +42,6 @@ export default function SmartEntrancePage() {
   const cachedMembersRef = useRef<any[]>([]);
   const timeoutRef = useRef<NodeJS.Timeout | null>(null);
 
-  // Hardened UI Reset Timer - Ensures Welcome screen closes after 3.5 seconds
   useEffect(() => {
     if (scanResult) {
       if (timeoutRef.current) clearTimeout(timeoutRef.current);
@@ -56,7 +56,6 @@ export default function SmartEntrancePage() {
     };
   }, [scanResult]);
 
-  // Local Cache Sync for instant lookup
   useEffect(() => {
     if (!db) return;
     setIsSyncing(true);
@@ -74,10 +73,7 @@ export default function SmartEntrancePage() {
   const triggerAccess = useCallback(async (member: any) => {
     if (!db || !member || isProcessingRef.current) return;
     
-    // Lock processing
     isProcessingRef.current = true;
-    
-    // Immediate UI Feedback
     setIdentifiedMember(member);
     setScanResult('success');
     
@@ -87,23 +83,20 @@ export default function SmartEntrancePage() {
 
     const memberId = member.id || member.phone;
     
-    // Log to local history for immediate display
     setRecentLogs(prev => [{
       name: member.fullName,
       time: new Date().toLocaleTimeString(),
       method: 'QR'
     }, ...prev].slice(0, 10));
 
-    // Background operations (Non-blocking but atomic)
     try {
-      await Promise.all([
-        addDoc(collection(db, 'attendance'), {
-          memberId: memberId,
-          memberName: member.fullName,
-          timestamp: serverTimestamp(),
-          method: 'qr',
-          latency: 0
-        }),
+      const lastCheckInDate = member.lastCheckIn?.seconds 
+        ? new Date(member.lastCheckIn.seconds * 1000) 
+        : null;
+
+      const alreadyLoggedToday = lastCheckInDate && isToday(lastCheckInDate);
+
+      const tasks: Promise<any>[] = [
         updateDoc(doc(db, 'members', memberId), {
           lastCheckIn: serverTimestamp()
         }),
@@ -113,7 +106,19 @@ export default function SmartEntrancePage() {
           memberId: memberId,
           method: 'qr'
         })
-      ]);
+      ];
+
+      if (!alreadyLoggedToday) {
+        tasks.push(addDoc(collection(db, 'attendance'), {
+          memberId: memberId,
+          memberName: member.fullName,
+          timestamp: serverTimestamp(),
+          method: 'qr',
+          latency: 0
+        }));
+      }
+
+      await Promise.all(tasks);
     } catch (err) {
       console.warn("Background Sync Warning:", err);
     }
@@ -132,7 +137,6 @@ export default function SmartEntrancePage() {
         throw new Error("No camera hardware found.");
       }
 
-      // Prioritize back/rear cameras for kiosk use
       const preferredCamera = devices.find(d => 
         d.label.toLowerCase().includes("back") || 
         d.label.toLowerCase().includes("rear") ||
@@ -145,7 +149,7 @@ export default function SmartEntrancePage() {
           fps: 15,
           qrbox: { width: 320, height: 320 },
           formatsToSupport: [Html5QrcodeSupportedFormats.QR_CODE]
-        } as any, // Cast to any to resolve TS mismatch with library types
+        } as any,
         (decodedText) => {
           if (isProcessingRef.current) return;
           
@@ -158,7 +162,6 @@ export default function SmartEntrancePage() {
             if (member && member.status === 'active') {
               triggerAccess(member);
             } else {
-              // Denied case
               isProcessingRef.current = true;
               setScanResult('failure');
               setTimeout(() => {

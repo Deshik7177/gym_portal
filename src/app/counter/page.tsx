@@ -11,10 +11,9 @@ import {
   UserCheck, 
   History,
   WifiOff,
-  AlertCircle,
   UserX,
-  Clock
 } from 'lucide-react';
+import { isToday } from 'date-fns';
 
 import { Badge } from '@/components/ui/badge';
 import { Button } from '@/components/ui/button';
@@ -35,7 +34,6 @@ import {
   TableRow,
 } from '@/components/ui/table';
 import { useToast } from '@/hooks/use-toast';
-import Link from 'next/link';
 
 export default function CounterPage() {
   const db = useFirestore();
@@ -95,26 +93,42 @@ export default function CounterPage() {
     if (!verifiedMember || !db) return;
     const docRef = doc(db, 'members', verifiedMember.id);
     
-    // 1. Update member document
-    updateDoc(docRef, { 
-      lastCheckIn: serverTimestamp(),
-      updatedAt: serverTimestamp()
-    });
+    try {
+      const lastCheckInDate = verifiedMember.lastCheckIn?.seconds 
+        ? new Date(verifiedMember.lastCheckIn.seconds * 1000) 
+        : null;
 
-    // 2. Log historical attendance
-    addDoc(collection(db, 'attendance'), {
-      memberId: verifiedMember.id,
-      memberName: verifiedMember.fullName,
-      timestamp: serverTimestamp(),
-      method: 'manual',
-      score: 1.0
-    });
-    
-    setVerifiedMember(prev => ({ ...prev, authenticated: true }));
-    toast({ 
-      title: "Check-In Success", 
-      description: `Attendance logged for ${verifiedMember.fullName}.` 
-    });
+      const alreadyLoggedToday = lastCheckInDate && isToday(lastCheckInDate);
+
+      const tasks: Promise<any>[] = [
+        updateDoc(docRef, { 
+          lastCheckIn: serverTimestamp(),
+          updatedAt: serverTimestamp()
+        })
+      ];
+
+      if (!alreadyLoggedToday) {
+        tasks.push(addDoc(collection(db, 'attendance'), {
+          memberId: verifiedMember.id,
+          memberName: verifiedMember.fullName,
+          timestamp: serverTimestamp(),
+          method: 'manual',
+          score: 1.0
+        }));
+      }
+      
+      await Promise.all(tasks);
+
+      setVerifiedMember(prev => ({ ...prev, authenticated: true }));
+      toast({ 
+        title: alreadyLoggedToday ? "Member Refresh" : "Check-In Success", 
+        description: alreadyLoggedToday 
+          ? `Member ${verifiedMember.fullName} already has a log for today.` 
+          : `Attendance logged for ${verifiedMember.fullName}.` 
+      });
+    } catch (err) {
+      toast({ variant: "destructive", title: "Action Failed" });
+    }
   };
 
   const resetSearch = () => {
@@ -177,7 +191,7 @@ export default function CounterPage() {
                            {verifiedMember.authenticated && (
                              <div className="absolute inset-0 bg-green-500/20 backdrop-blur-[2px] flex flex-col items-center justify-center animate-in zoom-in duration-500">
                                 <CheckCircle className="h-24 w-24 text-green-500 drop-shadow-lg" />
-                                <span className="bg-green-500 text-white px-4 py-1 rounded-full text-sm font-bold mt-4 tracking-widest uppercase">Check-In Success</span>
+                                <span className="bg-green-500 text-white px-4 py-1 rounded-full text-sm font-bold mt-4 tracking-widest uppercase">Verified</span>
                              </div>
                            )}
                         </div>

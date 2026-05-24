@@ -23,7 +23,7 @@ import { collection, query, doc, deleteDoc, updateDoc, serverTimestamp, addDoc, 
 import { useFirestore, useCollection, useProfile } from '@/firebase';
 import Link from 'next/link';
 import { useRouter } from 'next/navigation';
-import { format, startOfDay } from 'date-fns';
+import { format, startOfDay, isToday } from 'date-fns';
 import { QRCodeCanvas } from 'qrcode.react';
 import { generateMemberQrPayload } from '@/lib/qr-logic';
 
@@ -165,18 +165,37 @@ export default function MembersListPage() {
     setIsProcessingCheckIn(member.phone);
     try {
       const timestamp = serverTimestamp();
-      updateDoc(doc(db, 'members', member.phone), {
-        lastCheckIn: timestamp,
-        updatedAt: timestamp
+      const lastCheckInDate = member.lastCheckIn?.seconds 
+        ? new Date(member.lastCheckIn.seconds * 1000) 
+        : null;
+
+      const alreadyLoggedToday = lastCheckInDate && isToday(lastCheckInDate);
+
+      const tasks: Promise<any>[] = [
+        updateDoc(doc(db, 'members', member.phone), {
+          lastCheckIn: timestamp,
+          updatedAt: timestamp
+        })
+      ];
+
+      if (!alreadyLoggedToday) {
+        tasks.push(addDoc(collection(db, 'attendance'), {
+          memberId: member.phone,
+          memberName: member.fullName,
+          timestamp: timestamp,
+          method: 'manual',
+          latency: 0
+        }));
+      }
+
+      await Promise.all(tasks);
+      
+      toast({ 
+        title: alreadyLoggedToday ? "Entry Freshness Updated" : "Manual Attendance Recorded", 
+        description: alreadyLoggedToday 
+          ? `Member ${member.fullName} was already logged today.` 
+          : `Check-in logged for ${member.fullName}.` 
       });
-      addDoc(collection(db, 'attendance'), {
-        memberId: member.phone,
-        memberName: member.fullName,
-        timestamp: timestamp,
-        method: 'manual',
-        latency: 0
-      });
-      toast({ title: "Manual Attendance Recorded", description: `Check-in logged for ${member.fullName}.` });
     } catch (e: any) {
       toast({ variant: "destructive", title: "Check-In Failed" });
     } finally {
@@ -400,7 +419,6 @@ export default function MembersListPage() {
         </CardContent>
       </Card>
 
-      {/* Individual Attendance History Dialog */}
       <Dialog open={!!memberForHistory} onOpenChange={(open) => !open && setMemberForHistory(null)}>
         <DialogContent className="sm:max-w-lg bg-zinc-900 border-white/10 rounded-3xl p-6">
           <DialogHeader className="mb-4">
@@ -465,7 +483,6 @@ export default function MembersListPage() {
         </DialogContent>
       </Dialog>
 
-      {/* Permanent Member Passport Dialog */}
       <Dialog open={!!memberQrToShow} onOpenChange={(open) => !open && setMemberQrToShow(null)}>
         <DialogContent className="sm:max-w-md bg-zinc-900 border-white/10 rounded-3xl p-6">
           <div className="flex flex-col items-center text-center gap-4">
@@ -496,7 +513,6 @@ export default function MembersListPage() {
         </DialogContent>
       </Dialog>
 
-      {/* PT Session Dialog */}
       <Dialog open={!!memberForPT} onOpenChange={(open) => !open && setMemberForPT(null)}>
         <DialogContent className="sm:max-w-md bg-zinc-900 border-white/10 rounded-3xl p-8">
           <DialogHeader>
