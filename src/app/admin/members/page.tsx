@@ -25,7 +25,7 @@ import { collection, query, doc, deleteDoc, updateDoc, serverTimestamp, addDoc, 
 import { useFirestore, useCollection, useProfile } from '@/firebase';
 import Link from 'next/link';
 import { useRouter } from 'next/navigation';
-import { format, startOfDay, isToday, parseISO } from 'date-fns';
+import { format, startOfDay, isToday, parseISO, endOfDay } from 'date-fns';
 import { QRCodeCanvas } from 'qrcode.react';
 import { generateMemberQrPayload } from '@/lib/qr-logic';
 
@@ -97,10 +97,18 @@ export default function MembersListPage() {
   const router = useRouter();
   const { isAdmin, loading: profileLoading } = useProfile();
   
+  // State for search and simple filters
   const [searchTerm, setSearchTerm] = useState('');
   const [filterStatus, setFilterStatus] = useState('all');
   const [filterType, setFilterType] = useState('all');
   
+  // State for date range filters (Expiration)
+  const [filterDateFrom, setFilterDateFrom] = useState<Date | undefined>(undefined);
+  const [filterDateTo, setFilterDateTo] = useState<Date | undefined>(undefined);
+  const [isFilterFromOpen, setIsFilterFromOpen] = useState(false);
+  const [isFilterToOpen, setIsFilterToOpen] = useState(false);
+  
+  // Action/Modal states
   const [memberToDelete, setMemberToDelete] = useState<any>(null);
   const [memberForPT, setMemberForPT] = useState<any>(null);
   const [memberQrToShow, setMemberQrToShow] = useState<any>(null);
@@ -108,6 +116,7 @@ export default function MembersListPage() {
   const [isUpdatingPT, setIsUpdatingPT] = useState(false);
   const [isProcessingCheckIn, setIsProcessingCheckIn] = useState<string | null>(null);
   
+  // PT Add states
   const [ptPrice, setPtPrice] = useState('');
   const [ptStartDate, setPtStartDate] = useState<Date | undefined>(undefined);
   const [ptEndDate, setPtEndDate] = useState<Date | undefined>(undefined);
@@ -117,9 +126,11 @@ export default function MembersListPage() {
   const qrRef = useRef<HTMLDivElement>(null);
   const today = useMemo(() => startOfDay(new Date()), []);
 
+  // Main members query
   const membersRef = useMemo(() => db ? query(collection(db, 'members')) : null, [db]);
   const { data: members, loading } = useCollection<any>(membersRef);
 
+  // History query for specific member
   const attendanceQuery = useMemo(() => {
     if (!db || !memberForHistory) return null;
     return query(
@@ -132,17 +143,44 @@ export default function MembersListPage() {
 
   const { data: memberLogs, loading: logsLoading } = useCollection<any>(attendanceQuery);
 
+  // Helper for PT date restrictions based on current member selection
+  const ptLimits = useMemo(() => {
+    if (!memberForPT) return null;
+    return {
+      start: memberForPT.startDate ? parseISO(memberForPT.startDate) : today,
+      end: memberForPT.endDate ? parseISO(memberForPT.endDate) : undefined
+    };
+  }, [memberForPT, today]);
+
+  // Combined filtering logic
   const filteredMembers = useMemo(() => {
     if (!members) return [];
     return members.filter(m => {
+      // Search filter
       const matchesSearch = (m.fullName?.toLowerCase().includes(searchTerm.toLowerCase()) || 
                              m.phone?.includes(searchTerm));
+      
+      // Status filter
       const matchesStatus = filterStatus === 'all' || m.status === filterStatus;
+      
+      // Category filter
       const matchesType = filterType === 'all' || m.type === filterType;
       
-      return matchesSearch && matchesStatus && matchesType;
+      // Expiration Date Range filter
+      let matchesDate = true;
+      if (filterDateFrom || filterDateTo) {
+        if (m.endDate) {
+          const expiryDate = parseISO(m.endDate);
+          if (filterDateFrom && expiryDate < startOfDay(filterDateFrom)) matchesDate = false;
+          if (filterDateTo && expiryDate > endOfDay(filterDateTo)) matchesDate = false;
+        } else {
+          matchesDate = false;
+        }
+      }
+      
+      return matchesSearch && matchesStatus && matchesType && matchesDate;
     });
-  }, [members, searchTerm, filterStatus, filterType]);
+  }, [members, searchTerm, filterStatus, filterType, filterDateFrom, filterDateTo]);
 
   const stats = useMemo(() => {
     if (!members) return { total: 0, active: 0, personal: 0 };
@@ -152,15 +190,6 @@ export default function MembersListPage() {
       personal: members.filter(m => m.type === 'personal').length,
     };
   }, [members]);
-
-  // Helpers for PT date restrictions
-  const ptLimits = useMemo(() => {
-    if (!memberForPT) return null;
-    return {
-      start: memberForPT.startDate ? parseISO(memberForPT.startDate) : today,
-      end: memberForPT.endDate ? parseISO(memberForPT.endDate) : undefined
-    };
-  }, [memberForPT, today]);
 
   const handleDeleteMember = () => {
     if (!db || !memberToDelete || !isAdmin) return;
@@ -265,6 +294,8 @@ export default function MembersListPage() {
     setSearchTerm('');
     setFilterStatus('all');
     setFilterType('all');
+    setFilterDateFrom(undefined);
+    setFilterDateTo(undefined);
   };
 
   if (loading || profileLoading) return <div className="flex h-60 w-full items-center justify-center"><Loader2 className="h-8 w-8 animate-spin text-primary" /></div>;
@@ -317,50 +348,91 @@ export default function MembersListPage() {
 
       <Card className="border-none bg-card/40 backdrop-blur-xl shadow-2xl rounded-2xl overflow-hidden">
         <CardHeader className="border-b border-white/5 py-6">
-          <div className="flex flex-col lg:flex-row items-center gap-4">
-            <div className="relative flex-1 w-full">
-              <Search className="absolute left-3.5 top-1/2 -translate-y-1/2 h-4 w-4 text-muted-foreground" />
-              <Input
-                placeholder="Search member ID or name..."
-                className="pl-10 h-11 bg-black/20 border-white/5 focus:border-primary/50 rounded-xl w-full"
-                value={searchTerm}
-                onChange={(e) => setSearchTerm(e.target.value)}
-              />
+          <div className="flex flex-col gap-4">
+            <div className="flex flex-col lg:flex-row items-center gap-4">
+              <div className="relative flex-1 w-full">
+                <Search className="absolute left-3.5 top-1/2 -translate-y-1/2 h-4 w-4 text-muted-foreground" />
+                <Input
+                  placeholder="Search member ID or name..."
+                  className="pl-10 h-11 bg-black/20 border-white/5 focus:border-primary/50 rounded-xl w-full"
+                  value={searchTerm}
+                  onChange={(e) => setSearchTerm(e.target.value)}
+                />
+              </div>
+              <div className="flex items-center gap-3 w-full lg:w-auto">
+                <Select value={filterStatus} onValueChange={setFilterStatus}>
+                  <SelectTrigger className="h-11 bg-black/20 border-white/5 rounded-xl lg:w-40">
+                    <div className="flex items-center gap-2">
+                      <Filter className="h-3.5 w-3.5 opacity-40" />
+                      <SelectValue placeholder="Status" />
+                    </div>
+                  </SelectTrigger>
+                  <SelectContent>
+                    <SelectItem value="all">All Status</SelectItem>
+                    <SelectItem value="active">Active</SelectItem>
+                    <SelectItem value="non-active">Non-Active</SelectItem>
+                  </SelectContent>
+                </Select>
+
+                <Select value={filterType} onValueChange={setFilterType}>
+                  <SelectTrigger className="h-11 bg-black/20 border-white/5 rounded-xl lg:w-40">
+                    <div className="flex items-center gap-2">
+                      <Filter className="h-3.5 w-3.5 opacity-40" />
+                      <SelectValue placeholder="Category" />
+                    </div>
+                  </SelectTrigger>
+                  <SelectContent>
+                    <SelectItem value="all">All Categories</SelectItem>
+                    <SelectItem value="group">Group</SelectItem>
+                    <SelectItem value="personal">Personal Training</SelectItem>
+                  </SelectContent>
+                </Select>
+              </div>
             </div>
-            <div className="flex items-center gap-3 w-full lg:w-auto">
-              <Select value={filterStatus} onValueChange={setFilterStatus}>
-                <SelectTrigger className="h-11 bg-black/20 border-white/5 rounded-xl lg:w-40">
-                  <div className="flex items-center gap-2">
-                    <Filter className="h-3.5 w-3.5 opacity-40" />
-                    <SelectValue placeholder="Status" />
-                  </div>
-                </SelectTrigger>
-                <SelectContent>
-                  <SelectItem value="all">All Status</SelectItem>
-                  <SelectItem value="active">Active</SelectItem>
-                  <SelectItem value="non-active">Non-Active</SelectItem>
-                </SelectContent>
-              </Select>
 
-              <Select value={filterType} onValueChange={setFilterType}>
-                <SelectTrigger className="h-11 bg-black/20 border-white/5 rounded-xl lg:w-40">
-                   <div className="flex items-center gap-2">
-                    <Filter className="h-3.5 w-3.5 opacity-40" />
-                    <SelectValue placeholder="Category" />
-                  </div>
-                </SelectTrigger>
-                <SelectContent>
-                  <SelectItem value="all">All Categories</SelectItem>
-                  <SelectItem value="group">Group</SelectItem>
-                  <SelectItem value="personal">Personal Training</SelectItem>
-                </SelectContent>
-              </Select>
+            {/* Date Range Filters Section */}
+            <div className="flex flex-col lg:flex-row items-center gap-4 pt-2 border-t border-white/5 mt-2">
+               <span className="text-[10px] font-black uppercase tracking-widest opacity-40 whitespace-nowrap">Expiration Range:</span>
+               <div className="flex items-center gap-2 w-full lg:w-auto">
+                <Popover open={isFilterFromOpen} onOpenChange={setIsFilterFromOpen}>
+                  <PopoverTrigger asChild>
+                    <Button variant="outline" className={cn("h-10 text-[10px] font-bold bg-black/20 border-white/5 rounded-lg lg:w-36 justify-start", !filterDateFrom && "text-muted-foreground")}>
+                      <CalendarIcon className="mr-2 h-3 w-3 text-primary/60" />
+                      {filterDateFrom ? format(filterDateFrom, "MMM dd, yyyy") : "Starts From"}
+                    </Button>
+                  </PopoverTrigger>
+                  <PopoverContent className="w-auto p-0" align="start">
+                    <Calendar
+                      mode="single"
+                      selected={filterDateFrom}
+                      onSelect={(date) => { setFilterDateFrom(date); setIsFilterFromOpen(false); }}
+                    />
+                  </PopoverContent>
+                </Popover>
 
-              {(searchTerm || filterStatus !== 'all' || filterType !== 'all') && (
-                <Button variant="ghost" size="icon" onClick={resetFilters} className="h-11 w-11 hover:bg-destructive/10 hover:text-destructive rounded-xl">
-                  <X className="h-5 w-5" />
-                </Button>
-              )}
+                <Popover open={isFilterToOpen} onOpenChange={setIsFilterToOpen}>
+                  <PopoverTrigger asChild>
+                    <Button variant="outline" className={cn("h-10 text-[10px] font-bold bg-black/20 border-white/5 rounded-lg lg:w-36 justify-start", !filterDateTo && "text-muted-foreground")}>
+                      <CalendarIcon className="mr-2 h-3 w-3 text-primary/60" />
+                      {filterDateTo ? format(filterDateTo, "MMM dd, yyyy") : "Ends At"}
+                    </Button>
+                  </PopoverTrigger>
+                  <PopoverContent className="w-auto p-0" align="start">
+                    <Calendar
+                      mode="single"
+                      selected={filterDateTo}
+                      onSelect={(date) => { setFilterDateTo(date); setIsFilterToOpen(false); }}
+                      disabled={(date) => filterDateFrom ? date < filterDateFrom : false}
+                    />
+                  </PopoverContent>
+                </Popover>
+
+                {(searchTerm || filterStatus !== 'all' || filterType !== 'all' || filterDateFrom || filterDateTo) && (
+                  <Button variant="ghost" size="sm" onClick={resetFilters} className="h-10 px-4 hover:bg-destructive/10 hover:text-destructive rounded-lg flex items-center gap-2 text-[10px] font-black uppercase">
+                    <X className="h-3.5 w-3.5" /> Clear All
+                  </Button>
+                )}
+               </div>
             </div>
           </div>
         </CardHeader>
@@ -452,7 +524,7 @@ export default function MembersListPage() {
         </CardContent>
       </Card>
 
-      {/* Entry History Dialog */}
+      {/* Modals remain the same... */}
       <Dialog open={!!memberForHistory} onOpenChange={(open) => !open && setMemberForHistory(null)}>
         <DialogContent className="sm:max-w-lg bg-zinc-900 border-white/10 rounded-3xl p-6">
           <DialogHeader className="mb-4">
@@ -466,7 +538,6 @@ export default function MembersListPage() {
               </div>
             </div>
           </DialogHeader>
-          
           <div className="max-h-[400px] overflow-auto rounded-xl border border-white/5 bg-black/20">
              <Table>
                <TableHeader className="bg-white/[0.02]">
@@ -508,7 +579,6 @@ export default function MembersListPage() {
                </TableBody>
              </Table>
           </div>
-          
           <div className="mt-6">
             <Button variant="outline" className="w-full h-12 rounded-xl border-white/10 hover:bg-white/5 uppercase font-black text-xs tracking-widest" onClick={() => setMemberForHistory(null)}>
               Close Audit
@@ -517,7 +587,6 @@ export default function MembersListPage() {
         </DialogContent>
       </Dialog>
 
-      {/* QR Passport Dialog */}
       <Dialog open={!!memberQrToShow} onOpenChange={(open) => !open && setMemberQrToShow(null)}>
         <DialogContent className="sm:max-w-md bg-zinc-900 border-white/10 rounded-3xl p-6">
           <div className="flex flex-col items-center text-center gap-4">
@@ -548,7 +617,6 @@ export default function MembersListPage() {
         </DialogContent>
       </Dialog>
 
-      {/* PT Session Dialog with Restricted Dates */}
       <Dialog open={!!memberForPT} onOpenChange={(open) => !open && setMemberForPT(null)}>
         <DialogContent className="sm:max-w-md bg-zinc-900 border-white/10 rounded-3xl p-8">
           <DialogHeader>
@@ -557,7 +625,6 @@ export default function MembersListPage() {
             </DialogTitle>
             <DialogDescription className="text-xs font-bold uppercase tracking-widest opacity-60">For {memberForPT?.fullName}</DialogDescription>
           </DialogHeader>
-
           {memberForPT && (
             <div className="bg-primary/5 border border-primary/10 p-3 rounded-xl mb-4 flex items-center gap-3">
                <CalendarDays className="h-4 w-4 text-primary" />
@@ -571,7 +638,6 @@ export default function MembersListPage() {
                </div>
             </div>
           )}
-
           <div className="space-y-6 py-6">
             <div className="space-y-2">
               <Label className="text-[10px] uppercase font-black tracking-widest opacity-40">Package Price (INR)</Label>
@@ -597,7 +663,6 @@ export default function MembersListPage() {
                       onSelect={(date) => { setPtStartDate(date); setIsPtStartDateOpen(false); }} 
                       disabled={(date) => {
                         if (!ptLimits) return false;
-                        // PT must be within membership start/end AND >= today
                         const isBeforeMembership = date < ptLimits.start;
                         const isAfterMembership = ptLimits.end ? date > ptLimits.end : false;
                         const isBeforeToday = date < today;
@@ -623,7 +688,6 @@ export default function MembersListPage() {
                       onSelect={(date) => { setPtEndDate(date); setIsPtEndDateOpen(false); }} 
                       disabled={(date) => {
                         if (!ptLimits) return false;
-                        // PT end must be within membership AND >= PT start
                         const isBeforePtStart = date < (ptStartDate || today);
                         const isAfterMembership = ptLimits.end ? date > ptLimits.end : false;
                         return isBeforePtStart || isAfterMembership;
