@@ -16,7 +16,8 @@ import {
   WifiOff,
   Scan,
   ShieldCheck,
-  History
+  History,
+  ShieldAlert
 } from 'lucide-react';
 
 import { Button } from '@/components/ui/button';
@@ -24,10 +25,11 @@ import { Sheet, SheetContent, SheetTrigger, SheetHeader, SheetTitle, SheetDescri
 import UserNav from '@/components/user-nav';
 import { Badge } from '@/components/ui/badge';
 import { cn } from '@/lib/utils';
+import { Alert, AlertDescription, AlertTitle } from '@/components/ui/alert';
 
 export default function ReceptionLayout({ children }: { children: React.ReactNode }) {
   const { user, loading } = useUser();
-  const { isAdmin, loading: profileLoading } = useProfile();
+  const { profile, isAdmin, isMissingProfile, loading: profileLoading } = useProfile();
   const router = useRouter();
   const pathname = usePathname();
   const [isOnline, setIsOnline] = useState(true);
@@ -146,14 +148,25 @@ export default function ReceptionLayout({ children }: { children: React.ReactNod
               </nav>
             </SheetContent>
           </Sheet>
-          <div className="flex-1">
+          <div className="flex-1 flex items-center gap-4">
              <h2 className="font-semibold text-lg hidden md:block text-primary font-headline">
                {navItems.find(item => item.href === pathname)?.label || 'Portal'}
              </h2>
+             {isAdmin && <Badge className="bg-primary/20 text-primary border-primary/30 uppercase text-[9px] font-black tracking-widest px-2">Administrator</Badge>}
           </div>
           <UserNav />
         </header>
         <main className="flex-1 p-6">
+            {isMissingProfile && (
+              <Alert variant="destructive" className="mb-6 border-destructive/50 bg-destructive/5">
+                <ShieldAlert className="h-4 w-4" />
+                <AlertTitle className="font-black uppercase tracking-widest text-[10px]">Role Configuration Required</AlertTitle>
+                <AlertDescription className="text-xs">
+                  Your account (UID: <code className="bg-black/20 px-1 rounded">{user.uid}</code>) is authenticated but has no role assigned in Firestore. 
+                  Please go to the Firebase Console and create a document in the <b>users</b> collection with this UID as the document ID and set <b>role</b> to "admin" or "staff".
+                </AlertDescription>
+              </Alert>
+            )}
             {children}
         </main>
       </div>

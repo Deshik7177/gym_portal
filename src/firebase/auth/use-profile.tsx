@@ -1,4 +1,3 @@
-
 'use client';
 
 import { useMemo } from 'react';
@@ -23,6 +22,7 @@ export function useProfile() {
 
   const profileRef = useMemo(() => {
     if (!db || !user) return null;
+    // The UID from Firebase Auth is used as the document ID in the 'users' collection
     return doc(db, 'users', user.uid);
   }, [db, user]);
 
@@ -33,5 +33,7 @@ export function useProfile() {
     isAdmin: profile?.role === 'admin',
     isStaff: profile?.role === 'staff',
     loading: userLoading || profileLoading,
+    // Helper to check if the user is authenticated but missing a role profile
+    isMissingProfile: !userLoading && user && !profileLoading && !profile
   };
 }
