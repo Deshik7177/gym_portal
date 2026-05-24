@@ -82,7 +82,7 @@ function RegisterForm() {
           setDescription(data.description || '');
           setStartDate(data.startDate ? new Date(data.startDate) : undefined);
           setEndDate(data.endDate ? new Date(data.endDate) : undefined);
-          setIsEnrolled(!!data.faceEmbedding);
+          setIsEnrolled(!!data.qrToken);
           setIsEditMode(true);
         }
       }).finally(() => setLoading(false));
@@ -104,7 +104,7 @@ function RegisterForm() {
         setDescription(data.description || '');
         setStartDate(data.startDate ? new Date(data.startDate) : undefined);
         setEndDate(data.endDate ? new Date(data.endDate) : undefined);
-        setIsEnrolled(!!data.faceEmbedding);
+        setIsEnrolled(!!data.qrToken);
         setIsEditMode(true);
       } else {
         toast({ variant: "destructive", title: "Not Found", description: "No member found with this phone number." });
@@ -148,20 +148,34 @@ function RegisterForm() {
     
     setDoc(docRef, memberData, { merge: true })
       .then(() => {
+        // Deterministic ID for the membership sale to prevent duplicates on edit/fix
+        const startDateStr = format(startDate, 'yyyyMMdd');
+        const saleId = `membership_${phone}_${startDateStr}`;
+        
         const saleData = {
           memberId: phone,
           memberName: fullName,
           amount: parseFloat(price) || 0,
           date: new Date().toISOString().split('T')[0],
           category: 'membership',
-          description: description || (isEditMode ? `Update: Group Membership` : `New: Group Membership`),
-          createdAt: serverTimestamp()
+          description: description || (isEditMode ? `Membership Profile Update` : `New Group Membership`),
+          updatedAt: serverTimestamp()
         };
-        addDoc(collection(db, 'sales'), saleData);
+
+        // If it's a new registration, we also set the createdAt
+        if (!isEditMode) {
+          (saleData as any).createdAt = serverTimestamp();
+        }
+
+        // Use setDoc with a fixed ID to overwrite instead of creating duplicates
+        setDoc(doc(db, 'sales', saleId), saleData, { merge: true })
+          .catch((err) => {
+             console.warn("Sale log failed, but member saved:", err);
+          });
 
         toast({ 
-          title: "Saved Successfully", 
-          description: "Member records are synced with the cloud." 
+          title: "Database Synced", 
+          description: "Records have been updated in the cloud ledger." 
         });
         
         if (!isEditMode) resetForm();
@@ -215,9 +229,9 @@ function RegisterForm() {
 
       <Alert className="bg-primary/5 border-primary/20">
         <Info className="h-4 w-4 text-primary" />
-        <AlertTitle className="text-primary font-bold">Thrive Fit Cloud Sync</AlertTitle>
+        <AlertTitle className="text-primary font-bold">Audit Consistency Active</AlertTitle>
         <AlertDescription>
-          Member data is automatically synchronized with your Cloud Firestore database.
+          Price updates on existing profiles will modify the current term's ledger entry instead of creating duplicates.
         </AlertDescription>
       </Alert>
 
@@ -226,7 +240,7 @@ function RegisterForm() {
           <CardHeader>
             <div className="flex items-center justify-between">
               <CardTitle>Member Details</CardTitle>
-              {isEnrolled && <Badge className="bg-green-500">Biometrics Active</Badge>}
+              {isEnrolled && <Badge className="bg-green-500">Passport Active</Badge>}
             </div>
           </CardHeader>
           <CardContent className="space-y-6">
@@ -356,7 +370,7 @@ function RegisterForm() {
                   <FileText className="h-3 w-3" /> Notes / Package Details
                 </Label>
                 <Textarea 
-                  placeholder="e.g. 3 Months + 1 Month Free, Personal Training bundle, etc." 
+                  placeholder="e.g. 3 Months + 1 Month Free, etc." 
                   className="min-h-[48px] resize-none"
                   value={description}
                   onChange={(e) => setDescription(e.target.value)}
