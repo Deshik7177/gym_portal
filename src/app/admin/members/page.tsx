@@ -76,7 +76,7 @@ import {
   DialogFooter,
   DialogHeader,
   DialogTitle,
-} from "@/dialog";
+} from "@/components/ui/dialog";
 import { Label } from '@/components/ui/label';
 import { useToast } from '@/hooks/use-toast';
 import { errorEmitter } from '@/firebase/error-emitter';
