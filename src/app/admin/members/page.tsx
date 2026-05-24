@@ -1,3 +1,4 @@
+
 'use client';
 
 import { useState, useMemo, useRef } from 'react';
@@ -16,10 +17,11 @@ import {
   Filter,
   X,
   UserCheck,
-  History
+  History,
+  ShieldAlert
 } from 'lucide-react';
 import { collection, query, doc, deleteDoc, updateDoc, serverTimestamp, addDoc, where, orderBy, limit } from 'firebase/firestore';
-import { useFirestore, useCollection } from '@/firebase';
+import { useFirestore, useCollection, useProfile } from '@/firebase';
 import Link from 'next/link';
 import { useRouter } from 'next/navigation';
 import { format, startOfDay } from 'date-fns';
@@ -92,6 +94,7 @@ export default function MembersListPage() {
   const db = useFirestore();
   const { toast } = useToast();
   const router = useRouter();
+  const { isAdmin, loading: profileLoading } = useProfile();
   
   const [searchTerm, setSearchTerm] = useState('');
   const [filterStatus, setFilterStatus] = useState('all');
@@ -116,7 +119,6 @@ export default function MembersListPage() {
   const membersRef = useMemo(() => db ? query(collection(db, 'members')) : null, [db]);
   const { data: members, loading } = useCollection<any>(membersRef);
 
-  // Individual Attendance History Query
   const attendanceQuery = useMemo(() => {
     if (!db || !memberForHistory) return null;
     return query(
@@ -151,7 +153,7 @@ export default function MembersListPage() {
   }, [members]);
 
   const handleDeleteMember = () => {
-    if (!db || !memberToDelete) return;
+    if (!db || !memberToDelete || !isAdmin) return;
     deleteDoc(doc(db, 'members', memberToDelete.phone))
       .then(() => {
         toast({ title: "Member Removed" });
@@ -236,7 +238,7 @@ export default function MembersListPage() {
     setFilterType('all');
   };
 
-  if (loading) return <div className="flex h-60 w-full items-center justify-center"><Loader2 className="h-8 w-8 animate-spin text-primary" /></div>;
+  if (loading || profileLoading) return <div className="flex h-60 w-full items-center justify-center"><Loader2 className="h-8 w-8 animate-spin text-primary" /></div>;
 
   return (
     <div className="flex flex-col gap-6">
@@ -276,6 +278,13 @@ export default function MembersListPage() {
             </CardContent>
          </Card>
       </div>
+
+      {!isAdmin && (
+        <div className="bg-orange-500/10 border border-orange-500/20 p-4 rounded-xl flex items-center gap-3">
+           <ShieldAlert className="h-5 w-5 text-orange-500" />
+           <p className="text-xs font-bold text-orange-500 uppercase tracking-widest">Limited View: Edit/Delete Restricted to Admins</p>
+        </div>
+      )}
 
       <Card className="border-none bg-card/40 backdrop-blur-xl shadow-2xl rounded-2xl overflow-hidden">
         <CardHeader className="border-b border-white/5 py-6">
@@ -369,10 +378,15 @@ export default function MembersListPage() {
                         <DropdownMenuItem onSelect={() => handleManualCheckIn(member)} className="p-3 gap-3 rounded-lg mx-1 cursor-pointer text-green-500"><UserCheck className="h-4 w-4" /> Manual Check-In</DropdownMenuItem>
                         <DropdownMenuItem onSelect={() => setMemberForHistory(member)} className="p-3 gap-3 rounded-lg mx-1 cursor-pointer"><History className="h-4 w-4 text-accent" /> View History</DropdownMenuItem>
                         <DropdownMenuItem onSelect={() => setMemberQrToShow(member)} className="p-3 gap-3 rounded-lg mx-1 cursor-pointer"><QrCode className="h-4 w-4 text-primary" /> View Entry QR</DropdownMenuItem>
-                        <DropdownMenuItem onSelect={() => router.push(`/admin/register?edit=${member.phone}`)} className="p-3 gap-3 rounded-lg mx-1 cursor-pointer"><ArrowUpRight className="h-4 w-4" /> Edit Profile</DropdownMenuItem>
-                        <DropdownMenuItem onSelect={() => setMemberForPT(member)} className="p-3 gap-3 rounded-lg mx-1 cursor-pointer"><CreditCard className="h-4 w-4" /> Add PT Session</DropdownMenuItem>
-                        <DropdownMenuSeparator className="bg-white/5" />
-                        <DropdownMenuItem className="p-3 gap-3 rounded-lg mx-1 text-destructive cursor-pointer" onSelect={() => setMemberToDelete(member)}><Trash2 className="h-4 w-4" /> Terminate Record</DropdownMenuItem>
+                        
+                        {isAdmin && (
+                          <>
+                            <DropdownMenuItem onSelect={() => router.push(`/admin/register?edit=${member.phone}`)} className="p-3 gap-3 rounded-lg mx-1 cursor-pointer"><ArrowUpRight className="h-4 w-4" /> Edit Profile</DropdownMenuItem>
+                            <DropdownMenuItem onSelect={() => setMemberForPT(member)} className="p-3 gap-3 rounded-lg mx-1 cursor-pointer"><CreditCard className="h-4 w-4" /> Add PT Session</DropdownMenuItem>
+                            <DropdownMenuSeparator className="bg-white/5" />
+                            <DropdownMenuItem className="p-3 gap-3 rounded-lg mx-1 text-destructive cursor-pointer" onSelect={() => setMemberToDelete(member)}><Trash2 className="h-4 w-4" /> Terminate Record</DropdownMenuItem>
+                          </>
+                        )}
                       </DropdownMenuContent>
                     </DropdownMenu>
                   </TableCell>

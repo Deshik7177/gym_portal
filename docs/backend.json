@@ -1,3 +1,4 @@
+
 {
   "entities": {
     "Member": {
@@ -19,6 +20,16 @@
         "createdAt": { "type": "string", "format": "date-time" }
       },
       "required": ["fullName", "phone", "status", "price"]
+    },
+    "User": {
+      "title": "User",
+      "description": "A staff or admin user profile.",
+      "type": "object",
+      "properties": {
+        "email": { "type": "string" },
+        "role": { "type": "string", "enum": ["admin", "staff"] },
+        "name": { "type": "string" }
+      }
     },
     "GateControl": {
       "title": "Gate Control",
@@ -64,6 +75,10 @@
     "/members/{phone}": {
       "schema": "#/backend/entities/Member",
       "description": "Gym members indexed by phone."
+    },
+    "/users/{uid}": {
+      "schema": "#/backend/entities/User",
+      "description": "System users and their roles."
     },
     "/gateControl/{commandId}": {
       "schema": "#/backend/entities/GateControl",

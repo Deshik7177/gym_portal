@@ -1,3 +1,4 @@
+
 'use client';
 
 import { useState, useMemo } from 'react';
@@ -11,10 +12,12 @@ import {
   CreditCard,
   ChevronRight,
   TrendingUp,
-  History
+  History,
+  Trash2,
+  MoreHorizontal
 } from 'lucide-react';
-import { collection, query, orderBy } from 'firebase/firestore';
-import { useFirestore, useCollection } from '@/firebase';
+import { collection, query, orderBy, doc, deleteDoc } from 'firebase/firestore';
+import { useFirestore, useCollection, useProfile } from '@/firebase';
 import { format, startOfDay, endOfDay, parseISO } from 'date-fns';
 
 import { Button } from '@/components/ui/button';
@@ -45,11 +48,21 @@ import {
   PopoverContent,
   PopoverTrigger,
 } from "@/components/ui/popover";
+import {
+  DropdownMenu,
+  DropdownMenuContent,
+  DropdownMenuItem,
+  DropdownMenuTrigger,
+} from '@/components/ui/dropdown-menu';
 import { cn } from '@/lib/utils';
 import { Badge } from '@/components/ui/badge';
+import { useToast } from '@/hooks/use-toast';
 
 export default function SalesReportPage() {
   const db = useFirestore();
+  const { toast } = useToast();
+  const { isAdmin, loading: profileLoading } = useProfile();
+  
   const [filter, setFilter] = useState('all');
   const [searchTerm, setSearchTerm] = useState('');
   
@@ -88,6 +101,16 @@ export default function SalesReportPage() {
     return filteredSales.reduce((acc, s) => acc + (s.amount || 0), 0);
   }, [filteredSales]);
 
+  const handleDeleteSale = async (saleId: string) => {
+    if (!db || !isAdmin) return;
+    try {
+      await deleteDoc(doc(db, 'sales', saleId));
+      toast({ title: "Transaction Voided", description: "The entry has been removed from the ledger." });
+    } catch (e: any) {
+      toast({ variant: "destructive", title: "Action Denied", description: "Only admins can void transactions." });
+    }
+  };
+
   const resetFilters = () => {
     setSearchTerm('');
     setFilter('all');
@@ -95,7 +118,7 @@ export default function SalesReportPage() {
     setDateTo(undefined);
   };
 
-  if (loading) {
+  if (loading || profileLoading) {
     return (
       <div className="flex h-[400px] w-full items-center justify-center">
         <Loader2 className="h-8 w-8 animate-spin text-primary" />
@@ -240,9 +263,11 @@ export default function SalesReportPage() {
                           {sale.date ? format(parseISO(sale.date), 'MMM dd, yyyy') : 'NO DATE'}
                         </TableCell>
                         <TableCell>
-                          <div className="flex items-center gap-2">
-                            <span className="font-bold text-white group-hover:text-primary transition-colors">{sale.memberName}</span>
-                            <ChevronRight className="h-3 w-3 opacity-0 group-hover:opacity-40 transition-all -translate-x-1 group-hover:translate-x-0" />
+                          <div className="flex items-center justify-between">
+                            <div className="flex items-center gap-2">
+                              <span className="font-bold text-white group-hover:text-primary transition-colors">{sale.memberName}</span>
+                              <ChevronRight className="h-3 w-3 opacity-0 group-hover:opacity-40 transition-all -translate-x-1 group-hover:translate-x-0" />
+                            </div>
                           </div>
                         </TableCell>
                         <TableCell>
@@ -257,7 +282,23 @@ export default function SalesReportPage() {
                           {sale.description}
                         </TableCell>
                         <TableCell className="text-right font-black text-white pr-8 tabular-nums">
-                          ₹{sale.amount.toLocaleString()}
+                           <div className="flex items-center justify-end gap-3">
+                             <span>₹{sale.amount.toLocaleString()}</span>
+                             {isAdmin && (
+                               <DropdownMenu>
+                                 <DropdownMenuTrigger asChild>
+                                   <Button variant="ghost" size="icon" className="h-7 w-7 opacity-0 group-hover:opacity-100 transition-opacity">
+                                      <MoreHorizontal className="h-3 w-3" />
+                                   </Button>
+                                 </DropdownMenuTrigger>
+                                 <DropdownMenuContent align="end" className="bg-zinc-900 border-white/10">
+                                   <DropdownMenuItem onSelect={() => handleDeleteSale(sale.id)} className="text-destructive gap-2">
+                                     <Trash2 className="h-3 w-3" /> Void Transaction
+                                   </DropdownMenuItem>
+                                 </DropdownMenuContent>
+                               </DropdownMenu>
+                             )}
+                           </div>
                         </TableCell>
                       </TableRow>
                     ))
