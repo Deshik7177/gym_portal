@@ -1,3 +1,4 @@
+
 'use client';
 
 import { useState, useRef, useEffect, useCallback } from 'react';
@@ -12,9 +13,11 @@ import {
   Camera,
   AlertCircle,
   Scan,
-  UserCheck
+  UserCheck,
+  UserPlus,
+  Phone
 } from 'lucide-react';
-import { collection, query, updateDoc, doc, serverTimestamp, onSnapshot, addDoc } from 'firebase/firestore';
+import { collection, query, updateDoc, doc, serverTimestamp, onSnapshot, addDoc, getDoc } from 'firebase/firestore';
 import { useFirestore } from '@/firebase';
 import { Html5Qrcode, Html5QrcodeSupportedFormats } from 'html5-qrcode';
 import { cn } from '@/lib/utils';
@@ -22,18 +25,21 @@ import { validateQrPayload } from '@/lib/qr-logic';
 import { isToday } from 'date-fns';
 
 import { Button } from '@/components/ui/button';
-import { Card, CardContent } from '@/components/ui/card';
+import { Card, CardContent, CardHeader, CardTitle, CardDescription } from '@/components/ui/card';
 import { Badge } from '@/components/ui/badge';
 import { useToast } from '@/hooks/use-toast';
 import { Table, TableBody, TableCell, TableRow } from '@/components/ui/table';
 import { Tabs, TabsList, TabsTrigger } from '@/components/ui/tabs';
 import { FaceScanner } from '@/components/FaceScanner';
+import { FaceEnrollment } from '@/components/FaceEnrollment';
+import { Input } from '@/components/ui/input';
+import { Label } from '@/components/ui/label';
 
 export default function SmartEntrancePage() {
   const db = useFirestore();
   const { toast } = useToast();
   
-  const [authMode, setAuthMode] = useState<'qr' | 'face'>('qr');
+  const [authMode, setAuthMode] = useState<'qr' | 'face' | 'enroll'>('qr');
   const [isCameraActive, setIsCameraActive] = useState(false);
   const [isInitializing, setIsInitializing] = useState(false);
   const [identifiedMember, setIdentifiedMember] = useState<any>(null);
@@ -41,6 +47,11 @@ export default function SmartEntrancePage() {
   const [recentLogs, setRecentLogs] = useState<any[]>([]);
   const [isSyncing, setIsSyncing] = useState(false);
   const [torchOn, setTorchOn] = useState(false);
+
+  // Enrollment states
+  const [enrollPhone, setEnrollPhone] = useState('');
+  const [memberToEnroll, setMemberToEnroll] = useState<any>(null);
+  const [isEnrolling, setIsEnrolling] = useState(false);
 
   const scannerRef = useRef<Html5Qrcode | null>(null);
   const isProcessingRef = useRef(false);
@@ -75,7 +86,7 @@ export default function SmartEntrancePage() {
     };
   }, [db]);
 
-  const triggerAccess = useCallback(async (member: any, method: 'qr' | 'face') => {
+  const triggerAccess = useCallback(async (member: any, method: 'qr' | 'face' | 'manual') => {
     if (!db || !member || isProcessingRef.current) return;
     
     isProcessingRef.current = true;
@@ -222,11 +233,57 @@ export default function SmartEntrancePage() {
 
   const handleAuthModeChange = (val: string) => {
     stopScanner();
-    setAuthMode(val as 'qr' | 'face');
+    setAuthMode(val as any);
+    setMemberToEnroll(null);
+    setEnrollPhone('');
+    
     if (val === 'face') {
         setIsCameraActive(true);
     } else {
         setIsCameraActive(false);
+    }
+  };
+
+  const handleLookupForEnroll = async () => {
+    if (!db || !enrollPhone) return;
+    setIsInitializing(true);
+    try {
+      const docRef = doc(db, 'members', enrollPhone);
+      const snap = await getDoc(docRef);
+      if (snap.exists()) {
+        setMemberToEnroll({ id: snap.id, ...snap.data() });
+      } else {
+        toast({ 
+          variant: "destructive", 
+          title: "Member Not Found", 
+          description: "Please register the member in the admin portal first." 
+        });
+      }
+    } catch (e) {
+      toast({ variant: "destructive", title: "Lookup Failed" });
+    } finally {
+      setIsInitializing(false);
+    }
+  };
+
+  const handleFaceEnrolled = async (embedding: number[]) => {
+    if (!db || !memberToEnroll) return;
+    setIsEnrolling(true);
+    try {
+      await updateDoc(doc(db, 'members', memberToEnroll.id), {
+        faceEmbedding: embedding,
+        updatedAt: serverTimestamp()
+      });
+      toast({ 
+        title: "Face ID Enrolled", 
+        description: `Biometric identity linked to ${memberToEnroll.fullName}.` 
+      });
+      setAuthMode('face');
+    } catch (e) {
+      toast({ variant: "destructive", title: "Enrollment Failed" });
+    } finally {
+      setIsEnrolling(false);
+      setMemberToEnroll(null);
     }
   };
 
@@ -258,6 +315,9 @@ export default function SmartEntrancePage() {
                 <TabsTrigger value="face" className="data-[state=active]:bg-primary data-[state=active]:text-primary-foreground font-black text-[10px] uppercase tracking-widest px-6 rounded-lg transition-all">
                     <UserCheck className="h-3.5 w-3.5 mr-2" /> Face ID
                 </TabsTrigger>
+                <TabsTrigger value="enroll" className="data-[state=active]:bg-accent data-[state=active]:text-accent-foreground font-black text-[10px] uppercase tracking-widest px-6 rounded-lg transition-all">
+                    <UserPlus className="h-3.5 w-3.5 mr-2" /> Enrollment
+                </TabsTrigger>
             </TabsList>
         </Tabs>
       </div>
@@ -283,12 +343,53 @@ export default function SmartEntrancePage() {
                         </div>
                     )}
                 </>
-            ) : (
+            ) : authMode === 'face' ? (
                 <FaceScanner 
                     members={cachedMembersRef.current} 
                     onMatch={(member) => triggerAccess(member, 'face')} 
                     isActive={authMode === 'face'}
                 />
+            ) : (
+              <div className="w-full h-full flex items-center justify-center bg-zinc-950 p-12">
+                {!memberToEnroll ? (
+                  <div className="w-full max-w-md space-y-6">
+                    <div className="flex flex-col items-center gap-4 text-center">
+                      <div className="h-16 w-16 bg-accent/10 rounded-2xl flex items-center justify-center">
+                        <UserPlus className="h-8 w-8 text-accent" />
+                      </div>
+                      <h2 className="text-2xl font-black uppercase tracking-tighter italic text-white">New Face ID Link</h2>
+                      <p className="text-xs text-muted-foreground uppercase tracking-widest font-bold opacity-40">Identify member to begin biometric enrollment</p>
+                    </div>
+                    <div className="space-y-4">
+                      <div className="space-y-2">
+                        <Label className="text-[10px] uppercase font-black tracking-widest opacity-40">Enter Registered Mobile Number</Label>
+                        <div className="relative">
+                          <Phone className="absolute left-4 top-1/2 -translate-y-1/2 h-4 w-4 text-muted-foreground" />
+                          <Input 
+                            value={enrollPhone}
+                            onChange={(e) => setEnrollPhone(e.target.value)}
+                            onKeyDown={(e) => e.key === 'Enter' && handleLookupForEnroll()}
+                            placeholder="Mobile ID" 
+                            className="pl-12 h-14 bg-white/5 border-white/10 text-xl font-bold rounded-xl"
+                          />
+                        </div>
+                      </div>
+                      <Button 
+                        onClick={handleLookupForEnroll} 
+                        disabled={isInitializing || !enrollPhone}
+                        className="w-full h-14 rounded-xl bg-accent text-accent-foreground font-black uppercase tracking-widest shadow-xl shadow-accent/20"
+                      >
+                        {isInitializing ? <Loader2 className="h-5 w-5 animate-spin" /> : "Verify Member Details"}
+                      </Button>
+                    </div>
+                  </div>
+                ) : (
+                  <FaceEnrollment 
+                    onComplete={handleFaceEnrolled} 
+                    onCancel={() => setMemberToEnroll(null)} 
+                  />
+                )}
+              </div>
             )}
 
             {isInitializing && authMode === 'qr' && (
@@ -394,7 +495,9 @@ export default function SmartEntrancePage() {
                 <p className="text-[11px] text-muted-foreground leading-relaxed">
                     {authMode === 'qr' 
                         ? "Ensure your screen brightness is high and the code is centered."
-                        : "Remove glasses or hats and look directly at the center oval for Face ID."
+                        : authMode === 'face'
+                        ? "Look directly at the center oval for Face ID verification."
+                        : "Enter the member's mobile number to begin biometric link."
                     }
                 </p>
              </div>
