@@ -10,7 +10,9 @@ import {
   Smartphone,
   Zap,
   Camera,
-  AlertCircle
+  AlertCircle,
+  Scan,
+  UserCheck
 } from 'lucide-react';
 import { collection, query, updateDoc, doc, serverTimestamp, onSnapshot, addDoc } from 'firebase/firestore';
 import { useFirestore } from '@/firebase';
@@ -24,11 +26,14 @@ import { Card, CardContent } from '@/components/ui/card';
 import { Badge } from '@/components/ui/badge';
 import { useToast } from '@/hooks/use-toast';
 import { Table, TableBody, TableCell, TableRow } from '@/components/ui/table';
+import { Tabs, TabsList, TabsTrigger } from '@/components/ui/tabs';
+import { FaceScanner } from '@/components/FaceScanner';
 
 export default function SmartEntrancePage() {
   const db = useFirestore();
   const { toast } = useToast();
   
+  const [authMode, setAuthMode] = useState<'qr' | 'face'>('qr');
   const [isCameraActive, setIsCameraActive] = useState(false);
   const [isInitializing, setIsInitializing] = useState(false);
   const [identifiedMember, setIdentifiedMember] = useState<any>(null);
@@ -70,7 +75,7 @@ export default function SmartEntrancePage() {
     };
   }, [db]);
 
-  const triggerAccess = useCallback(async (member: any) => {
+  const triggerAccess = useCallback(async (member: any, method: 'qr' | 'face') => {
     if (!db || !member || isProcessingRef.current) return;
     
     isProcessingRef.current = true;
@@ -86,7 +91,7 @@ export default function SmartEntrancePage() {
     setRecentLogs(prev => [{
       name: member.fullName,
       time: new Date().toLocaleTimeString(),
-      method: 'QR'
+      method: method.toUpperCase()
     }, ...prev].slice(0, 10));
 
     try {
@@ -104,7 +109,7 @@ export default function SmartEntrancePage() {
           command: 'OPEN',
           timestamp: serverTimestamp(),
           memberId: memberId,
-          method: 'qr'
+          method: method
         })
       ];
 
@@ -113,7 +118,7 @@ export default function SmartEntrancePage() {
           memberId: memberId,
           memberName: member.fullName,
           timestamp: serverTimestamp(),
-          method: 'qr',
+          method: method,
           latency: 0
         }));
       }
@@ -160,7 +165,7 @@ export default function SmartEntrancePage() {
             );
 
             if (member && member.status === 'active') {
-              triggerAccess(member);
+              triggerAccess(member, 'qr');
             } else {
               isProcessingRef.current = true;
               setScanResult('failure');
@@ -215,6 +220,16 @@ export default function SmartEntrancePage() {
     }
   };
 
+  const handleAuthModeChange = (val: string) => {
+    stopScanner();
+    setAuthMode(val as 'qr' | 'face');
+    if (val === 'face') {
+        setIsCameraActive(true);
+    } else {
+        setIsCameraActive(false);
+    }
+  };
+
   useEffect(() => {
     return () => {
       stopScanner();
@@ -223,21 +238,34 @@ export default function SmartEntrancePage() {
 
   return (
     <div className="max-w-7xl mx-auto space-y-6 pb-20">
-      <div className="flex flex-col gap-2">
-         <h1 className="text-4xl font-black font-headline tracking-tighter text-white flex items-center gap-3 uppercase">
-            <ShieldCheck className="h-10 w-10 text-primary" />
-            Entry Portal
-         </h1>
-         <div className="flex items-center gap-2">
-            <p className="text-muted-foreground italic text-xs uppercase tracking-widest font-bold opacity-60">High-Performance Optical Pipeline Active</p>
-            {isSyncing && <Badge variant="outline" className="h-5 text-[9px] animate-pulse border-primary/20 bg-primary/5 text-primary"><Cloud className="h-2 w-2 mr-1" /> SYNCING CACHE</Badge>}
-         </div>
+      <div className="flex flex-col lg:flex-row justify-between items-start lg:items-end gap-4">
+        <div className="flex flex-col gap-2">
+           <h1 className="text-4xl font-black font-headline tracking-tighter text-white flex items-center gap-3 uppercase">
+              <ShieldCheck className="h-10 w-10 text-primary" />
+              Entry Portal
+           </h1>
+           <div className="flex items-center gap-2">
+              <p className="text-muted-foreground italic text-xs uppercase tracking-widest font-bold opacity-60">Unified Biometric Pipeline Active</p>
+              {isSyncing && <Badge variant="outline" className="h-5 text-[9px] animate-pulse border-primary/20 bg-primary/5 text-primary"><Cloud className="h-2 w-2 mr-1" /> SYNCING CACHE</Badge>}
+           </div>
+        </div>
+
+        <Tabs value={authMode} onValueChange={handleAuthModeChange} className="bg-white/5 p-1 rounded-xl border border-white/5">
+            <TabsList className="bg-transparent gap-1 h-10">
+                <TabsTrigger value="qr" className="data-[state=active]:bg-primary data-[state=active]:text-primary-foreground font-black text-[10px] uppercase tracking-widest px-6 rounded-lg transition-all">
+                    <Scan className="h-3.5 w-3.5 mr-2" /> QR Passport
+                </TabsTrigger>
+                <TabsTrigger value="face" className="data-[state=active]:bg-primary data-[state=active]:text-primary-foreground font-black text-[10px] uppercase tracking-widest px-6 rounded-lg transition-all">
+                    <UserCheck className="h-3.5 w-3.5 mr-2" /> Face ID
+                </TabsTrigger>
+            </TabsList>
+        </Tabs>
       </div>
 
       <div className="grid grid-cols-1 lg:grid-cols-12 gap-8">
         <Card className="lg:col-span-8 overflow-hidden flex flex-col relative bg-black border-none shadow-[0_0_50px_-12px_rgba(var(--primary),0.3)] rounded-3xl min-h-[600px]">
           <div className="absolute top-6 right-6 z-20 flex gap-2">
-            {isCameraActive && (
+            {isCameraActive && authMode === 'qr' && (
               <Button size="icon" variant="outline" className={cn("bg-black/50 backdrop-blur-md rounded-full border-white/10", torchOn && "text-primary border-primary")} onClick={toggleTorch}>
                   <Zap className={cn("h-4 w-4", torchOn && "fill-primary")} />
               </Button>
@@ -245,16 +273,25 @@ export default function SmartEntrancePage() {
           </div>
 
           <div className="relative flex-1 bg-black flex items-center justify-center overflow-hidden">
-            <div id="qr-reader" className="w-full h-full" />
-            
-            {!isCameraActive && !isInitializing && (
-              <div className="absolute inset-0 flex flex-col items-center justify-center gap-6 text-muted-foreground/10 bg-zinc-950">
-                <Smartphone className="h-32 w-32" />
-                <p className="font-headline text-2xl tracking-widest uppercase">Scanner Offline</p>
-              </div>
+            {authMode === 'qr' ? (
+                <>
+                    <div id="qr-reader" className="w-full h-full" />
+                    {!isCameraActive && !isInitializing && (
+                        <div className="absolute inset-0 flex flex-col items-center justify-center gap-6 text-muted-foreground/10 bg-zinc-950">
+                            <Smartphone className="h-32 w-32" />
+                            <p className="font-headline text-2xl tracking-widest uppercase">Scanner Offline</p>
+                        </div>
+                    )}
+                </>
+            ) : (
+                <FaceScanner 
+                    members={cachedMembersRef.current} 
+                    onMatch={(member) => triggerAccess(member, 'face')} 
+                    isActive={authMode === 'face'}
+                />
             )}
 
-            {isInitializing && (
+            {isInitializing && authMode === 'qr' && (
               <div className="absolute inset-0 flex flex-col items-center justify-center bg-black/80 backdrop-blur-xl z-50">
                  <Loader2 className="h-12 w-12 animate-spin text-primary mb-4" />
                  <p className="text-xs font-black uppercase tracking-widest text-primary/60">Enumerating Devices...</p>
@@ -269,8 +306,8 @@ export default function SmartEntrancePage() {
                 </div>
                 <h2 className="text-7xl font-black font-headline text-white mb-2 tracking-tighter italic uppercase">Welcome</h2>
                 <p className="text-3xl text-primary font-black uppercase tracking-tight mb-4">{identifiedMember.fullName}</p>
-                <Badge variant="outline" className="bg-white/10 border-white/20 text-white font-mono text-[10px] tracking-widest px-4 py-1">
-                   VERIFIED INSTANTLY
+                <Badge variant="outline" className="bg-white/10 border-white/20 text-white font-mono text-[10px] tracking-widest px-4 py-1 uppercase">
+                   Identity Verified: {authMode.toUpperCase()}
                 </Badge>
               </div>
             )}
@@ -278,43 +315,45 @@ export default function SmartEntrancePage() {
             {scanResult === 'failure' && (
               <div className="absolute inset-0 flex flex-col items-center justify-center z-[100] animate-in zoom-in duration-300 bg-destructive/95 backdrop-blur-3xl">
                 <h2 className="text-7xl font-black font-headline text-white mb-2 tracking-tighter italic uppercase">Denied</h2>
-                <p className="text-xl text-white font-black uppercase tracking-widest opacity-60">Subscription Lapsed</p>
+                <p className="text-xl text-white font-black uppercase tracking-widest opacity-60">Access Restricted</p>
               </div>
             )}
           </div>
 
-          <CardContent className="p-8 border-t border-white/5 bg-card/80 backdrop-blur-3xl">
-             <div className="flex flex-col sm:flex-row items-center justify-between gap-6">
-                <div className="flex items-center gap-6">
-                   <div>
-                      <p className="text-[10px] font-black text-muted-foreground uppercase tracking-[0.5em] mb-2">Sensor Status</p>
-                      <div className="flex items-center gap-4">
-                         <div className={cn("h-3 w-3 rounded-full", isCameraActive ? "bg-green-500 animate-pulse shadow-[0_0_10px_rgba(34,197,94,1)]" : "bg-zinc-800")} />
-                         <span className="font-mono text-xs text-white/40 uppercase tracking-widest">
-                           {isCameraActive ? 'OPTICAL ENGINE: LIVE' : 'SYSTEM: STANDBY'}
-                         </span>
-                      </div>
-                   </div>
+          {authMode === 'qr' && (
+            <CardContent className="p-8 border-t border-white/5 bg-card/80 backdrop-blur-3xl">
+                <div className="flex flex-col sm:flex-row items-center justify-between gap-6">
+                    <div className="flex items-center gap-6">
+                    <div>
+                        <p className="text-[10px] font-black text-muted-foreground uppercase tracking-[0.5em] mb-2">Sensor Status</p>
+                        <div className="flex items-center gap-4">
+                            <div className={cn("h-3 w-3 rounded-full", isCameraActive ? "bg-green-500 animate-pulse shadow-[0_0_10px_rgba(34,197,94,1)]" : "bg-zinc-800")} />
+                            <span className="font-mono text-xs text-white/40 uppercase tracking-widest">
+                            {isCameraActive ? 'OPTICAL ENGINE: LIVE' : 'SYSTEM: STANDBY'}
+                            </span>
+                        </div>
+                    </div>
+                    </div>
+                    
+                    <div className="flex gap-4 w-full sm:w-auto">
+                    {!isCameraActive ? (
+                        <Button size="lg" onClick={startScanner} disabled={isInitializing} className="flex-1 sm:px-12 font-black h-16 text-xl rounded-2xl shadow-2xl shadow-primary/20 uppercase">
+                            {isInitializing ? <Loader2 className="h-6 w-6 animate-spin mr-3" /> : <Camera className="mr-3 h-6 w-6" />}
+                            Initialize QR
+                        </Button>
+                    ) : (
+                        <Button 
+                        size="lg" 
+                        onClick={stopScanner} 
+                        className="flex-1 sm:px-16 font-black h-16 text-xl rounded-2xl shadow-2xl shadow-white/5 bg-white/5 text-white hover:bg-white/10 uppercase"
+                        >
+                        Stop Scanner
+                        </Button>
+                    )}
+                    </div>
                 </div>
-                
-                <div className="flex gap-4 w-full sm:w-auto">
-                  {!isCameraActive ? (
-                    <Button size="lg" onClick={startScanner} disabled={isInitializing} className="flex-1 sm:px-12 font-black h-16 text-xl rounded-2xl shadow-2xl shadow-primary/20 uppercase">
-                        {isInitializing ? <Loader2 className="h-6 w-6 animate-spin mr-3" /> : <Camera className="mr-3 h-6 w-6" />}
-                        Initialize Scanner
-                    </Button>
-                  ) : (
-                    <Button 
-                      size="lg" 
-                      onClick={stopScanner} 
-                      className="flex-1 sm:px-16 font-black h-16 text-xl rounded-2xl shadow-2xl shadow-white/5 bg-white/5 text-white hover:bg-white/10 uppercase"
-                    >
-                      Disable Scanner
-                    </Button>
-                  )}
-                </div>
-             </div>
-          </CardContent>
+            </CardContent>
+          )}
         </Card>
 
         <div className="lg:col-span-4 flex flex-col gap-6">
@@ -333,7 +372,7 @@ export default function SmartEntrancePage() {
                           <TableCell className="text-[10px] font-mono opacity-30 pl-8">{log.time}</TableCell>
                           <TableCell className="font-bold text-sm text-white/80">{log.name}</TableCell>
                           <TableCell className="text-right pr-8">
-                             <Badge variant="outline" className="text-[9px] font-black px-2 py-0 border-none text-primary uppercase tracking-tighter">QR OK</Badge>
+                             <Badge variant="outline" className="text-[9px] font-black px-2 py-0 border-none text-primary uppercase tracking-tighter">{log.method} OK</Badge>
                           </TableCell>
                       </TableRow>
                     )) : (
@@ -352,7 +391,12 @@ export default function SmartEntrancePage() {
              <AlertCircle className="h-5 w-5 text-primary mt-0.5" />
              <div className="space-y-1">
                 <p className="text-[10px] font-black uppercase tracking-widest text-primary">System Tip</p>
-                <p className="text-[11px] text-muted-foreground leading-relaxed">The camera will automatically detect your <b>Passport QR</b>. Ensure your brightness is up and the code is centered.</p>
+                <p className="text-[11px] text-muted-foreground leading-relaxed">
+                    {authMode === 'qr' 
+                        ? "Ensure your screen brightness is high and the code is centered."
+                        : "Remove glasses or hats and look directly at the center oval for Face ID."
+                    }
+                </p>
              </div>
           </div>
         </div>
