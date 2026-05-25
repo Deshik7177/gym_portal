@@ -1,11 +1,12 @@
 'use client';
 
-import React, { useEffect, useRef, useState, useCallback } from 'react';
-import { Loader2, Camera, ShieldAlert, Zap } from 'lucide-react';
+import React, { useEffect, useRef, useState } from 'react';
+import { Loader2, ShieldAlert } from 'lucide-react';
 import * as faceapi from 'face-api.js';
 import { loadFaceModels, checkFrameQuality, findBestMatch } from '@/lib/face-logic';
 import { Button } from '@/components/ui/button';
 import { cn } from '@/lib/utils';
+import { useToast } from '@/hooks/use-toast';
 
 interface FaceScannerProps {
   members: any[];
@@ -14,19 +15,27 @@ interface FaceScannerProps {
 }
 
 export function FaceScanner({ members, onMatch, isActive }: FaceScannerProps) {
+  const { toast } = useToast();
   const videoRef = useRef<HTMLVideoElement>(null);
-  const canvasRef = useRef<HTMLCanvasElement>(null);
   const [isInitializing, setIsInitializing] = useState(false);
   const [cameraError, setCameraError] = useState<string | null>(null);
-  const [isProcessing, setIsProcessing] = useState(false);
-  const requestRef = useRef<number>(null);
+  
+  const isProcessingRef = useRef(false);
+  const loopTimeoutRef = useRef<NodeJS.Timeout | null>(null);
 
-  const detectAndMatch = useCallback(async () => {
-    if (!videoRef.current || !isActive || isProcessing) return;
+  const runVerificationCycle = async () => {
+    if (!videoRef.current || !isActive || isProcessingRef.current) return;
+
+    if (videoRef.current.readyState !== 4) {
+      loopTimeoutRef.current = setTimeout(runVerificationCycle, 200);
+      return;
+    }
+
+    isProcessingRef.current = true;
 
     try {
       const detection = await faceapi
-        .detectSingleFace(videoRef.current, new faceapi.SsdMobilenetv1Options({ minConfidence: 0.5 }))
+        .detectSingleFace(videoRef.current, new faceapi.TinyFaceDetectorOptions({ inputSize: 224, scoreThreshold: 0.5 }))
         .withFaceLandmarks()
         .withFaceDescriptor();
 
@@ -35,41 +44,34 @@ export function FaceScanner({ members, onMatch, isActive }: FaceScannerProps) {
         if (quality.isValid) {
           const { bestMatch, distance } = findBestMatch(Array.from(detection.descriptor), members);
           
-          // Distance threshold for a match (lower is better, < 0.45 is strict/good)
           if (bestMatch && distance < 0.48) {
-            setIsProcessing(true);
             onMatch(bestMatch);
-            // Resume detection after a delay happens in parent component state change
+            // Cycle will be paused by parent state (isActive = false) on match
+            return; 
           }
         }
       }
     } catch (err) {
-      console.warn("Detection cycle skipped:", err);
+      console.warn("Verification cycle error:", err);
+    } finally {
+      isProcessingRef.current = false;
+      // Throttled loop: ~3 FPS for verification to keep UI fluid
+      loopTimeoutRef.current = setTimeout(runVerificationCycle, 330);
     }
-
-    if (isActive) {
-      requestRef.current = requestAnimationFrame(detectAndMatch);
-    }
-  }, [isActive, isProcessing, members, onMatch]);
+  };
 
   useEffect(() => {
     if (isActive) {
-      setIsProcessing(false);
       startCamera();
     } else {
+      if (loopTimeoutRef.current) clearTimeout(loopTimeoutRef.current);
       stopCamera();
     }
-    return () => stopCamera();
-  }, [isActive]);
-
-  useEffect(() => {
-    if (isActive && !isInitializing && !cameraError) {
-      requestRef.current = requestAnimationFrame(detectAndMatch);
-    }
     return () => {
-      if (requestRef.current) cancelAnimationFrame(requestRef.current);
+      if (loopTimeoutRef.current) clearTimeout(loopTimeoutRef.current);
+      stopCamera();
     };
-  }, [isActive, isInitializing, cameraError, detectAndMatch]);
+  }, [isActive]);
 
   async function startCamera() {
     setIsInitializing(true);
@@ -86,16 +88,15 @@ export function FaceScanner({ members, onMatch, isActive }: FaceScannerProps) {
       if (videoRef.current) {
         videoRef.current.srcObject = stream;
         setIsInitializing(false);
+        runVerificationCycle();
       }
     } catch (err: any) {
-      console.error("Camera access failed:", err);
-      setCameraError(err.message || "Could not access camera hardware.");
+      setCameraError(err.message || "Camera hardware failure.");
       setIsInitializing(false);
     }
   }
 
   function stopCamera() {
-    if (requestRef.current) cancelAnimationFrame(requestRef.current);
     const stream = videoRef.current?.srcObject as MediaStream;
     stream?.getTracks().forEach(track => track.stop());
     if (videoRef.current) videoRef.current.srcObject = null;
@@ -105,9 +106,9 @@ export function FaceScanner({ members, onMatch, isActive }: FaceScannerProps) {
     return (
       <div className="flex flex-col items-center justify-center gap-4 p-12 text-center h-full bg-zinc-950">
         <ShieldAlert className="h-16 w-16 text-destructive" />
-        <h3 className="text-xl font-bold uppercase tracking-tighter">Optical Engine Failure</h3>
+        <h3 className="text-xl font-bold uppercase tracking-tighter">Sensor Failure</h3>
         <p className="text-muted-foreground text-sm max-w-xs">{cameraError}</p>
-        <Button onClick={startCamera} variant="outline" className="mt-4">Retry Hardware Link</Button>
+        <Button onClick={startCamera} variant="outline" className="mt-4 border-white/10">Retry Hardware Link</Button>
       </div>
     );
   }
@@ -125,7 +126,6 @@ export function FaceScanner({ members, onMatch, isActive }: FaceScannerProps) {
         )}
       />
       
-      {/* Face Guide Overlay */}
       {!isInitializing && (
         <div className="absolute inset-0 flex items-center justify-center pointer-events-none">
           <div className="w-[280px] h-[360px] border-2 border-primary/30 rounded-[140px] relative">
@@ -138,11 +138,10 @@ export function FaceScanner({ members, onMatch, isActive }: FaceScannerProps) {
       {isInitializing && (
         <div className="absolute inset-0 flex flex-col items-center justify-center bg-black/80 backdrop-blur-xl z-50">
           <Loader2 className="h-12 w-12 animate-spin text-primary mb-4" />
-          <p className="text-xs font-black uppercase tracking-widest text-primary/60">Calibrating Neural Net...</p>
+          <p className="text-xs font-black uppercase tracking-widest text-primary/60">Calibrating Biometric Engine...</p>
         </div>
       )}
 
-      {/* Real-time Status */}
       <div className="absolute bottom-6 left-6 z-20">
         <div className="flex items-center gap-3 bg-black/60 backdrop-blur-md p-3 rounded-xl border border-white/5">
           <div className="h-2 w-2 rounded-full bg-green-500 animate-pulse" />

@@ -5,8 +5,8 @@ import * as faceapi from 'face-api.js';
 let modelsLoadedPromise: Promise<void> | null = null;
 
 /**
- * Loads high-precision models required for the biometric pipeline.
- * Ensures consistent model usage between enrollment and verification.
+ * Loads optimized models for the biometric pipeline.
+ * Switched to TinyFaceDetector for better performance on kiosk hardware.
  */
 export function loadFaceModels() {
   if (typeof window === 'undefined') return Promise.resolve();
@@ -16,13 +16,12 @@ export function loadFaceModels() {
   
   modelsLoadedPromise = (async () => {
     try {
-      // Use high-precision SSD and Landmarks for all operations
       await Promise.all([
-        faceapi.nets.ssdMobilenetv1.loadFromUri(MODEL_URL),
+        faceapi.nets.tinyFaceDetector.loadFromUri(MODEL_URL),
         faceapi.nets.faceLandmark68Net.loadFromUri(MODEL_URL),
         faceapi.nets.faceRecognitionNet.loadFromUri(MODEL_URL),
       ]);
-      console.log('Biometric Neural Pipeline Initialized');
+      console.log('Production Biometric Pipeline Initialized (TinyFace)');
     } catch (error) {
       console.error('Failed to load local AI models:', error);
       modelsLoadedPromise = null; 
@@ -34,43 +33,61 @@ export function loadFaceModels() {
 }
 
 /**
- * Strict quality check for face frame to ensure high-fidelity embeddings.
- * Rejects frames based on angle, confidence, and lighting.
+ * Hardened quality check.
+ * Validates centering, size, and requires micro-movements between samples.
  */
-export async function checkFrameQuality(detection: faceapi.WithFaceDescriptor<faceapi.WithFaceLandmarks<{ detection: faceapi.FaceDetection }>>) {
+export async function checkFrameQuality(
+  detection: faceapi.WithFaceDescriptor<faceapi.WithFaceLandmarks<{ detection: faceapi.FaceDetection }>>,
+  lastDescriptor?: number[]
+) {
   if (!detection) return { isValid: false, reason: "No face detected" };
   
-  const { detection: d, landmarks } = detection;
+  const { detection: d, landmarks, descriptor } = detection;
   
-  // 1. Confidence Threshold (Relaxed from 0.8 to 0.6 for better accessibility)
-  if (d.score < 0.6) return { isValid: false, reason: "Face unclear" };
+  // 1. Confidence Threshold (Tiny detector needs ~0.5)
+  if (d.score < 0.5) return { isValid: false, reason: "Face unclear" };
 
-  // 2. Pose Estimation (Alignment)
+  // 2. Centering & Pose Estimation
   const nose = landmarks.getNose();
   const leftEye = landmarks.getLeftEye();
   const rightEye = landmarks.getRightEye();
-
   const eyeCenterX = (leftEye[0].x + rightEye[3].x) / 2;
-  const noseX = nose[0].x;
-  const horizontalOffset = Math.abs(noseX - eyeCenterX);
+  const horizontalOffset = Math.abs(nose[0].x - eyeCenterX);
   
-  // Relaxed from 30 to 50 to allow more natural movement
-  if (horizontalOffset > 50) return { isValid: false, reason: "Look at camera" };
+  if (horizontalOffset > 40) return { isValid: false, reason: "Center your face" };
 
-  // 3. Proximity Check (Relaxed from 140 to 100)
-  if (d.box.width < 100) return { isValid: false, reason: "Step closer" };
+  // 3. Proximity Check (Size in frame)
+  if (d.box.width < 110) return { isValid: false, reason: "Step closer" };
 
-  // 4. Descriptor Validation
-  if (!detection.descriptor || detection.descriptor.length !== 128) {
-    return { isValid: false, reason: "Signal error" };
+  // 4. Movement Validation (Anti-Stasis)
+  // Rejects identical frames to ensure 5 unique samples
+  if (lastDescriptor) {
+    const dist = faceapi.euclideanDistance(new Float32Array(descriptor), new Float32Array(lastDescriptor));
+    if (dist < 0.12) return { isValid: false, reason: "Tilt your head slightly" };
   }
 
   return { isValid: true };
 }
 
 /**
+ * Validates that all captured samples are consistent.
+ * Detects if a "poison" sample was introduced during enrollment.
+ */
+export function validateSampleConsistency(embeddings: number[][]): boolean {
+  if (embeddings.length < 2) return true;
+  const avg = averageEmbeddings(embeddings);
+  const avgArr = new Float32Array(avg);
+
+  // Check if any sample drifts too far from the average (> 0.45)
+  for (const emb of embeddings) {
+    const dist = faceapi.euclideanDistance(avgArr, new Float32Array(emb));
+    if (dist > 0.45) return false;
+  }
+  return true;
+}
+
+/**
  * Calculates the average descriptor from multiple frames.
- * This stabilizes the biometric ID against lighting and pose noise.
  */
 export function averageEmbeddings(embeddings: number[][]): number[] {
   if (embeddings.length === 0) return [];
@@ -87,12 +104,11 @@ export function averageEmbeddings(embeddings: number[][]): number[] {
 }
 
 /**
- * Performs local similarity comparison using Euclidean Distance.
- * Threshold < 0.55 is recommended for high accuracy.
+ * Performs 1:N local similarity comparison.
  */
 export function findBestMatch(liveDescriptor: number[], members: any[]) {
   let bestMatch = null;
-  let minDistance = 2.0; // Euclidean distance max is 2.0
+  let minDistance = 2.0;
 
   if (!liveDescriptor || liveDescriptor.length !== 128 || !members || members.length === 0) {
     return { bestMatch: null, distance: 2.0 };
@@ -106,25 +122,11 @@ export function findBestMatch(liveDescriptor: number[], members: any[]) {
     const storedArray = new Float32Array(member.faceEmbedding);
     const distance = faceapi.euclideanDistance(liveArray, storedArray);
     
-    // Lower distance = closer match
     if (distance < minDistance) {
       minDistance = distance;
       bestMatch = member;
     }
   }
 
-  if (bestMatch) {
-    console.debug(`[Biometric] Best Candidate: ${bestMatch.fullName}, Dist: ${minDistance.toFixed(4)}`);
-  }
-
   return { bestMatch, distance: minDistance };
-}
-
-/**
- * Lightweight passive detection
- */
-export async function detectFacePassive(input: HTMLVideoElement | HTMLCanvasElement) {
-  if (!input || (input instanceof HTMLVideoElement && input.readyState < 2)) return null;
-  const options = new faceapi.SsdMobilenetv1Options({ minConfidence: 0.5 });
-  return await faceapi.detectSingleFace(input, options);
 }
