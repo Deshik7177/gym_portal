@@ -3,10 +3,10 @@
 import * as faceapi from 'face-api.js';
 
 let modelsLoadedPromise: Promise<void> | null = null;
+const MEMBER_CACHE = new Map<string, { data: any, buffer: Float32Array }>();
 
 /**
  * Loads optimized models for the biometric pipeline.
- * Switched to TinyFaceDetector for better performance on kiosk hardware.
  */
 export function loadFaceModels() {
   if (typeof window === 'undefined') return Promise.resolve();
@@ -21,7 +21,6 @@ export function loadFaceModels() {
         faceapi.nets.faceLandmark68Net.loadFromUri(MODEL_URL),
         faceapi.nets.faceRecognitionNet.loadFromUri(MODEL_URL),
       ]);
-      console.log('Production Biometric Pipeline Initialized (TinyFace)');
     } catch (error) {
       console.error('Failed to load local AI models:', error);
       modelsLoadedPromise = null; 
@@ -34,7 +33,7 @@ export function loadFaceModels() {
 
 /**
  * Hardened quality check.
- * Validates centering, size, and requires micro-movements between samples.
+ * Rejects frames that are blurred, off-center, or too small.
  */
 export async function checkFrameQuality(
   detection: faceapi.WithFaceDescriptor<faceapi.WithFaceLandmarks<{ detection: faceapi.FaceDetection }>>,
@@ -44,26 +43,25 @@ export async function checkFrameQuality(
   
   const { detection: d, landmarks, descriptor } = detection;
   
-  // 1. Confidence Threshold (Tiny detector needs ~0.5)
-  if (d.score < 0.5) return { isValid: false, reason: "Face unclear" };
+  // 1. Confidence Threshold
+  if (d.score < 0.6) return { isValid: false, reason: "Face unclear" };
 
-  // 2. Centering & Pose Estimation
+  // 2. Centering & Alignment
   const nose = landmarks.getNose();
   const leftEye = landmarks.getLeftEye();
   const rightEye = landmarks.getRightEye();
   const eyeCenterX = (leftEye[0].x + rightEye[3].x) / 2;
   const horizontalOffset = Math.abs(nose[0].x - eyeCenterX);
   
-  if (horizontalOffset > 40) return { isValid: false, reason: "Center your face" };
+  if (horizontalOffset > 35) return { isValid: false, reason: "Center your face" };
 
-  // 3. Proximity Check (Size in frame)
-  if (d.box.width < 110) return { isValid: false, reason: "Step closer" };
+  // 3. Size in Frame (Ensures enough detail)
+  if (d.box.width < 120) return { isValid: false, reason: "Step closer" };
 
-  // 4. Movement Validation (Anti-Stasis)
-  // Rejects identical frames to ensure 5 unique samples
+  // 4. Movement Validation (For enrollment diversity)
   if (lastDescriptor) {
     const dist = faceapi.euclideanDistance(new Float32Array(descriptor), new Float32Array(lastDescriptor));
-    if (dist < 0.12) return { isValid: false, reason: "Tilt your head slightly" };
+    if (dist < 0.15) return { isValid: false, reason: "Slowly tilt your head" };
   }
 
   return { isValid: true };
@@ -71,23 +69,21 @@ export async function checkFrameQuality(
 
 /**
  * Validates that all captured samples are consistent.
- * Detects if a "poison" sample was introduced during enrollment.
  */
 export function validateSampleConsistency(embeddings: number[][]): boolean {
   if (embeddings.length < 2) return true;
   const avg = averageEmbeddings(embeddings);
   const avgArr = new Float32Array(avg);
 
-  // Check if any sample drifts too far from the average (> 0.45)
   for (const emb of embeddings) {
     const dist = faceapi.euclideanDistance(avgArr, new Float32Array(emb));
-    if (dist > 0.45) return false;
+    if (dist > 0.42) return false; // Reject drift
   }
   return true;
 }
 
 /**
- * Calculates the average descriptor from multiple frames.
+ * Calculates the average descriptor.
  */
 export function averageEmbeddings(embeddings: number[][]): number[] {
   if (embeddings.length === 0) return [];
@@ -104,29 +100,44 @@ export function averageEmbeddings(embeddings: number[][]): number[] {
 }
 
 /**
- * Performs 1:N local similarity comparison.
+ * Performs optimized 1:N matching using pre-buffered Float32Arrays.
  */
 export function findBestMatch(liveDescriptor: number[], members: any[]) {
-  let bestMatch = null;
-  let minDistance = 2.0;
-
   if (!liveDescriptor || liveDescriptor.length !== 128 || !members || members.length === 0) {
     return { bestMatch: null, distance: 2.0 };
   }
 
   const liveArray = new Float32Array(liveDescriptor);
+  let bestMatch = null;
+  let minDistance = 2.0;
 
-  for (const member of members) {
-    if (!member.faceEmbedding || !Array.isArray(member.faceEmbedding) || member.faceEmbedding.length !== 128) continue;
-    
-    const storedArray = new Float32Array(member.faceEmbedding);
-    const distance = faceapi.euclideanDistance(liveArray, storedArray);
-    
+  // Sync Cache: Avoid repetitive array allocations inside the loop
+  members.forEach(m => {
+    if (!m.faceEmbedding) return;
+    const cacheKey = m.id || m.phone;
+    if (!MEMBER_CACHE.has(cacheKey)) {
+      MEMBER_CACHE.set(cacheKey, {
+        data: m,
+        buffer: new Float32Array(m.faceEmbedding)
+      });
+    }
+  });
+
+  // Optimized vector comparison
+  for (const entry of MEMBER_CACHE.values()) {
+    const distance = faceapi.euclideanDistance(liveArray, entry.buffer);
     if (distance < minDistance) {
       minDistance = distance;
-      bestMatch = member;
+      bestMatch = entry.data;
     }
   }
 
   return { bestMatch, distance: minDistance };
+}
+
+/**
+ * Clears the matching cache (e.g., when members list is updated).
+ */
+export function clearBiometricCache() {
+  MEMBER_CACHE.clear();
 }
