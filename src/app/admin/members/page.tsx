@@ -95,20 +95,17 @@ export default function MembersListPage() {
   const db = useFirestore();
   const { toast } = useToast();
   const router = useRouter();
-  const { isAdmin, loading: profileLoading } = useProfile();
+  const { isAdmin, isStaff, loading: profileLoading } = useProfile();
   
-  // State for search and simple filters
   const [searchTerm, setSearchTerm] = useState('');
   const [filterStatus, setFilterStatus] = useState('all');
   const [filterType, setFilterType] = useState('all');
   
-  // State for date range filters (Expiration)
   const [filterDateFrom, setFilterDateFrom] = useState<Date | undefined>(undefined);
   const [filterDateTo, setFilterDateTo] = useState<Date | undefined>(undefined);
   const [isFilterFromOpen, setIsFilterFromOpen] = useState(false);
   const [isFilterToOpen, setIsFilterToOpen] = useState(false);
   
-  // Action/Modal states
   const [memberToDelete, setMemberToDelete] = useState<any>(null);
   const [memberForPT, setMemberForPT] = useState<any>(null);
   const [memberQrToShow, setMemberQrToShow] = useState<any>(null);
@@ -116,7 +113,6 @@ export default function MembersListPage() {
   const [isUpdatingPT, setIsUpdatingPT] = useState(false);
   const [isProcessingCheckIn, setIsProcessingCheckIn] = useState<string | null>(null);
   
-  // PT Add states
   const [ptPrice, setPtPrice] = useState('');
   const [ptStartDate, setPtStartDate] = useState<Date | undefined>(undefined);
   const [ptEndDate, setPtEndDate] = useState<Date | undefined>(undefined);
@@ -126,11 +122,9 @@ export default function MembersListPage() {
   const qrRef = useRef<HTMLDivElement>(null);
   const today = useMemo(() => startOfDay(new Date()), []);
 
-  // Main members query
   const membersRef = useMemo(() => db ? query(collection(db, 'members')) : null, [db]);
   const { data: members, loading } = useCollection<any>(membersRef);
 
-  // History query for specific member
   const attendanceQuery = useMemo(() => {
     if (!db || !memberForHistory) return null;
     return query(
@@ -143,7 +137,6 @@ export default function MembersListPage() {
 
   const { data: memberLogs, loading: logsLoading } = useCollection<any>(attendanceQuery);
 
-  // Helper for PT date restrictions based on current member selection
   const ptLimits = useMemo(() => {
     if (!memberForPT) return null;
     return {
@@ -152,21 +145,14 @@ export default function MembersListPage() {
     };
   }, [memberForPT, today]);
 
-  // Combined filtering logic
   const filteredMembers = useMemo(() => {
     if (!members) return [];
     return members.filter(m => {
-      // Search filter
       const matchesSearch = (m.fullName?.toLowerCase().includes(searchTerm.toLowerCase()) || 
                              m.phone?.includes(searchTerm));
-      
-      // Status filter
       const matchesStatus = filterStatus === 'all' || m.status === filterStatus;
-      
-      // Category filter
       const matchesType = filterType === 'all' || m.type === filterType;
       
-      // Expiration Date Range filter
       let matchesDate = true;
       if (filterDateFrom || filterDateTo) {
         if (m.endDate) {
@@ -215,6 +201,13 @@ export default function MembersListPage() {
         updateDoc(doc(db, 'members', member.phone), {
           lastCheckIn: timestamp,
           updatedAt: timestamp
+        }),
+        // Signal hardware gate via real-time queue
+        addDoc(collection(db, 'gateControl'), {
+          command: 'OPEN',
+          timestamp: timestamp,
+          memberId: member.phone,
+          method: 'manual'
         })
       ];
 
@@ -231,10 +224,10 @@ export default function MembersListPage() {
       await Promise.all(tasks);
       
       toast({ 
-        title: alreadyLoggedToday ? "Entry Freshness Updated" : "Manual Attendance Recorded", 
+        title: alreadyLoggedToday ? "Hardware Signal Sent" : "Manual Attendance Recorded", 
         description: alreadyLoggedToday 
-          ? `Member ${member.fullName} was already logged today.` 
-          : `Check-in logged for ${member.fullName}.` 
+          ? `Gate open signal sent for ${member.fullName}.` 
+          : `Check-in logged and gate opened for ${member.fullName}.` 
       });
     } catch (e: any) {
       toast({ variant: "destructive", title: "Check-In Failed" });
@@ -390,7 +383,6 @@ export default function MembersListPage() {
               </div>
             </div>
 
-            {/* Date Range Filters Section */}
             <div className="flex flex-col lg:flex-row items-center gap-4 pt-2 border-t border-white/5 mt-2">
                <span className="text-[10px] font-black uppercase tracking-widest opacity-40 whitespace-nowrap">Expiration Range:</span>
                <div className="flex items-center gap-2 w-full lg:w-auto">
@@ -524,7 +516,6 @@ export default function MembersListPage() {
         </CardContent>
       </Card>
 
-      {/* Modals remain the same... */}
       <Dialog open={!!memberForHistory} onOpenChange={(open) => !open && setMemberForHistory(null)}>
         <DialogContent className="sm:max-w-lg bg-zinc-900 border-white/10 rounded-3xl p-6">
           <DialogHeader className="mb-4">

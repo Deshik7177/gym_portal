@@ -104,6 +104,13 @@ export default function CounterPage() {
         updateDoc(docRef, { 
           lastCheckIn: serverTimestamp(),
           updatedAt: serverTimestamp()
+        }),
+        // Real-time ESP32 trigger
+        addDoc(collection(db, 'gateControl'), {
+          command: 'OPEN',
+          timestamp: serverTimestamp(),
+          memberId: verifiedMember.id,
+          method: 'manual'
         })
       ];
 
@@ -121,10 +128,10 @@ export default function CounterPage() {
 
       setVerifiedMember(prev => ({ ...prev, authenticated: true }));
       toast({ 
-        title: alreadyLoggedToday ? "Member Refresh" : "Check-In Success", 
+        title: alreadyLoggedToday ? "Hardware Access Granted" : "Check-In Success", 
         description: alreadyLoggedToday 
-          ? `Member ${verifiedMember.fullName} already has a log for today.` 
-          : `Attendance logged for ${verifiedMember.fullName}.` 
+          ? `Gate signal sent for ${verifiedMember.fullName}.` 
+          : `Attendance logged and gate opened for ${verifiedMember.fullName}.` 
       });
     } catch (err) {
       toast({ variant: "destructive", title: "Action Failed" });
