@@ -18,14 +18,13 @@ function Calendar({
   return (
     <DayPicker
       showOutsideDays={showOutsideDays}
-      fixedWeeks
       className={cn("p-3", className)}
       classNames={{
         months: "flex flex-col sm:flex-row space-y-4 sm:space-x-4 sm:space-y-0",
         month: "space-y-4",
-        month_caption: "flex justify-center pt-1 relative items-center h-7 mb-8",
+        month_caption: "flex justify-center pt-1 relative items-center h-9",
         caption_label: "text-sm font-bold tracking-tight",
-        nav: "flex items-center",
+        nav: "flex items-center space-x-1",
         button_previous: cn(
           buttonVariants({ variant: "outline" }),
           "h-7 w-7 bg-transparent p-0 opacity-50 hover:opacity-100 absolute left-1 top-0 flex items-center justify-center transition-all z-10"
@@ -34,10 +33,10 @@ function Calendar({
           buttonVariants({ variant: "outline" }),
           "h-7 w-7 bg-transparent p-0 opacity-50 hover:opacity-100 absolute right-1 top-0 flex items-center justify-center transition-all z-10"
         ),
-        month_grid: "w-full border-collapse",
-        weekdays: "flex w-full mb-1",
+        month_grid: "w-full border-collapse space-y-1",
+        weekdays: "flex w-full mt-2",
         weekday:
-          "text-muted-foreground rounded-md w-9 font-bold text-[0.7rem] uppercase tracking-tighter flex items-center justify-center h-9",
+          "text-muted-foreground rounded-md w-9 font-bold text-[0.7rem] uppercase tracking-wider flex items-center justify-center h-9",
         week: "flex w-full mt-1",
         day: "h-9 w-9 text-center text-sm p-0 relative flex items-center justify-center focus-within:relative focus-within:z-20",
         day_button: cn(
