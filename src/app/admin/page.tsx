@@ -1,6 +1,6 @@
 'use client';
 
-import { useMemo } from 'react';
+import { useMemo, useState } from 'react';
 import dynamic from 'next/dynamic';
 import {
   Clock,
@@ -11,10 +11,13 @@ import {
   Loader2,
   TrendingUp,
   Sparkles,
-  UserCircle
+  UserCircle,
+  DoorOpen,
+  Wifi,
+  Zap
 } from 'lucide-react';
 import Link from 'next/link';
-import { collection, query, orderBy, limit } from 'firebase/firestore';
+import { collection, query, orderBy, limit, addDoc, serverTimestamp } from 'firebase/firestore';
 import { useFirestore, useCollection } from '@/firebase';
 
 import { Button } from '@/components/ui/button';
@@ -26,6 +29,7 @@ import {
   CardTitle,
 } from '@/components/ui/card';
 import { Badge } from '@/components/ui/badge';
+import { useToast } from '@/hooks/use-toast';
 
 const Overview = dynamic(() => import('./components/overview').then(mod => mod.Overview), {
   loading: () => <div className="h-[350px] w-full bg-muted/20 animate-pulse rounded-xl" />,
@@ -34,6 +38,8 @@ const Overview = dynamic(() => import('./components/overview').then(mod => mod.O
 
 export default function ReceptionDashboard() {
   const db = useFirestore();
+  const { toast } = useToast();
+  const [isOpening, setIsOpening] = useState(false);
   
   const membersRef = useMemo(() => db ? query(collection(db, 'members')) : null, [db]);
   const { data: members, loading: membersLoading } = useCollection<any>(membersRef);
@@ -63,6 +69,31 @@ export default function ReceptionDashboard() {
     return sales.reduce((acc, sale) => acc + (sale.amount || 0), 0);
   }, [sales]);
 
+  const handleManualGateOpen = async () => {
+    if (!db || isOpening) return;
+    setIsOpening(true);
+    try {
+      await addDoc(collection(db, 'gateControl'), {
+        command: 'OPEN',
+        method: 'manual',
+        memberId: 'DASHBOARD_OVERRIDE',
+        timestamp: serverTimestamp()
+      });
+      toast({
+        title: "Gate Command Sent",
+        description: "The ESP32 override command has been dispatched.",
+      });
+    } catch (e) {
+      toast({
+        variant: "destructive",
+        title: "Override Failed",
+        description: "Cloud sync failed. Check your connection.",
+      });
+    } finally {
+      setIsOpening(false);
+    }
+  };
+
   if (membersLoading) {
     return (
       <div className="flex h-screen w-full items-center justify-center">
@@ -73,12 +104,32 @@ export default function ReceptionDashboard() {
 
   return (
     <div className="flex flex-col gap-6">
-      <div className="flex flex-col gap-1">
-        <div className="flex items-center gap-2 mb-1">
-          <Sparkles className="h-5 w-5 text-primary animate-pulse" />
-          <h1 className="text-3xl font-bold font-headline tracking-tight">Hello, Staff</h1>
+      <div className="flex flex-col md:flex-row justify-between items-start md:items-center gap-4">
+        <div className="flex flex-col gap-1">
+          <div className="flex items-center gap-2 mb-1">
+            <Sparkles className="h-5 w-5 text-primary animate-pulse" />
+            <h1 className="text-3xl font-bold font-headline tracking-tight">Hello, Staff</h1>
+          </div>
+          <p className="text-muted-foreground">Welcome to your Thrive Fit project overview.</p>
         </div>
-        <p className="text-muted-foreground">Welcome to your Thrive Fit project overview.</p>
+
+        <Card className="border-primary/20 bg-primary/5 flex items-center p-4 gap-4 rounded-2xl shadow-sm border">
+          <div className="space-y-1">
+            <p className="text-[10px] font-black uppercase tracking-widest text-primary/60">Hardware Link</p>
+            <div className="flex items-center gap-2">
+              <div className="h-2 w-2 rounded-full bg-green-500 animate-pulse" />
+              <span className="text-xs font-bold uppercase">ESP32 Online</span>
+            </div>
+          </div>
+          <Button 
+            onClick={handleManualGateOpen} 
+            disabled={isOpening}
+            className="h-12 px-6 font-black uppercase tracking-tighter text-xs shadow-xl shadow-primary/20 rounded-xl"
+          >
+            {isOpening ? <Loader2 className="h-4 w-4 animate-spin mr-2" /> : <DoorOpen className="h-4 w-4 mr-2" />}
+            Open Gate
+          </Button>
+        </Card>
       </div>
 
       <div className="grid gap-4 md:grid-cols-2 lg:grid-cols-4">
@@ -89,7 +140,7 @@ export default function ReceptionDashboard() {
               <TrendingUp className="h-4 w-4 text-green-500" />
             </CardHeader>
             <CardContent>
-              <div className="text-2xl font-bold">₹{totalRevenue.toLocaleString()}</div>
+              <div className="text-2xl font-bold tabular-nums">₹{totalRevenue.toLocaleString()}</div>
               <p className="text-xs text-muted-foreground">Total collections synced</p>
             </CardContent>
           </Link>
@@ -171,63 +222,92 @@ export default function ReceptionDashboard() {
             </CardContent>
           </Card>
         </div>
-        <Card className="col-span-3 shadow-md border-border/40 h-fit">
-          <CardHeader>
-            <CardTitle className="flex items-center gap-2">
-              <Activity className="h-5 w-5 text-primary" />
-              Membership Breakdown
-            </CardTitle>
-            <CardDescription>Real-time category distribution</CardDescription>
-          </CardHeader>
-          <CardContent className="space-y-6">
-            <div className="space-y-2">
-              <div className="flex items-center justify-between">
-                <div className="flex items-center gap-2">
-                  <div className="w-3 h-3 rounded-full bg-primary" />
-                  <span className="text-sm font-medium">Group Members</span>
+        
+        <div className="col-span-3 space-y-4">
+          <Card className="shadow-md border-border/40">
+            <CardHeader className="pb-3">
+              <CardTitle className="text-lg font-black uppercase tracking-tighter flex items-center gap-2">
+                <Zap className="h-4 w-4 text-primary" /> Command Center
+              </CardTitle>
+              <CardDescription>Manual hardware triggers</CardDescription>
+            </CardHeader>
+            <CardContent className="space-y-4">
+               <div className="p-4 rounded-xl border border-border bg-muted/20 space-y-3">
+                  <div className="flex items-center justify-between">
+                     <span className="text-[10px] font-black uppercase tracking-widest opacity-40">Main Entrance</span>
+                     <Badge variant="outline" className="h-5 text-[9px] bg-green-500/10 text-green-500 border-none">READY</Badge>
+                  </div>
+                  <Button 
+                    onClick={handleManualGateOpen} 
+                    disabled={isOpening}
+                    className="w-full h-14 font-black uppercase tracking-widest text-sm rounded-xl"
+                  >
+                    {isOpening ? <Loader2 className="h-5 w-5 animate-spin mr-2" /> : <DoorOpen className="h-5 w-5 mr-2" />}
+                    Pulse Gate Relay
+                  </Button>
+                  <p className="text-[9px] text-muted-foreground text-center italic">Sends transient OPEN command to ESP32 queue</p>
+               </div>
+            </CardContent>
+          </Card>
+
+          <Card className="shadow-md border-border/40 h-fit">
+            <CardHeader>
+              <CardTitle className="flex items-center gap-2">
+                <Activity className="h-5 w-5 text-primary" />
+                Breakdown
+              </CardTitle>
+              <CardDescription>Real-time category distribution</CardDescription>
+            </CardHeader>
+            <CardContent className="space-y-6">
+              <div className="space-y-2">
+                <div className="flex items-center justify-between">
+                  <div className="flex items-center gap-2">
+                    <div className="w-3 h-3 rounded-full bg-primary" />
+                    <span className="text-sm font-medium">Group Members</span>
+                  </div>
+                  <span className="font-bold">{stats.group}</span>
                 </div>
-                <span className="font-bold">{stats.group}</span>
-              </div>
-              <div className="w-full bg-muted rounded-full h-2">
-                <div 
-                  className="bg-primary h-2 rounded-full transition-all duration-500" 
-                  style={{ width: stats.total > 0 ? `${(stats.group / stats.total) * 100}%` : '0%' }} 
-                />
-              </div>
-            </div>
-
-            <div className="space-y-2">
-              <div className="flex items-center justify-between">
-                <div className="flex items-center gap-2">
-                  <div className="w-3 h-3 rounded-full bg-accent/60" />
-                  <span className="text-sm font-medium">Personal Training</span>
+                <div className="w-full bg-muted rounded-full h-2">
+                  <div 
+                    className="bg-primary h-2 rounded-full transition-all duration-500" 
+                    style={{ width: stats.total > 0 ? `${(stats.group / stats.total) * 100}%` : '0%' }} 
+                  />
                 </div>
-                <span className="font-bold">{stats.personal}</span>
               </div>
-              <div className="w-full bg-muted rounded-full h-2">
-                <div 
-                  className="bg-accent/60 h-2 rounded-full transition-all duration-500" 
-                  style={{ width: stats.total > 0 ? `${(stats.personal / stats.total) * 100}%` : '0%' }} 
-                />
-              </div>
-            </div>
 
-            <div className="pt-6 border-t border-border/50">
-              <div className="flex items-center justify-between">
-                <span className="text-sm font-medium">System Status</span>
-                <span className="text-sm text-green-500 font-bold flex items-center gap-1 uppercase tracking-tighter">
-                  Active: {stats.active}
-                </span>
+              <div className="space-y-2">
+                <div className="flex items-center justify-between">
+                  <div className="flex items-center gap-2">
+                    <div className="w-3 h-3 rounded-full bg-accent/60" />
+                    <span className="text-sm font-medium">Personal Training</span>
+                  </div>
+                  <span className="font-bold">{stats.personal}</span>
+                </div>
+                <div className="w-full bg-muted rounded-full h-2">
+                  <div 
+                    className="bg-accent/60 h-2 rounded-full transition-all duration-500" 
+                    style={{ width: stats.total > 0 ? `${(stats.personal / stats.total) * 100}%` : '0%' }} 
+                  />
+                </div>
               </div>
-            </div>
 
-            <Button asChild variant="outline" className="w-full mt-2">
-              <Link href="/admin/members">
-                Detailed Directory <ArrowUpRight className="ml-2 h-4 w-4" />
-              </Link>
-            </Button>
-          </CardContent>
-        </Card>
+              <div className="pt-6 border-t border-border/50">
+                <div className="flex items-center justify-between">
+                  <span className="text-sm font-medium">System Status</span>
+                  <span className="text-sm text-green-500 font-bold flex items-center gap-1 uppercase tracking-tighter">
+                    Active: {stats.active}
+                  </span>
+                </div>
+              </div>
+
+              <Button asChild variant="outline" className="w-full mt-2">
+                <Link href="/admin/members">
+                  Detailed Directory <ArrowUpRight className="ml-2 h-4 w-4" />
+                </Link>
+              </Button>
+            </CardContent>
+          </Card>
+        </div>
       </div>
     </div>
   );
