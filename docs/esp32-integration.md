@@ -7,6 +7,12 @@ This document provides the necessary details to connect your ESP32 hardware to t
 - **Relay Pin:** GPIO 26 (Recommended)
 - **Library:** [Firebase-ESP-Client](https://github.com/mobizt/Firebase-ESP-Client)
 
+## Network Architecture: Cloud-Based Sync
+**Crucial Note:** The Staff Portal and the ESP32 **DO NOT** need to be on the same local network (SSID).
+- The Portal writes a command to the Google Cloud (Firestore).
+- The ESP32 listens to that same cloud location.
+- Both devices only require a stable internet connection to communicate. You can control the gate from anywhere in the world.
+
 ## Performance & Latency
 Expected latency from portal trigger to physical relay is **300ms - 800ms**.
 To maintain low latency:
