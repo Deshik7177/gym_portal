@@ -15,7 +15,8 @@ import {
   Scan,
   UserCheck,
   UserPlus,
-  Phone
+  Phone,
+  Link2
 } from 'lucide-react';
 import { collection, query, updateDoc, doc, serverTimestamp, onSnapshot, addDoc, getDoc } from 'firebase/firestore';
 import { useFirestore } from '@/firebase';
@@ -97,7 +98,7 @@ export default function SmartEntrancePage() {
       navigator.vibrate(100);
     }
 
-    const memberId = member.id || member.phone;
+    const memberId = member.phone || member.id;
     
     setRecentLogs(prev => [{
       name: member.fullName,
@@ -106,7 +107,6 @@ export default function SmartEntrancePage() {
     }, ...prev].slice(0, 10));
 
     try {
-      // Logic: Log attendance once per day, but always allow entry
       const lastCheckInDate = member.lastCheckIn?.seconds 
         ? new Date(member.lastCheckIn.seconds * 1000) 
         : null;
@@ -114,12 +114,11 @@ export default function SmartEntrancePage() {
       const alreadyLoggedToday = lastCheckInDate && isToday(lastCheckInDate);
 
       const tasks: Promise<any>[] = [
-        // Always update the member's last seen status
         updateDoc(doc(db, 'members', memberId), {
           lastCheckIn: serverTimestamp(),
           updatedAt: serverTimestamp()
         }),
-        // Always signal hardware gate via real-time queue
+        // DISPATCH GATE COMMAND TO ESP32
         addDoc(collection(db, 'gateControl'), {
           command: 'OPEN',
           timestamp: serverTimestamp(),
@@ -128,7 +127,6 @@ export default function SmartEntrancePage() {
         })
       ];
 
-      // ONLY add to historical attendance ledger if it's the first time today
       if (!alreadyLoggedToday) {
         tasks.push(addDoc(collection(db, 'attendance'), {
           memberId: memberId,
@@ -141,7 +139,7 @@ export default function SmartEntrancePage() {
 
       await Promise.all(tasks);
     } catch (err) {
-      console.warn("Background Sync Warning:", err);
+      console.warn("Gate Dispatch Warning:", err);
     }
   }, [db]);
 
@@ -275,7 +273,7 @@ export default function SmartEntrancePage() {
     if (!db || !memberToEnroll) return;
     setIsEnrolling(true);
     try {
-      await updateDoc(doc(db, 'members', memberToEnroll.id), {
+      await updateDoc(doc(db, 'members', memberToEnroll.phone || memberToEnroll.id), {
         faceEmbedding: embedding,
         updatedAt: serverTimestamp()
       });
@@ -357,7 +355,7 @@ export default function SmartEntrancePage() {
             ) : (
               <div className="w-full h-full flex items-center justify-center bg-background p-12">
                 {!memberToEnroll ? (
-                  <div className="w-full max-w-md space-y-6">
+                  <div className="w-full max-md space-y-6">
                     <div className="flex flex-col items-center gap-4 text-center">
                       <div className="h-16 w-16 bg-accent/10 rounded-2xl flex items-center justify-center">
                         <UserPlus className="h-8 w-8 text-accent" />
@@ -405,16 +403,22 @@ export default function SmartEntrancePage() {
             )}
 
             {scanResult === 'success' && identifiedMember && (
-              <div className="absolute inset-0 flex flex-col items-center justify-center z-[100] animate-in zoom-in duration-300 bg-background/95 backdrop-blur-3xl">
+              <div className="absolute inset-0 flex flex-col items-center justify-center z-[100] animate-in zoom-in duration-300 bg-background/95 backdrop-blur-3xl text-center px-6">
                 <div className="relative mb-8">
                    <div className="absolute inset-0 bg-primary/20 blur-[100px] rounded-full" />
                    <CheckCircle2 className="h-48 w-48 text-primary relative" />
                 </div>
                 <h2 className="text-7xl font-black font-headline text-foreground mb-2 tracking-tighter italic uppercase">Welcome</h2>
                 <p className="text-3xl text-primary font-black uppercase tracking-tight mb-4">{identifiedMember.fullName}</p>
-                <Badge variant="outline" className="bg-muted border-border text-foreground font-mono text-[10px] tracking-widest px-4 py-1 uppercase">
-                   Identity Verified: {authMode.toUpperCase()}
-                </Badge>
+                <div className="flex flex-col items-center gap-2">
+                  <Badge variant="outline" className="bg-muted border-border text-foreground font-mono text-[10px] tracking-widest px-4 py-1 uppercase">
+                    Identity Verified: {authMode.toUpperCase()}
+                  </Badge>
+                  <div className="flex items-center gap-2 text-green-500 animate-pulse mt-2">
+                    <Link2 className="h-4 w-4" />
+                    <span className="text-[10px] font-black uppercase tracking-widest">Gate Command Dispatched</span>
+                  </div>
+                </div>
               </div>
             )}
 
@@ -494,14 +498,9 @@ export default function SmartEntrancePage() {
           <div className="bg-primary/5 border border-primary/10 rounded-2xl p-4 flex items-start gap-3">
              <AlertCircle className="h-5 w-5 text-primary mt-0.5" />
              <div className="space-y-1">
-                <p className="text-[10px] font-black uppercase tracking-widest text-primary">System Tip</p>
+                <p className="text-[10px] font-black uppercase tracking-widest text-primary">Hardware Status</p>
                 <p className="text-[11px] text-muted-foreground leading-relaxed">
-                    {authMode === 'qr' 
-                        ? "Ensure your screen brightness is high and the code is centered."
-                        : authMode === 'face'
-                        ? "Look directly at the center oval for Face ID verification."
-                        : "Enter the member's mobile number to begin biometric link."
-                    }
+                    Successful matches will trigger a real-time command in the <b>gateControl</b> queue for the ESP32 relay.
                 </p>
              </div>
           </div>

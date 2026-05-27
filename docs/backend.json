@@ -16,6 +16,7 @@
         "price": { "type": "number" },
         "description": { "type": "string", "description": "Details about the opted package" },
         "photoData": { "type": "string" },
+        "faceEmbedding": { "type": "array", "items": { "type": "number" } },
         "lastCheckIn": { "type": "string", "format": "date-time" },
         "createdAt": { "type": "string", "format": "date-time" }
       },
@@ -33,13 +34,13 @@
     },
     "GateControl": {
       "title": "Gate Control",
-      "description": "Real-time commands for the physical gate relay.",
+      "description": "Real-time commands for the physical gate relay (ESP32).",
       "type": "object",
       "properties": {
         "command": { "type": "string", "enum": ["OPEN", "CLOSE"] },
         "timestamp": { "type": "string", "format": "date-time" },
         "memberId": { "type": "string" },
-        "method": { "type": "string", "enum": ["qr", "manual"] }
+        "method": { "type": "string", "enum": ["qr", "manual", "face"] }
       }
     },
     "Attendance": {
@@ -50,7 +51,7 @@
         "memberId": { "type": "string" },
         "memberName": { "type": "string" },
         "timestamp": { "type": "string", "format": "date-time" },
-        "method": { "type": "string", "enum": ["qr", "manual"] },
+        "method": { "type": "string", "enum": ["qr", "manual", "face"] },
         "latency": { "type": "number", "description": "Scan speed in ms" }
       }
     },
@@ -82,7 +83,7 @@
     },
     "/gateControl/{commandId}": {
       "schema": "#/backend/entities/GateControl",
-      "description": "Real-time gate command queue."
+      "description": "Real-time gate command queue for hardware integration."
     },
     "/attendance/{logId}": {
       "schema": "#/backend/entities/Attendance",
