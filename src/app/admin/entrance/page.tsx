@@ -1,4 +1,3 @@
-
 'use client';
 
 import { useState, useRef, useEffect, useCallback } from 'react';
@@ -297,7 +296,7 @@ export default function SmartEntrancePage() {
     <div className="max-w-7xl mx-auto space-y-6 pb-20">
       <div className="flex flex-col lg:flex-row justify-between items-start lg:items-end gap-4">
         <div className="flex flex-col gap-2">
-           <h1 className="text-4xl font-black font-headline tracking-tighter text-white flex items-center gap-3 uppercase">
+           <h1 className="text-4xl font-black font-headline tracking-tighter text-foreground flex items-center gap-3 uppercase">
               <ShieldCheck className="h-10 w-10 text-primary" />
               Entry Portal
            </h1>
@@ -307,7 +306,7 @@ export default function SmartEntrancePage() {
            </div>
         </div>
 
-        <Tabs value={authMode} onValueChange={handleAuthModeChange} className="bg-white/5 p-1 rounded-xl border border-white/5">
+        <Tabs value={authMode} onValueChange={handleAuthModeChange} className="bg-muted p-1 rounded-xl border border-border shadow-sm">
             <TabsList className="bg-transparent gap-1 h-10">
                 <TabsTrigger value="qr" className="data-[state=active]:bg-primary data-[state=active]:text-primary-foreground font-black text-[10px] uppercase tracking-widest px-6 rounded-lg transition-all">
                     <Scan className="h-3.5 w-3.5 mr-2" /> QR Passport
@@ -323,10 +322,10 @@ export default function SmartEntrancePage() {
       </div>
 
       <div className="grid grid-cols-1 lg:grid-cols-12 gap-8">
-        <Card className="lg:col-span-8 overflow-hidden flex flex-col relative bg-black border-none shadow-[0_0_50px_-12px_rgba(var(--primary),0.3)] rounded-3xl min-h-[600px]">
+        <Card className="lg:col-span-8 overflow-hidden flex flex-col relative bg-card border-border shadow-2xl rounded-3xl min-h-[600px]">
           <div className="absolute top-6 right-6 z-20 flex gap-2">
             {isCameraActive && authMode === 'qr' && (
-              <Button size="icon" variant="outline" className={cn("bg-black/50 backdrop-blur-md rounded-full border-white/10", torchOn && "text-primary border-primary")} onClick={toggleTorch}>
+              <Button size="icon" variant="outline" className={cn("bg-background/50 backdrop-blur-md rounded-full border-border", torchOn && "text-primary border-primary")} onClick={toggleTorch}>
                   <Zap className={cn("h-4 w-4", torchOn && "fill-primary")} />
               </Button>
             )}
@@ -337,7 +336,7 @@ export default function SmartEntrancePage() {
                 <>
                     <div id="qr-reader" className="w-full h-full" />
                     {!isCameraActive && !isInitializing && (
-                        <div className="absolute inset-0 flex flex-col items-center justify-center gap-6 text-muted-foreground/10 bg-zinc-950">
+                        <div className="absolute inset-0 flex flex-col items-center justify-center gap-6 text-muted-foreground/10 bg-muted/20">
                             <Smartphone className="h-32 w-32" />
                             <p className="font-headline text-2xl tracking-widest uppercase">Scanner Offline</p>
                         </div>
@@ -350,14 +349,14 @@ export default function SmartEntrancePage() {
                     isActive={authMode === 'face'}
                 />
             ) : (
-              <div className="w-full h-full flex items-center justify-center bg-zinc-950 p-12">
+              <div className="w-full h-full flex items-center justify-center bg-background p-12">
                 {!memberToEnroll ? (
                   <div className="w-full max-w-md space-y-6">
                     <div className="flex flex-col items-center gap-4 text-center">
                       <div className="h-16 w-16 bg-accent/10 rounded-2xl flex items-center justify-center">
                         <UserPlus className="h-8 w-8 text-accent" />
                       </div>
-                      <h2 className="text-2xl font-black uppercase tracking-tighter italic text-white">New Face ID Link</h2>
+                      <h2 className="text-2xl font-black uppercase tracking-tighter italic text-foreground">New Face ID Link</h2>
                       <p className="text-xs text-muted-foreground uppercase tracking-widest font-bold opacity-40">Identify member to begin biometric enrollment</p>
                     </div>
                     <div className="space-y-4">
@@ -370,7 +369,7 @@ export default function SmartEntrancePage() {
                             onChange={(e) => setEnrollPhone(e.target.value)}
                             onKeyDown={(e) => e.key === 'Enter' && handleLookupForEnroll()}
                             placeholder="Mobile ID" 
-                            className="pl-12 h-14 bg-white/5 border-white/10 text-xl font-bold rounded-xl"
+                            className="pl-12 h-14 bg-muted border-border text-xl font-bold rounded-xl"
                           />
                         </div>
                       </div>
@@ -393,21 +392,21 @@ export default function SmartEntrancePage() {
             )}
 
             {isInitializing && authMode === 'qr' && (
-              <div className="absolute inset-0 flex flex-col items-center justify-center bg-black/80 backdrop-blur-xl z-50">
+              <div className="absolute inset-0 flex flex-col items-center justify-center bg-background/80 backdrop-blur-xl z-50">
                  <Loader2 className="h-12 w-12 animate-spin text-primary mb-4" />
                  <p className="text-xs font-black uppercase tracking-widest text-primary/60">Enumerating Devices...</p>
               </div>
             )}
 
             {scanResult === 'success' && identifiedMember && (
-              <div className="absolute inset-0 flex flex-col items-center justify-center z-[100] animate-in zoom-in duration-300 bg-black/95 backdrop-blur-3xl">
+              <div className="absolute inset-0 flex flex-col items-center justify-center z-[100] animate-in zoom-in duration-300 bg-background/95 backdrop-blur-3xl">
                 <div className="relative mb-8">
                    <div className="absolute inset-0 bg-primary/20 blur-[100px] rounded-full" />
                    <CheckCircle2 className="h-48 w-48 text-primary relative" />
                 </div>
-                <h2 className="text-7xl font-black font-headline text-white mb-2 tracking-tighter italic uppercase">Welcome</h2>
+                <h2 className="text-7xl font-black font-headline text-foreground mb-2 tracking-tighter italic uppercase">Welcome</h2>
                 <p className="text-3xl text-primary font-black uppercase tracking-tight mb-4">{identifiedMember.fullName}</p>
-                <Badge variant="outline" className="bg-white/10 border-white/20 text-white font-mono text-[10px] tracking-widest px-4 py-1 uppercase">
+                <Badge variant="outline" className="bg-muted border-border text-foreground font-mono text-[10px] tracking-widest px-4 py-1 uppercase">
                    Identity Verified: {authMode.toUpperCase()}
                 </Badge>
               </div>
@@ -415,63 +414,61 @@ export default function SmartEntrancePage() {
 
             {scanResult === 'failure' && (
               <div className="absolute inset-0 flex flex-col items-center justify-center z-[100] animate-in zoom-in duration-300 bg-destructive/95 backdrop-blur-3xl">
-                <h2 className="text-7xl font-black font-headline text-white mb-2 tracking-tighter italic uppercase">Denied</h2>
-                <p className="text-xl text-white font-black uppercase tracking-widest opacity-60">Access Restricted</p>
+                <h2 className="text-7xl font-black font-headline text-destructive-foreground mb-2 tracking-tighter italic uppercase">Denied</h2>
+                <p className="text-xl text-destructive-foreground font-black uppercase tracking-widest opacity-60">Access Restricted</p>
               </div>
             )}
           </div>
 
-          {authMode === 'qr' && (
-            <CardContent className="p-8 border-t border-white/5 bg-card/80 backdrop-blur-3xl">
-                <div className="flex flex-col sm:flex-row items-center justify-between gap-6">
-                    <div className="flex items-center gap-6">
-                    <div>
-                        <p className="text-[10px] font-black text-muted-foreground uppercase tracking-[0.5em] mb-2">Sensor Status</p>
-                        <div className="flex items-center gap-4">
-                            <div className={cn("h-3 w-3 rounded-full", isCameraActive ? "bg-green-500 animate-pulse shadow-[0_0_10px_rgba(34,197,94,1)]" : "bg-zinc-800")} />
-                            <span className="font-mono text-xs text-white/40 uppercase tracking-widest">
-                            {isCameraActive ? 'OPTICAL ENGINE: LIVE' : 'SYSTEM: STANDBY'}
-                            </span>
-                        </div>
-                    </div>
-                    </div>
-                    
-                    <div className="flex gap-4 w-full sm:w-auto">
-                    {!isCameraActive ? (
-                        <Button size="lg" onClick={startScanner} disabled={isInitializing} className="flex-1 sm:px-12 font-black h-16 text-xl rounded-2xl shadow-2xl shadow-primary/20 uppercase">
-                            {isInitializing ? <Loader2 className="h-6 w-6 animate-spin mr-3" /> : <Camera className="mr-3 h-6 w-6" />}
-                            Initialize QR
-                        </Button>
-                    ) : (
-                        <Button 
-                        size="lg" 
-                        onClick={stopScanner} 
-                        className="flex-1 sm:px-16 font-black h-16 text-xl rounded-2xl shadow-2xl shadow-white/5 bg-white/5 text-white hover:bg-white/10 uppercase"
-                        >
-                        Stop Scanner
-                        </Button>
-                    )}
-                    </div>
-                </div>
-            </CardContent>
-          )}
+          <CardContent className="p-8 border-t border-border bg-card">
+              <div className="flex flex-col sm:flex-row items-center justify-between gap-6">
+                  <div className="flex items-center gap-6">
+                  <div>
+                      <p className="text-[10px] font-black text-muted-foreground uppercase tracking-[0.5em] mb-2">Sensor Status</p>
+                      <div className="flex items-center gap-4">
+                          <div className={cn("h-3 w-3 rounded-full", isCameraActive ? "bg-green-500 animate-pulse shadow-[0_0_10px_rgba(34,197,94,1)]" : "bg-muted")} />
+                          <span className="font-mono text-xs text-muted-foreground uppercase tracking-widest">
+                          {isCameraActive ? 'OPTICAL ENGINE: LIVE' : 'SYSTEM: STANDBY'}
+                          </span>
+                      </div>
+                  </div>
+                  </div>
+                  
+                  <div className="flex gap-4 w-full sm:w-auto">
+                  {!isCameraActive ? (
+                      <Button size="lg" onClick={startScanner} disabled={isInitializing} className="flex-1 sm:px-12 font-black h-16 text-xl rounded-2xl shadow-2xl shadow-primary/20 uppercase">
+                          {isInitializing ? <Loader2 className="h-6 w-6 animate-spin mr-3" /> : <Camera className="mr-3 h-6 w-6" />}
+                          Initialize {authMode === 'qr' ? 'QR' : 'Face'}
+                      </Button>
+                  ) : (
+                      <Button 
+                      size="lg" 
+                      onClick={stopScanner} 
+                      className="flex-1 sm:px-16 font-black h-16 text-xl rounded-2xl shadow-2xl shadow-muted/5 bg-muted text-foreground hover:bg-muted/80 uppercase"
+                      >
+                      Stop Scanner
+                      </Button>
+                  )}
+                  </div>
+              </div>
+          </CardContent>
         </Card>
 
         <div className="lg:col-span-4 flex flex-col gap-6">
-          <Card className="flex-1 overflow-auto border-none shadow-2xl bg-black/40 backdrop-blur-xl rounded-3xl">
-            <div className="bg-white/[0.02] border-b border-white/5 py-6 px-8 flex items-center justify-between">
+          <Card className="flex-1 overflow-auto border-border shadow-2xl bg-card rounded-3xl">
+            <div className="bg-muted/50 border-b border-border py-6 px-8 flex items-center justify-between">
               <h2 className="text-[10px] uppercase tracking-[0.5em] font-black flex items-center gap-3 text-primary">
                   <History className="h-4 w-4" /> LIVE TRAFFIC
               </h2>
-              <Badge variant="outline" className="h-5 text-[8px] border-white/10 opacity-40 uppercase">REAL-TIME</Badge>
+              <Badge variant="outline" className="h-5 text-[8px] border-border opacity-40 uppercase">REAL-TIME</Badge>
             </div>
             <CardContent className="p-0">
               <Table>
                   <TableBody>
                     {recentLogs.length > 0 ? recentLogs.map((log, i) => (
-                      <TableRow key={i} className="border-b border-white/5 hover:bg-white/[0.02] animate-in slide-in-from-left-2">
+                      <TableRow key={i} className="border-b border-border hover:bg-muted transition-colors animate-in slide-in-from-left-2">
                           <TableCell className="text-[10px] font-mono opacity-30 pl-8">{log.time}</TableCell>
-                          <TableCell className="font-bold text-sm text-white/80">{log.name}</TableCell>
+                          <TableCell className="font-bold text-sm text-foreground">{log.name}</TableCell>
                           <TableCell className="text-right pr-8">
                              <Badge variant="outline" className="text-[9px] font-black px-2 py-0 border-none text-primary uppercase tracking-tighter">{log.method} OK</Badge>
                           </TableCell>

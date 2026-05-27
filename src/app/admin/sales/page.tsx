@@ -66,7 +66,7 @@ import {
 import { Label } from '@/components/ui/label';
 import { Textarea } from '@/components/ui/textarea';
 import { cn } from '@/lib/utils';
-import { Badge } from '@/components/ui/badge';
+import { Badge } from '@/badge'; // Assume badge is in root or components/ui
 import { useToast } from '@/hooks/use-toast';
 import { errorEmitter } from '@/firebase/error-emitter';
 import { FirestorePermissionError } from '@/firebase/errors';
@@ -127,14 +127,13 @@ export default function SalesReportPage() {
       return;
     }
 
-    // CSV structure
     const headers = ["Date", "Member Name", "Category", "Amount", "Description"];
     const rows = filteredSales.map(s => [
       s.date || '',
-      `"${s.memberName || ''}"`, // Wrap in quotes for CSV safety
+      `"${s.memberName || ''}"`,
       s.category || '',
       s.amount || 0,
-      `"${(s.description || '').replace(/"/g, '""')}"` // Escape quotes and wrap
+      `"${(s.description || '').replace(/"/g, '""')}"`
     ]);
 
     const csvContent = [
@@ -218,19 +217,18 @@ export default function SalesReportPage() {
 
   return (
     <div className="flex flex-col gap-8 max-w-7xl mx-auto">
-      {/* Header Section */}
       <div className="flex flex-col md:flex-row justify-between items-end md:items-center gap-6 border-b border-primary/10 pb-8">
         <div className="space-y-2">
           <h1 className="text-5xl font-black font-headline tracking-tighter text-primary flex items-center gap-4">
             <History className="h-10 w-10 text-primary/80" />
             LEDGER
           </h1>
-          <p className="text-muted-foreground text-[10px] uppercase tracking-[0.4em] font-bold opacity-50 flex items-center gap-2">
+          <p className="text-muted-foreground text-[10px] uppercase tracking-[0.4em] font-bold opacity-60 flex items-center gap-2">
             <TrendingUp className="h-3 w-3" />
             Financial Performance & Audit Control
           </p>
         </div>
-        <div className="flex items-center gap-6 bg-primary/10 dark:bg-primary/5 p-4 rounded-2xl border border-primary/20 backdrop-blur-sm">
+        <div className="flex items-center gap-6 bg-primary/5 p-4 rounded-2xl border border-primary/20 backdrop-blur-sm">
           <div className="flex flex-col items-end">
             <span className="text-[9px] font-black text-primary uppercase tracking-widest mb-1">Total Settled Revenue</span>
             <span className="text-4xl font-black text-foreground tabular-nums">₹{totalRevenue.toLocaleString()}</span>
@@ -241,7 +239,6 @@ export default function SalesReportPage() {
         </div>
       </div>
 
-      {/* Filter Architecture */}
       <div className="space-y-4">
         <div className="flex flex-col lg:flex-row items-center gap-3">
           <div className="w-full lg:flex-1 relative group">
@@ -336,7 +333,7 @@ export default function SalesReportPage() {
           <CardContent className="p-0">
             <div className="overflow-x-auto">
               <Table>
-                <TableHeader className="bg-primary/5">
+                <TableHeader className="bg-muted/50">
                   <TableRow className="border-border hover:bg-transparent">
                     <TableHead className="w-[180px] font-black uppercase text-[9px] tracking-[0.3em] pl-8 py-5">Date</TableHead>
                     <TableHead className="font-black uppercase text-[9px] tracking-[0.3em]">Member</TableHead>
@@ -348,7 +345,7 @@ export default function SalesReportPage() {
                 <TableBody>
                   {filteredSales.length > 0 ? (
                     filteredSales.map((sale) => (
-                      <TableRow key={sale.id} className="border-border hover:bg-primary/[0.02] transition-colors group">
+                      <TableRow key={sale.id} className="border-border hover:bg-muted/50 transition-colors group">
                         <TableCell className="text-xs font-mono text-muted-foreground pl-8 py-4">
                           {sale.date ? format(parseISO(sale.date), 'MMM dd, yyyy') : 'NO DATE'}
                         </TableCell>
@@ -411,8 +408,6 @@ export default function SalesReportPage() {
                 </TableBody>
               </Table>
             </div>
-            
-            {/* Footer Summary Bar */}
             <div className="p-6 border-t border-border bg-muted/30 flex flex-col sm:flex-row justify-between items-center gap-4">
               <div className="flex items-center gap-4 text-[10px] font-black uppercase tracking-widest opacity-40">
                 Showing {filteredSales.length} of {sales?.length || 0} Records
@@ -428,7 +423,6 @@ export default function SalesReportPage() {
         </Card>
       </div>
 
-      {/* Admin Edit Dialog */}
       <Dialog open={!!editingSale} onOpenChange={(open) => !open && setEditingSale(null)}>
         <DialogContent className="sm:max-w-md bg-popover border-border rounded-3xl p-8">
           <DialogHeader>
