@@ -12,12 +12,12 @@ import {
   ShieldCheck,
   ShieldX
 } from 'lucide-react';
-import { doc, setDoc, getDoc, serverTimestamp } from 'firebase/firestore';
+import { doc, setDoc, getDoc, serverTimestamp, collection, addDoc } from 'firebase/firestore';
 import { useFirestore } from '@/firebase';
 import { errorEmitter } from '@/firebase/error-emitter';
 import { FirestorePermissionError, type SecurityRuleContext } from '@/firebase/errors';
 import { cn } from '@/lib/utils';
-import { format, differenceInDays, startOfDay } from 'date-fns';
+import { format, startOfDay } from 'date-fns';
 
 import { Button } from '@/components/ui/button';
 import {
@@ -149,29 +149,43 @@ function RegisterForm() {
 
     const docRef = doc(db, 'members', phone);
     
-    setDoc(docRef, memberData, { merge: true })
-      .then(() => {
-        toast({ 
-          title: "Database Synced", 
-          description: "Records have been updated in the cloud ledger." 
+    try {
+      // 1. Save member profile
+      await setDoc(docRef, memberData, { merge: true });
+
+      // 2. If it's a NEW registration, log the sale automatically
+      if (!isEditMode && parseFloat(price) > 0) {
+        await addDoc(collection(db, 'sales'), {
+          memberId: phone,
+          memberName: fullName,
+          amount: parseFloat(price),
+          date: new Date().toISOString().split('T')[0],
+          category: 'membership',
+          description: description || `New Membership Registration: ${memberData.startDate} to ${memberData.endDate}`,
+          createdAt: serverTimestamp()
         });
-        
-        if (isEditMode) {
-          router.push('/admin/members');
-        } else {
-          resetForm();
-        }
-        setLoading(false);
-      })
-      .catch(async (err: any) => {
-        setLoading(false);
-        const permissionError = new FirestorePermissionError({
-          path: docRef.path,
-          operation: 'write',
-          requestResourceData: memberData,
-        } satisfies SecurityRuleContext);
-        errorEmitter.emit('permission-error', permissionError);
+      }
+
+      toast({ 
+        title: "Database Synced", 
+        description: isEditMode ? "Profile updated successfully." : "Member registered and sale logged in ledger." 
       });
+      
+      if (isEditMode) {
+        router.push('/admin/members');
+      } else {
+        resetForm();
+      }
+    } catch (err: any) {
+      const permissionError = new FirestorePermissionError({
+        path: docRef.path,
+        operation: 'write',
+        requestResourceData: memberData,
+      } satisfies SecurityRuleContext);
+      errorEmitter.emit('permission-error', permissionError);
+    } finally {
+      setLoading(false);
+    }
   };
 
   const resetForm = () => {
