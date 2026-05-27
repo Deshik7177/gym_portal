@@ -192,6 +192,8 @@ export default function MembersListPage() {
     setIsProcessingCheckIn(member.phone);
     try {
       const timestamp = serverTimestamp();
+      
+      // Determine if they've already checked in today for historical logging
       const lastCheckInDate = member.lastCheckIn?.seconds 
         ? new Date(member.lastCheckIn.seconds * 1000) 
         : null;
@@ -199,11 +201,12 @@ export default function MembersListPage() {
       const alreadyLoggedToday = lastCheckInDate && isToday(lastCheckInDate);
 
       const tasks: Promise<any>[] = [
+        // Always update the member record for real-time tracking
         updateDoc(doc(db, 'members', member.phone), {
           lastCheckIn: timestamp,
           updatedAt: timestamp
         }),
-        // Signal hardware gate via real-time queue
+        // Always signal hardware gate via real-time queue
         addDoc(collection(db, 'gateControl'), {
           command: 'OPEN',
           timestamp: timestamp,
@@ -212,6 +215,7 @@ export default function MembersListPage() {
         })
       ];
 
+      // ONLY add to historical attendance ledger if it's the first time today
       if (!alreadyLoggedToday) {
         tasks.push(addDoc(collection(db, 'attendance'), {
           memberId: member.phone,
@@ -225,9 +229,9 @@ export default function MembersListPage() {
       await Promise.all(tasks);
       
       toast({ 
-        title: alreadyLoggedToday ? "Hardware Signal Sent" : "Manual Attendance Recorded", 
+        title: alreadyLoggedToday ? "Welcome Back!" : "Manual Attendance Recorded", 
         description: alreadyLoggedToday 
-          ? `Gate open signal sent for ${member.fullName}.` 
+          ? `Gate opened for ${member.fullName}. (Daily attendance already logged)` 
           : `Check-in logged and gate opened for ${member.fullName}.` 
       });
     } catch (e: any) {

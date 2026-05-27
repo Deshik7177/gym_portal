@@ -1,3 +1,4 @@
+
 'use client';
 
 import { useState, useEffect } from 'react';
@@ -94,6 +95,7 @@ export default function CounterPage() {
     const docRef = doc(db, 'members', verifiedMember.id);
     
     try {
+      // Logic: Log attendance once per day, but always allow entry
       const lastCheckInDate = verifiedMember.lastCheckIn?.seconds 
         ? new Date(verifiedMember.lastCheckIn.seconds * 1000) 
         : null;
@@ -101,11 +103,12 @@ export default function CounterPage() {
       const alreadyLoggedToday = lastCheckInDate && isToday(lastCheckInDate);
 
       const tasks: Promise<any>[] = [
+        // Always update the member record for real-time tracking
         updateDoc(docRef, { 
           lastCheckIn: serverTimestamp(),
           updatedAt: serverTimestamp()
         }),
-        // Real-time ESP32 trigger
+        // Always signal hardware gate via real-time queue
         addDoc(collection(db, 'gateControl'), {
           command: 'OPEN',
           timestamp: serverTimestamp(),
@@ -114,6 +117,7 @@ export default function CounterPage() {
         })
       ];
 
+      // ONLY add to historical attendance ledger if it's the first time today
       if (!alreadyLoggedToday) {
         tasks.push(addDoc(collection(db, 'attendance'), {
           memberId: verifiedMember.id,
@@ -128,9 +132,9 @@ export default function CounterPage() {
 
       setVerifiedMember(prev => ({ ...prev, authenticated: true }));
       toast({ 
-        title: alreadyLoggedToday ? "Hardware Access Granted" : "Check-In Success", 
+        title: alreadyLoggedToday ? "Welcome Back!" : "Check-In Success", 
         description: alreadyLoggedToday 
-          ? `Gate signal sent for ${verifiedMember.fullName}.` 
+          ? `Gate signal sent for ${verifiedMember.fullName}. (Daily attendance already logged)` 
           : `Attendance logged and gate opened for ${verifiedMember.fullName}.` 
       });
     } catch (err) {

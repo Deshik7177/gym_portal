@@ -1,3 +1,4 @@
+
 'use client';
 
 import { useState, useRef, useEffect, useCallback } from 'react';
@@ -105,6 +106,7 @@ export default function SmartEntrancePage() {
     }, ...prev].slice(0, 10));
 
     try {
+      // Logic: Log attendance once per day, but always allow entry
       const lastCheckInDate = member.lastCheckIn?.seconds 
         ? new Date(member.lastCheckIn.seconds * 1000) 
         : null;
@@ -112,9 +114,12 @@ export default function SmartEntrancePage() {
       const alreadyLoggedToday = lastCheckInDate && isToday(lastCheckInDate);
 
       const tasks: Promise<any>[] = [
+        // Always update the member's last seen status
         updateDoc(doc(db, 'members', memberId), {
-          lastCheckIn: serverTimestamp()
+          lastCheckIn: serverTimestamp(),
+          updatedAt: serverTimestamp()
         }),
+        // Always signal hardware gate via real-time queue
         addDoc(collection(db, 'gateControl'), {
           command: 'OPEN',
           timestamp: serverTimestamp(),
@@ -123,6 +128,7 @@ export default function SmartEntrancePage() {
         })
       ];
 
+      // ONLY add to historical attendance ledger if it's the first time today
       if (!alreadyLoggedToday) {
         tasks.push(addDoc(collection(db, 'attendance'), {
           memberId: memberId,
