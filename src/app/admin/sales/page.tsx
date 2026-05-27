@@ -1,4 +1,3 @@
-
 'use client';
 
 import { useState, useMemo } from 'react';
@@ -390,7 +389,7 @@ export default function SalesReportPage() {
                                      <Trash2 className="h-3 w-3" /> Void Transaction
                                    </DropdownMenuItem>
                                  </DropdownMenuContent>
-                               </Circle>
+                               </DropdownMenu>
                              )}
                            </div>
                         </TableCell>
