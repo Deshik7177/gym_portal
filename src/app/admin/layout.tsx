@@ -15,7 +15,6 @@ import {
   Wifi,
   WifiOff,
   Scan,
-  ShieldCheck,
   History,
   ShieldAlert
 } from 'lucide-react';
@@ -26,6 +25,7 @@ import UserNav from '@/components/user-nav';
 import { Badge } from '@/components/ui/badge';
 import { cn } from '@/lib/utils';
 import { Alert, AlertDescription, AlertTitle } from '@/components/ui/alert';
+import Logo from '@/components/logo';
 
 export default function ReceptionLayout({ children }: { children: React.ReactNode }) {
   const { user, loading } = useUser();
@@ -75,9 +75,8 @@ export default function ReceptionLayout({ children }: { children: React.ReactNod
     <div className="flex min-h-screen w-full flex-col bg-background/95">
       <aside className="fixed inset-y-0 left-0 z-10 hidden w-64 flex-col border-r bg-card/50 backdrop-blur-sm sm:flex shadow-xl">
         <div className="flex h-16 items-center border-b px-6">
-          <Link href="/admin" className="flex items-center gap-2 font-semibold">
-            <ShieldCheck className="h-6 w-6 text-primary" />
-            <span className="text-lg font-headline text-primary">Thrive Fit</span>
+          <Link href="/admin">
+            <Logo />
           </Link>
         </div>
         <nav className="flex flex-col gap-1 px-4 py-6">
@@ -125,9 +124,8 @@ export default function ReceptionLayout({ children }: { children: React.ReactNod
             </SheetTrigger>
             <SheetContent side="left" className="w-[280px] p-0">
               <SheetHeader className="px-6 pt-6 pb-2 text-left">
-                <SheetTitle className="flex items-center gap-2">
-                  <ShieldCheck className="h-6 w-6 text-primary" />
-                  Thrive Fit
+                <SheetTitle>
+                  <Logo />
                 </SheetTitle>
                 <SheetDescription>Staff Management Menu</SheetDescription>
               </SheetHeader>

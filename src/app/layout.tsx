@@ -12,6 +12,9 @@ const playfairDisplay = Playfair_Display({ subsets: ['latin'], variable: '--font
 export const metadata: Metadata = {
   title: 'Thrive Fit | Staff Portal',
   description: 'The operating system for modern gyms.',
+  icons: {
+    icon: '/favicon.ico',
+  },
 };
 
 export default function RootLayout({
