@@ -1,3 +1,4 @@
+
 'use client';
 
 import { useState, useMemo, useRef } from 'react';
@@ -488,7 +489,7 @@ export default function MembersListPage() {
                           {isProcessingCheckIn === member.phone ? <Loader2 className="h-4 w-4 animate-spin text-primary" /> : <MoreHorizontal className="h-4 w-4" />}
                         </Button>
                       </DropdownMenuTrigger>
-                      <DropdownMenuContent align="end" className="w-56 bg-zinc-900 border-white/10 rounded-xl shadow-2xl">
+                      <DropdownMenuContent align="end" className="w-56 bg-popover border-border rounded-xl shadow-2xl">
                         <DropdownMenuLabel className="text-[10px] uppercase font-black tracking-widest opacity-40 p-4">Member Control</DropdownMenuLabel>
                         <DropdownMenuItem onSelect={() => handleManualCheckIn(member)} className="p-3 gap-3 rounded-lg mx-1 cursor-pointer text-green-500"><UserCheck className="h-4 w-4" /> Manual Check-In</DropdownMenuItem>
                         <DropdownMenuItem onSelect={() => setMemberForHistory(member)} className="p-3 gap-3 rounded-lg mx-1 cursor-pointer"><History className="h-4 w-4 text-accent" /> View History</DropdownMenuItem>
@@ -517,7 +518,7 @@ export default function MembersListPage() {
       </Card>
 
       <Dialog open={!!memberForHistory} onOpenChange={(open) => !open && setMemberForHistory(null)}>
-        <DialogContent className="sm:max-w-lg bg-zinc-900 border-white/10 rounded-3xl p-6">
+        <DialogContent className="sm:max-w-lg bg-popover border-border rounded-3xl p-6">
           <DialogHeader className="mb-4">
             <div className="flex items-center gap-3">
               <div className="h-10 w-10 rounded-xl bg-accent/10 flex items-center justify-center">
@@ -529,7 +530,7 @@ export default function MembersListPage() {
               </div>
             </div>
           </DialogHeader>
-          <div className="max-h-[400px] overflow-auto rounded-xl border border-white/5 bg-black/20">
+          <div className="max-h-[400px] overflow-auto rounded-xl border border-border bg-muted/20">
              <Table>
                <TableHeader className="bg-white/[0.02]">
                  <TableRow className="border-white/5">
@@ -554,7 +555,7 @@ export default function MembersListPage() {
                         </div>
                       </TableCell>
                       <TableCell>
-                        <Badge variant="outline" className="text-[9px] font-black uppercase py-0 px-2 h-5 border-white/10 opacity-60">
+                        <Badge variant="outline" className="text-[9px] font-black uppercase py-0 px-2 h-5 border-border opacity-60">
                           {log.method || 'manual'}
                         </Badge>
                       </TableCell>
@@ -571,7 +572,7 @@ export default function MembersListPage() {
              </Table>
           </div>
           <div className="mt-6">
-            <Button variant="outline" className="w-full h-12 rounded-xl border-white/10 hover:bg-white/5 uppercase font-black text-xs tracking-widest" onClick={() => setMemberForHistory(null)}>
+            <Button variant="outline" className="w-full h-12 rounded-xl border-border hover:bg-muted/50 uppercase font-black text-xs tracking-widest" onClick={() => setMemberForHistory(null)}>
               Close Audit
             </Button>
           </div>
@@ -579,7 +580,7 @@ export default function MembersListPage() {
       </Dialog>
 
       <Dialog open={!!memberQrToShow} onOpenChange={(open) => !open && setMemberQrToShow(null)}>
-        <DialogContent className="sm:max-w-md bg-zinc-900 border-white/10 rounded-3xl p-6">
+        <DialogContent className="sm:max-w-md bg-popover border-border rounded-3xl p-6">
           <div className="flex flex-col items-center text-center gap-4">
             <div className="h-12 w-12 bg-primary/10 rounded-xl flex items-center justify-center">
               <QrCode className="h-6 w-6 text-primary" />
@@ -588,7 +589,7 @@ export default function MembersListPage() {
             <DialogDescription className="text-[10px] font-bold uppercase tracking-widest opacity-60">Permanent Entry ID: {memberQrToShow?.fullName}</DialogDescription>
           </div>
           <div className="flex flex-col items-center justify-center py-6 gap-6">
-             <div ref={qrRef} className="bg-white p-4 rounded-2xl shadow-2xl border-4 border-white/10">
+             <div ref={qrRef} className="bg-white p-4 rounded-2xl shadow-2xl border-4 border-muted">
                 {memberQrToShow && (
                   <QRCodeCanvas 
                     value={generateMemberQrPayload(memberQrToShow.phone)} 
@@ -609,7 +610,7 @@ export default function MembersListPage() {
       </Dialog>
 
       <Dialog open={!!memberForPT} onOpenChange={(open) => !open && setMemberForPT(null)}>
-        <DialogContent className="sm:max-w-md bg-zinc-900 border-white/10 rounded-3xl p-8">
+        <DialogContent className="sm:max-w-md bg-popover border-border rounded-3xl p-8">
           <DialogHeader>
             <DialogTitle className="text-2xl font-black font-headline tracking-tighter text-primary flex items-center gap-3">
               <CreditCard className="h-6 w-6" /> ADD PT SESSION
@@ -621,7 +622,7 @@ export default function MembersListPage() {
                <CalendarDays className="h-4 w-4 text-primary" />
                <div className="text-[10px]">
                   <p className="font-black uppercase tracking-widest opacity-40">Membership Window</p>
-                  <p className="font-bold text-white/80">
+                  <p className="font-bold">
                     {memberForPT.startDate ? format(parseISO(memberForPT.startDate), 'MMM dd, yyyy') : 'N/A'} 
                     <span className="mx-2">→</span>
                     {memberForPT.endDate ? format(parseISO(memberForPT.endDate), 'MMM dd, yyyy') : 'N/A'}
@@ -634,7 +635,7 @@ export default function MembersListPage() {
               <Label className="text-[10px] uppercase font-black tracking-widest opacity-40">Package Price (INR)</Label>
               <div className="relative">
                 <span className="absolute left-4 top-1/2 -translate-y-1/2 text-primary font-black">₹</span>
-                <Input type="number" className="pl-8 h-12 bg-black/20 border-white/10 font-bold text-lg" placeholder="0.00" value={ptPrice} onChange={(e) => setPtPrice(e.target.value)} />
+                <Input type="number" className="pl-8 h-12 bg-muted/20 border-border font-bold text-lg" placeholder="0.00" value={ptPrice} onChange={(e) => setPtPrice(e.target.value)} />
               </div>
             </div>
             <div className="grid grid-cols-2 gap-4">
@@ -642,7 +643,7 @@ export default function MembersListPage() {
                 <Label className="text-[10px] uppercase font-black tracking-widest opacity-40">Start Date</Label>
                 <Popover open={isPtStartDateOpen} onOpenChange={setIsPtStartDateOpen}>
                   <PopoverTrigger asChild>
-                    <Button variant="outline" className="w-full h-12 justify-start font-bold bg-black/20 border-white/10">
+                    <Button variant="outline" className="w-full h-12 justify-start font-bold bg-muted/20 border-border">
                       <CalendarIcon className="mr-2 h-4 w-4 text-primary" />
                       {ptStartDate ? format(ptStartDate, "MMM dd") : "Pick"}
                     </Button>
@@ -667,7 +668,7 @@ export default function MembersListPage() {
                 <Label className="text-[10px] uppercase font-black tracking-widest opacity-40">End Date</Label>
                 <Popover open={isPtEndDateOpen} onOpenChange={setIsPtEndDateOpen}>
                   <PopoverTrigger asChild>
-                    <Button variant="outline" className="w-full h-12 justify-start font-bold bg-black/20 border-white/10">
+                    <Button variant="outline" className="w-full h-12 justify-start font-bold bg-muted/20 border-border">
                       <CalendarIcon className="mr-2 h-4 w-4 text-primary" />
                       {ptEndDate ? format(ptEndDate, "MMM dd") : "Pick"}
                     </Button>
@@ -698,7 +699,7 @@ export default function MembersListPage() {
       </Dialog>
 
       <AlertDialog open={!!memberToDelete} onOpenChange={(open) => !open && setMemberToDelete(null)}>
-        <AlertDialogContent className="bg-zinc-900 border-white/10 rounded-3xl p-8">
+        <AlertDialogContent className="bg-popover border-border rounded-3xl p-8">
           <AlertDialogHeader>
             <AlertDialogTitle className="text-xl font-bold font-headline text-primary">Permanently Delete Record?</AlertDialogTitle>
             <AlertDialogDescription>This will remove all biometric and transaction data for <b>{memberToDelete?.fullName}</b>.</AlertDialogDescription>
