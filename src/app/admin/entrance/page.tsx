@@ -118,7 +118,7 @@ export default function SmartEntrancePage() {
           lastCheckIn: serverTimestamp(),
           updatedAt: serverTimestamp()
         }),
-        // DISPATCH GATE COMMAND TO ESP32
+        // DISPATCH TRANSIENT GATE COMMAND
         addDoc(collection(db, 'gateControl'), {
           command: 'OPEN',
           timestamp: serverTimestamp(),
@@ -500,7 +500,7 @@ export default function SmartEntrancePage() {
              <div className="space-y-1">
                 <p className="text-[10px] font-black uppercase tracking-widest text-primary">Hardware Status</p>
                 <p className="text-[11px] text-muted-foreground leading-relaxed">
-                    Successful matches will trigger a real-time command in the <b>gateControl</b> queue for the ESP32 relay.
+                    Successful matches dispatch a **transient command**. Your ESP32 should process and **self-delete** the command document immediately to maintain a lean database.
                 </p>
              </div>
           </div>
