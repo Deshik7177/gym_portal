@@ -8,7 +8,9 @@ import {
   Loader2, 
   Calendar as CalendarIcon, 
   FileText,
-  Info
+  Info,
+  ShieldCheck,
+  ShieldX
 } from 'lucide-react';
 import { doc, setDoc, getDoc, serverTimestamp } from 'firebase/firestore';
 import { useFirestore } from '@/firebase';
@@ -36,6 +38,13 @@ import {
   PopoverContent,
   PopoverTrigger,
 } from "@/components/ui/popover";
+import {
+  Select,
+  SelectContent,
+  SelectItem,
+  SelectTrigger,
+  SelectValue,
+} from "@/components/ui/select";
 
 function RegisterForm() {
   const { toast } = useToast();
@@ -63,14 +72,6 @@ function RegisterForm() {
   const [loading, setLoading] = useState(false);
 
   const today = useMemo(() => startOfDay(new Date()), []);
-
-  const totalDays = useMemo(() => {
-    if (startDate && endDate) {
-      const days = differenceInDays(endDate, startDate);
-      return days >= 0 ? days : 0;
-    }
-    return 0;
-  }, [startDate, endDate]);
 
   useEffect(() => {
     if (editId && db) {
@@ -182,6 +183,7 @@ function RegisterForm() {
     setSearchQuery('');
     setStartDate(today);
     setEndDate(undefined);
+    setDurationStatus('active');
     router.replace('/admin/register');
   };
 
@@ -234,6 +236,39 @@ function RegisterForm() {
                   placeholder="10-digit primary contact" 
                   className="h-12 bg-black/20 border-white/10 focus:border-primary/50 transition-all rounded-xl"
                 />
+              </div>
+            </div>
+
+            <div className="grid grid-cols-1 md:grid-cols-2 gap-6">
+              <div className="space-y-4">
+                <Label className="text-[10px] uppercase font-black tracking-[0.2em] opacity-40">Contract Status</Label>
+                <Select value={durationStatus} onValueChange={(val: any) => setDurationStatus(val)}>
+                  <SelectTrigger className="h-12 bg-black/20 border-white/10 rounded-xl">
+                    <div className="flex items-center gap-3">
+                      {durationStatus === 'active' ? <ShieldCheck className="h-4 w-4 text-green-500" /> : <ShieldX className="h-4 w-4 text-destructive" />}
+                      <SelectValue placeholder="Select Status" />
+                    </div>
+                  </SelectTrigger>
+                  <SelectContent>
+                    <SelectItem value="active">Active Subscriber</SelectItem>
+                    <SelectItem value="non-active">Non-Active / Expired</SelectItem>
+                  </SelectContent>
+                </Select>
+              </div>
+
+              <div className="space-y-2">
+                <Label className="text-[10px] uppercase font-black tracking-[0.2em] opacity-40">Package Price (INR)</Label>
+                <div className="relative">
+                  <span className="absolute left-4 top-1/2 -translate-y-1/2 text-primary font-black">₹</span>
+                  <Input 
+                    type="number" 
+                    className="pl-8 h-12 text-xl font-black bg-black/20 border-white/10 rounded-xl" 
+                    value={price} 
+                    onChange={(e) => setPrice(e.target.value)} 
+                    required 
+                    placeholder="0" 
+                  />
+                </div>
               </div>
             </div>
 
@@ -294,32 +329,16 @@ function RegisterForm() {
               </div>
             </div>
 
-            <div className="grid grid-cols-1 md:grid-cols-2 gap-6">
-              <div className="space-y-2">
-                  <Label className="text-[10px] uppercase font-black tracking-[0.2em] opacity-40">Package Price (INR)</Label>
-                  <div className="relative">
-                    <span className="absolute left-4 top-1/2 -translate-y-1/2 text-primary font-black">₹</span>
-                    <Input 
-                      type="number" 
-                      className="pl-8 h-12 text-xl font-black bg-black/20 border-white/10 rounded-xl" 
-                      value={price} 
-                      onChange={(e) => setPrice(e.target.value)} 
-                      required 
-                      placeholder="0" 
-                    />
-                  </div>
-              </div>
-              <div className="space-y-2">
-                <Label className="text-[10px] uppercase font-black tracking-[0.2em] opacity-40 flex items-center gap-2">
-                  <FileText className="h-3 w-3" /> Package Notes
-                </Label>
-                <Textarea 
-                  placeholder="e.g. 3 Months + Personal Training" 
-                  className="min-h-[48px] h-12 resize-none bg-black/20 border-white/10 rounded-xl"
-                  value={description}
-                  onChange={(e) => setDescription(e.target.value)}
-                />
-              </div>
+            <div className="space-y-2">
+              <Label className="text-[10px] uppercase font-black tracking-[0.2em] opacity-40 flex items-center gap-2">
+                <FileText className="h-3 w-3" /> Package Notes
+              </Label>
+              <Textarea 
+                placeholder="e.g. 3 Months + Personal Training" 
+                className="min-h-[48px] h-12 resize-none bg-black/20 border-white/10 rounded-xl"
+                value={description}
+                onChange={(e) => setDescription(e.target.value)}
+              />
             </div>
           </CardContent>
           <CardFooter className="bg-white/[0.01] border-t border-white/5 p-8 flex gap-4">
