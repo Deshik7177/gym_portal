@@ -1,3 +1,4 @@
+
 'use client';
 
 import { useState, useMemo } from 'react';
@@ -230,10 +231,10 @@ export default function SalesReportPage() {
             Financial Performance & Audit Control
           </p>
         </div>
-        <div className="flex items-center gap-6 bg-primary/5 p-4 rounded-2xl border border-primary/10 backdrop-blur-sm">
+        <div className="flex items-center gap-6 bg-primary/10 dark:bg-primary/5 p-4 rounded-2xl border border-primary/20 backdrop-blur-sm">
           <div className="flex flex-col items-end">
-            <span className="text-[9px] font-black text-primary/60 uppercase tracking-widest mb-1">Total Settled Revenue</span>
-            <span className="text-4xl font-black text-white tabular-nums">₹{totalRevenue.toLocaleString()}</span>
+            <span className="text-[9px] font-black text-primary uppercase tracking-widest mb-1">Total Settled Revenue</span>
+            <span className="text-4xl font-black text-foreground tabular-nums">₹{totalRevenue.toLocaleString()}</span>
           </div>
           <Button onClick={handleExport} variant="default" className="h-12 px-6 font-bold shadow-xl shadow-primary/10">
             <Download className="mr-2 h-4 w-4" /> EXPORT
@@ -248,7 +249,7 @@ export default function SalesReportPage() {
             <Search className="absolute left-4 top-1/2 -translate-y-1/2 h-4 w-4 text-muted-foreground group-focus-within:text-primary transition-colors" />
             <Input
               placeholder="Search by member name..."
-              className="pl-11 h-12 bg-card border-primary/10 focus:border-primary/40 focus:ring-primary/20 transition-all text-sm rounded-xl"
+              className="pl-11 h-12 bg-card border-border focus:border-primary/40 focus:ring-primary/20 transition-all text-sm rounded-xl"
               value={searchTerm}
               onChange={(e) => setSearchTerm(e.target.value)}
             />
@@ -256,7 +257,7 @@ export default function SalesReportPage() {
           
           <div className="w-full lg:w-56">
             <Select value={filter} onValueChange={setFilter}>
-              <SelectTrigger className="h-12 bg-card border-primary/10 rounded-xl">
+              <SelectTrigger className="h-12 bg-card border-border rounded-xl">
                 <div className="flex items-center gap-2">
                   <Filter className="h-4 w-4 text-primary/60" />
                   <SelectValue placeholder="All Streams" />
@@ -276,7 +277,7 @@ export default function SalesReportPage() {
                 <Button
                   variant="outline"
                   className={cn(
-                    "h-12 flex-1 lg:w-44 justify-start text-left font-normal bg-card border-primary/10 text-xs rounded-xl",
+                    "h-12 flex-1 lg:w-44 justify-start text-left font-normal bg-card border-border text-xs rounded-xl",
                     !dateFrom && "text-muted-foreground"
                   )}
                 >
@@ -302,7 +303,7 @@ export default function SalesReportPage() {
                 <Button
                   variant="outline"
                   className={cn(
-                    "h-12 flex-1 lg:w-44 justify-start text-left font-normal bg-card border-primary/10 text-xs rounded-xl",
+                    "h-12 flex-1 lg:w-44 justify-start text-left font-normal bg-card border-border text-xs rounded-xl",
                     !dateTo && "text-muted-foreground"
                   )}
                 >
@@ -332,12 +333,12 @@ export default function SalesReportPage() {
           </div>
         </div>
 
-        <Card className="border border-primary/10 bg-card/40 backdrop-blur-xl shadow-2xl overflow-hidden rounded-2xl">
+        <Card className="border border-border bg-card shadow-xl overflow-hidden rounded-2xl">
           <CardContent className="p-0">
             <div className="overflow-x-auto">
               <Table>
-                <TableHeader className="bg-primary/[0.02]">
-                  <TableRow className="border-primary/10 hover:bg-transparent">
+                <TableHeader className="bg-primary/5">
+                  <TableRow className="border-border hover:bg-transparent">
                     <TableHead className="w-[180px] font-black uppercase text-[9px] tracking-[0.3em] pl-8 py-5">Date</TableHead>
                     <TableHead className="font-black uppercase text-[9px] tracking-[0.3em]">Member</TableHead>
                     <TableHead className="font-black uppercase text-[9px] tracking-[0.3em]">Category</TableHead>
@@ -348,14 +349,14 @@ export default function SalesReportPage() {
                 <TableBody>
                   {filteredSales.length > 0 ? (
                     filteredSales.map((sale) => (
-                      <TableRow key={sale.id} className="border-primary/5 hover:bg-primary/[0.02] transition-colors group">
-                        <TableCell className="text-xs font-mono text-muted-foreground/80 pl-8 py-4">
+                      <TableRow key={sale.id} className="border-border hover:bg-primary/[0.02] transition-colors group">
+                        <TableCell className="text-xs font-mono text-muted-foreground pl-8 py-4">
                           {sale.date ? format(parseISO(sale.date), 'MMM dd, yyyy') : 'NO DATE'}
                         </TableCell>
                         <TableCell>
                           <div className="flex items-center justify-between">
                             <div className="flex items-center gap-2">
-                              <span className="font-bold text-white group-hover:text-primary transition-colors">{sale.memberName}</span>
+                              <span className="font-bold text-foreground group-hover:text-primary transition-colors">{sale.memberName}</span>
                               <ChevronRight className="h-3 w-3 opacity-0 group-hover:opacity-40 transition-all -translate-x-1 group-hover:translate-x-0" />
                             </div>
                           </div>
@@ -368,10 +369,10 @@ export default function SalesReportPage() {
                             {sale.category}
                           </Badge>
                         </TableCell>
-                        <TableCell className="text-xs text-muted-foreground/60 max-w-[300px] truncate hidden md:table-cell italic font-medium">
+                        <TableCell className="text-xs text-muted-foreground max-w-[300px] truncate hidden md:table-cell italic font-medium">
                           {sale.description}
                         </TableCell>
-                        <TableCell className="text-right font-black text-white pr-8 tabular-nums">
+                        <TableCell className="text-right font-black text-foreground pr-8 tabular-nums">
                            <div className="flex items-center justify-end gap-3">
                              <span>₹{sale.amount.toLocaleString()}</span>
                              {isAdmin && (
@@ -381,7 +382,7 @@ export default function SalesReportPage() {
                                       <MoreHorizontal className="h-3 w-3" />
                                    </Button>
                                  </DropdownMenuTrigger>
-                                 <DropdownMenuContent align="end" className="bg-zinc-900 border-white/10 rounded-xl">
+                                 <DropdownMenuContent align="end" className="bg-popover border-border rounded-xl">
                                    <DropdownMenuItem onSelect={() => handleOpenEdit(sale)} className="gap-2 cursor-pointer">
                                      <Edit3 className="h-3 w-3 text-primary" /> Edit Transaction
                                    </DropdownMenuItem>
@@ -389,7 +390,7 @@ export default function SalesReportPage() {
                                      <Trash2 className="h-3 w-3" /> Void Transaction
                                    </DropdownMenuItem>
                                  </DropdownMenuContent>
-                               </DropdownMenu>
+                               </Circle>
                              )}
                            </div>
                         </TableCell>
@@ -413,7 +414,7 @@ export default function SalesReportPage() {
             </div>
             
             {/* Footer Summary Bar */}
-            <div className="p-6 border-t border-primary/10 bg-primary/[0.03] flex flex-col sm:flex-row justify-between items-center gap-4">
+            <div className="p-6 border-t border-border bg-muted/30 flex flex-col sm:flex-row justify-between items-center gap-4">
               <div className="flex items-center gap-4 text-[10px] font-black uppercase tracking-widest opacity-40">
                 Showing {filteredSales.length} of {sales?.length || 0} Records
               </div>
@@ -430,7 +431,7 @@ export default function SalesReportPage() {
 
       {/* Admin Edit Dialog */}
       <Dialog open={!!editingSale} onOpenChange={(open) => !open && setEditingSale(null)}>
-        <DialogContent className="sm:max-w-md bg-zinc-900 border-white/10 rounded-3xl p-8">
+        <DialogContent className="sm:max-w-md bg-popover border-border rounded-3xl p-8">
           <DialogHeader>
             <DialogTitle className="text-2xl font-black font-headline tracking-tighter text-primary flex items-center gap-3">
               <Edit3 className="h-6 w-6" /> EDIT TRANSACTION
@@ -446,7 +447,7 @@ export default function SalesReportPage() {
                 <span className="absolute left-4 top-1/2 -translate-y-1/2 text-primary font-black">₹</span>
                 <Input 
                   type="number" 
-                  className="pl-8 h-12 bg-black/20 border-white/10 font-bold text-lg" 
+                  className="pl-8 h-12 bg-muted/50 border-border font-bold text-lg" 
                   value={editAmount} 
                   onChange={(e) => setEditAmount(e.target.value)} 
                 />
@@ -455,7 +456,7 @@ export default function SalesReportPage() {
             <div className="space-y-2">
               <Label className="text-[10px] uppercase font-black tracking-widest opacity-40">Category</Label>
               <Select value={editCategory} onValueChange={setEditCategory}>
-                <SelectTrigger className="h-12 bg-black/20 border-white/10">
+                <SelectTrigger className="h-12 bg-muted/50 border-border">
                   <SelectValue />
                 </SelectTrigger>
                 <SelectContent>
@@ -468,7 +469,7 @@ export default function SalesReportPage() {
             <div className="space-y-2">
               <Label className="text-[10px] uppercase font-black tracking-widest opacity-40">Audit Memo</Label>
               <Textarea 
-                className="bg-black/20 border-white/10 min-h-[80px]" 
+                className="bg-muted/50 border-border min-h-[80px]" 
                 value={editDescription} 
                 onChange={(e) => setEditDescription(e.target.value)} 
               />

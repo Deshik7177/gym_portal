@@ -74,8 +74,8 @@ export default function ReceptionLayout({ children }: { children: React.ReactNod
   ];
 
   return (
-    <div className="flex min-h-screen w-full flex-col bg-background/95">
-      <aside className="fixed inset-y-0 left-0 z-10 hidden w-64 flex-col border-r bg-card/50 backdrop-blur-sm sm:flex shadow-xl">
+    <div className="flex min-h-screen w-full flex-col bg-background">
+      <aside className="fixed inset-y-0 left-0 z-10 hidden w-64 flex-col border-r bg-card sm:flex shadow-sm">
         <div className="flex h-16 items-center border-b px-6">
           <Link href="/admin">
             <Logo />
@@ -87,8 +87,8 @@ export default function ReceptionLayout({ children }: { children: React.ReactNod
               key={item.href}
               href={item.href}
               className={cn(
-                "flex items-center gap-3 rounded-lg px-3 py-2.5 text-sm font-medium transition-all hover:bg-primary/5",
-                pathname === item.href ? "text-primary bg-primary/10" : "text-muted-foreground hover:text-primary"
+                "flex items-center gap-3 rounded-lg px-3 py-2.5 text-sm font-medium transition-all",
+                pathname === item.href ? "text-primary bg-primary/10" : "text-muted-foreground hover:text-primary hover:bg-muted"
               )}
             >
               <item.icon className="h-4 w-4" />
@@ -97,7 +97,7 @@ export default function ReceptionLayout({ children }: { children: React.ReactNod
           ))}
         </nav>
         <div className="mt-auto px-4 py-4 space-y-2">
-           <Badge variant={isOnline ? "outline" : "destructive"} className="w-full justify-center gap-2 py-1 text-[10px] uppercase tracking-wider">
+           <Badge variant={isOnline ? "outline" : "destructive"} className="w-full justify-center gap-2 py-1 text-[10px] uppercase tracking-wider border-primary/20 bg-primary/5 text-primary">
              {isOnline ? (
                <> <Wifi className="h-3 w-3 text-green-500" /> Cloud Sync Active </>
              ) : (
@@ -108,7 +108,7 @@ export default function ReceptionLayout({ children }: { children: React.ReactNod
         <nav className="flex flex-col gap-1 px-4 pb-6">
           <Link
             href="#"
-            className="flex items-center gap-3 rounded-lg px-3 py-2 text-sm font-medium text-muted-foreground transition-all hover:text-primary"
+            className="flex items-center gap-3 rounded-lg px-3 py-2 text-sm font-medium text-muted-foreground transition-all hover:text-primary hover:bg-muted"
           >
             <Settings className="h-4 w-4" />
             System Settings
@@ -137,8 +137,8 @@ export default function ReceptionLayout({ children }: { children: React.ReactNod
                     key={item.href}
                     href={item.href} 
                     className={cn(
-                      "flex items-center gap-4 rounded-lg px-3 py-2 hover:bg-primary/5",
-                      pathname === item.href ? "text-primary bg-primary/10" : "text-muted-foreground hover:text-primary"
+                      "flex items-center gap-4 rounded-lg px-3 py-2",
+                      pathname === item.href ? "text-primary bg-primary/10" : "text-muted-foreground hover:text-primary hover:bg-muted"
                     )}
                   >
                     <item.icon className="h-5 w-5" />
@@ -165,7 +165,7 @@ export default function ReceptionLayout({ children }: { children: React.ReactNod
                 <ShieldAlert className="h-4 w-4" />
                 <AlertTitle className="font-black uppercase tracking-widest text-[10px]">Role Configuration Required</AlertTitle>
                 <AlertDescription className="text-xs">
-                  Your account (UID: <code className="bg-black/20 px-1 rounded">{user.uid}</code>) is authenticated but has no role assigned in Firestore. 
+                  Your account (UID: <code className="bg-muted px-1 rounded">{user.uid}</code>) is authenticated but has no role assigned in Firestore. 
                   Please go to the Firebase Console and create a document in the <b>users</b> collection with this UID as the document ID and set <b>role</b> to "admin" or "staff".
                 </AlertDescription>
               </Alert>
