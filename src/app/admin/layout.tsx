@@ -1,3 +1,4 @@
+
 'use client';
 
 import { useEffect, useState } from 'react';
@@ -26,6 +27,7 @@ import { Badge } from '@/components/ui/badge';
 import { cn } from '@/lib/utils';
 import { Alert, AlertDescription, AlertTitle } from '@/components/ui/alert';
 import Logo from '@/components/logo';
+import { ModeToggle } from '@/components/mode-toggle';
 
 export default function ReceptionLayout({ children }: { children: React.ReactNode }) {
   const { user, loading } = useUser();
@@ -152,7 +154,10 @@ export default function ReceptionLayout({ children }: { children: React.ReactNod
              </h2>
              {isAdmin && <Badge className="bg-primary/20 text-primary border-primary/30 uppercase text-[9px] font-black tracking-widest px-2">Administrator</Badge>}
           </div>
-          <UserNav />
+          <div className="flex items-center gap-4">
+            <ModeToggle />
+            <UserNav />
+          </div>
         </header>
         <main className="flex-1 p-6">
             {isMissingProfile && (

@@ -1,3 +1,4 @@
+
 import type { Metadata } from 'next';
 import { Toaster } from '@/components/ui/toaster';
 import './globals.css';
@@ -5,6 +6,7 @@ import { cn } from '@/lib/utils';
 import { Inter, Playfair_Display } from 'next/font/google';
 import { FirebaseClientProvider } from '@/firebase';
 import { FirebaseErrorListener } from '@/components/FirebaseErrorListener';
+import { ThemeProvider } from '@/components/theme-provider';
 
 const inter = Inter({ subsets: ['latin'], variable: '--font-inter' });
 const playfairDisplay = Playfair_Display({ subsets: ['latin'], variable: '--font-playfair-display' });
@@ -23,15 +25,22 @@ export default function RootLayout({
   children: React.ReactNode;
 }>) {
   return (
-    <html lang="en" className='dark' suppressHydrationWarning>
+    <html lang="en" suppressHydrationWarning>
       <body
         className={cn('min-h-screen bg-background font-body antialiased', inter.variable, playfairDisplay.variable)}
         suppressHydrationWarning={true}
       >
         <FirebaseClientProvider>
-          {children}
-          <FirebaseErrorListener />
-          <Toaster />
+          <ThemeProvider
+            attribute="class"
+            defaultTheme="dark"
+            enableSystem
+            disableTransitionOnChange
+          >
+            {children}
+            <FirebaseErrorListener />
+            <Toaster />
+          </ThemeProvider>
         </FirebaseClientProvider>
       </body>
     </html>
