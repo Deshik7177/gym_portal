@@ -12,13 +12,16 @@ import {
   UserCheck,
   Edit3,
   Trash2,
-  AlertTriangle
+  AlertTriangle,
+  Filter,
+  Calendar as CalendarIcon,
+  X
 } from 'lucide-react';
 import { collection, query, doc, deleteDoc, updateDoc, setDoc, serverTimestamp, addDoc, where, orderBy, limit } from 'firebase/firestore';
 import { useFirestore, useCollection, useProfile } from '@/firebase';
 import Link from 'next/link';
 import { useRouter } from 'next/navigation';
-import { format, startOfDay, isToday, parseISO, isAfter } from 'date-fns';
+import { format, startOfDay, isToday, parseISO, isAfter, isBefore, endOfDay } from 'date-fns';
 import { QRCodeCanvas } from 'qrcode.react';
 import { generateMemberQrPayload } from '@/lib/qr-logic';
 
@@ -54,6 +57,19 @@ import {
   DialogDescription,
   DialogFooter
 } from "@/components/ui/dialog";
+import {
+  Select,
+  SelectContent,
+  SelectItem,
+  SelectTrigger,
+  SelectValue,
+} from "@/components/ui/select";
+import {
+  Popover,
+  PopoverContent,
+  PopoverTrigger,
+} from "@/components/ui/popover";
+import { Calendar } from "@/components/ui/calendar";
 import { useToast } from '@/hooks/use-toast';
 import { cn } from '@/lib/utils';
 import { errorEmitter } from '@/firebase/error-emitter';
@@ -65,7 +81,17 @@ export default function MembersListPage() {
   const router = useRouter();
   const { isAdmin, isStaff, loading: profileLoading } = useProfile();
   
+  // Basic Search
   const [searchTerm, setSearchTerm] = useState('');
+  
+  // Advanced Filters
+  const [typeFilter, setTypeFilter] = useState('all'); // group, personal
+  const [categoryFilter, setCategoryFilter] = useState('all'); // active, non-active
+  const [validityFilter, setValidityFilter] = useState('all'); // live_active, live_expired
+  const [dateFrom, setDateFrom] = useState<Date | undefined>(undefined);
+  const [dateTo, setDateTo] = useState<Date | undefined>(undefined);
+  
+  // Dialog States
   const [memberQrToShow, setMemberQrToShow] = useState<any>(null);
   const [memberForHistory, setMemberForHistory] = useState<any>(null);
   const [memberToDelete, setMemberToDelete] = useState<any>(null);
@@ -93,10 +119,39 @@ export default function MembersListPage() {
   const filteredMembers = useMemo(() => {
     if (!members) return [];
     return members.filter(m => {
-      return (m.fullName?.toLowerCase().includes(searchTerm.toLowerCase()) || 
-              m.phone?.includes(searchTerm));
+      // Text Search
+      const matchesSearch = (m.fullName?.toLowerCase().includes(searchTerm.toLowerCase()) || 
+                             m.phone?.includes(searchTerm));
+      
+      // Membership Type (Personal/Group)
+      const matchesType = typeFilter === 'all' || m.type === typeFilter;
+      
+      // Category (Active/Non-Active term)
+      const matchesCategory = categoryFilter === 'all' || m.status === categoryFilter;
+
+      // Validity (Date-based status)
+      const expiryDate = m.endDate ? parseISO(m.endDate) : null;
+      const startDate = m.startDate ? parseISO(m.startDate) : null;
+      const isExpired = expiryDate ? isAfter(today, expiryDate) : false;
+      const notStarted = startDate ? isAfter(startDate, today) : false;
+      const isValid = !isExpired && !notStarted;
+
+      let matchesValidity = true;
+      if (validityFilter === 'live_active') matchesValidity = isValid;
+      if (validityFilter === 'live_expired') matchesValidity = isExpired;
+
+      // Date Range (based on End Date)
+      let matchesDates = true;
+      if (expiryDate) {
+        if (dateFrom && isBefore(expiryDate, startOfDay(dateFrom))) matchesDates = false;
+        if (dateTo && isAfter(expiryDate, endOfDay(dateTo))) matchesDates = false;
+      } else if (dateFrom || dateTo) {
+        matchesDates = false;
+      }
+
+      return matchesSearch && matchesType && matchesCategory && matchesValidity && matchesDates;
     });
-  }, [members, searchTerm]);
+  }, [members, searchTerm, typeFilter, categoryFilter, validityFilter, dateFrom, dateTo, today]);
 
   const stats = useMemo(() => {
     if (!members) return { total: 0, active: 0, personal: 0 };
@@ -138,7 +193,6 @@ export default function MembersListPage() {
 
     const alreadyLoggedToday = lastCheckInDate && isToday(lastCheckInDate);
 
-    // FIXED PATH GATE COMMAND
     setDoc(doc(db, 'gateControl', 'latest'), {
       command: 'OPEN',
       status: 'pending',
@@ -153,7 +207,6 @@ export default function MembersListPage() {
       }));
     });
 
-    // PROFILE UPDATE
     updateDoc(doc(db, 'members', memberId), {
       lastCheckIn: timestamp,
       updatedAt: timestamp
@@ -164,7 +217,6 @@ export default function MembersListPage() {
       }));
     });
 
-    // ATTENDANCE LOG (ONCE PER DAY)
     if (!alreadyLoggedToday) {
       addDoc(collection(db, 'attendance'), {
         memberId: memberId,
@@ -182,6 +234,15 @@ export default function MembersListPage() {
 
     toast({ title: alreadyLoggedToday ? "Welcome Back!" : "Attendance Recorded" });
     setIsProcessingCheckIn(null);
+  };
+
+  const resetFilters = () => {
+    setSearchTerm('');
+    setTypeFilter('all');
+    setCategoryFilter('all');
+    setValidityFilter('all');
+    setDateFrom(undefined);
+    setDateTo(undefined);
   };
 
   const handleDeleteMember = async () => {
@@ -254,10 +315,78 @@ export default function MembersListPage() {
       <Card className="border-none bg-card/40 backdrop-blur-xl shadow-2xl rounded-2xl overflow-hidden">
         <CardHeader className="border-b border-white/5 py-6">
           <div className="flex flex-col gap-4">
-            <div className="flex flex-col lg:flex-row items-center gap-4">
+            <div className="flex flex-col lg:flex-row items-center gap-3">
               <div className="relative flex-1 w-full">
                 <Search className="absolute left-3.5 top-1/2 -translate-y-1/2 h-4 w-4 text-muted-foreground" />
                 <Input placeholder="Search member ID or name..." className="pl-10 h-11 bg-black/20 border-white/10 rounded-xl w-full" value={searchTerm} onChange={(e) => setSearchTerm(e.target.value)} />
+              </div>
+              <div className="flex flex-wrap items-center gap-2">
+                <Select value={typeFilter} onValueChange={setTypeFilter}>
+                  <SelectTrigger className="h-11 w-40 bg-black/20 border-white/10 rounded-xl">
+                    <SelectValue placeholder="All Types" />
+                  </SelectTrigger>
+                  <SelectContent>
+                    <SelectItem value="all">All Types</SelectItem>
+                    <SelectItem value="group">Group</SelectItem>
+                    <SelectItem value="personal">Personal Training</SelectItem>
+                  </SelectContent>
+                </Select>
+
+                <Select value={categoryFilter} onValueChange={setCategoryFilter}>
+                  <SelectTrigger className="h-11 w-40 bg-black/20 border-white/10 rounded-xl">
+                    <SelectValue placeholder="All Categories" />
+                  </SelectTrigger>
+                  <SelectContent>
+                    <SelectItem value="all">All Categories</SelectItem>
+                    <SelectItem value="active">Active Term</SelectItem>
+                    <SelectItem value="non-active">Non-Active Term</SelectItem>
+                  </SelectContent>
+                </Select>
+
+                <Select value={validityFilter} onValueChange={setValidityFilter}>
+                  <SelectTrigger className="h-11 w-40 bg-black/20 border-white/10 rounded-xl">
+                    <SelectValue placeholder="Live Status" />
+                  </SelectTrigger>
+                  <SelectContent>
+                    <SelectItem value="all">Live Status</SelectItem>
+                    <SelectItem value="live_active">Currently Active</SelectItem>
+                    <SelectItem value="live_expired">Currently Expired</SelectItem>
+                  </SelectContent>
+                </Select>
+              </div>
+            </div>
+
+            <div className="flex flex-col lg:flex-row items-center gap-3">
+              <div className="flex gap-2 w-full lg:w-auto">
+                <Popover>
+                  <PopoverTrigger asChild>
+                    <Button variant="outline" className={cn("h-11 flex-1 lg:w-48 justify-start text-left font-normal bg-black/20 border-white/10 rounded-xl", !dateFrom && "text-muted-foreground")}>
+                      <CalendarIcon className="mr-2 h-4 w-4 opacity-40" />
+                      {dateFrom ? format(dateFrom, "MMM dd, yyyy") : <span>Expiry From</span>}
+                    </Button>
+                  </PopoverTrigger>
+                  <PopoverContent className="w-auto p-0" align="start">
+                    <Calendar mode="single" selected={dateFrom} onSelect={setDateFrom} initialFocus />
+                  </PopoverContent>
+                </Popover>
+
+                <Popover>
+                  <PopoverTrigger asChild>
+                    <Button variant="outline" className={cn("h-11 flex-1 lg:w-48 justify-start text-left font-normal bg-black/20 border-white/10 rounded-xl", !dateTo && "text-muted-foreground")}>
+                      <CalendarIcon className="mr-2 h-4 w-4 opacity-40" />
+                      {dateTo ? format(dateTo, "MMM dd, yyyy") : <span>Expiry To</span>}
+                    </Button>
+                  </PopoverTrigger>
+                  <PopoverContent className="w-auto p-0" align="start">
+                    <Calendar mode="single" selected={dateTo} onSelect={setDateTo} disabled={(date) => dateFrom ? date < dateFrom : false} initialFocus />
+                  </PopoverContent>
+                </Popover>
+
+                {(searchTerm || typeFilter !== 'all' || categoryFilter !== 'all' || validityFilter !== 'all' || dateFrom || dateTo) && (
+                  <Button variant="ghost" size="icon" onClick={resetFilters} className="h-11 w-11 hover:bg-destructive/10 hover:text-destructive rounded-xl">
+                    <X className="h-5 w-5" />
+                  </Button>
+                )}
               </div>
             </div>
           </div>
@@ -288,7 +417,10 @@ export default function MembersListPage() {
                         <div className="h-10 w-10 rounded-full bg-primary/10 flex items-center justify-center overflow-hidden">
                           {member.photoData ? <img src={member.photoData} className="w-full h-full object-cover" alt={member.fullName} /> : <User className="h-5 w-5 text-primary" />}
                         </div>
-                        <span className="font-bold text-sm text-foreground">{member.fullName}</span>
+                        <div className="flex flex-col">
+                          <span className="font-bold text-sm text-foreground">{member.fullName}</span>
+                          <span className="text-[9px] font-black uppercase opacity-30 tracking-widest">{member.status} TERM</span>
+                        </div>
                       </div>
                     </TableCell>
                     <TableCell>
@@ -341,7 +473,7 @@ export default function MembersListPage() {
                   </TableRow>
                 );
               }) : (
-                <TableRow><TableCell colSpan={5} className="h-64 text-center text-muted-foreground opacity-30 uppercase tracking-widest">No members found</TableCell></TableRow>
+                <TableRow><TableCell colSpan={5} className="h-64 text-center text-muted-foreground opacity-30 uppercase tracking-widest">No members found matching filters</TableCell></TableRow>
               )}
             </TableBody>
           </Table>
