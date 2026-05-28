@@ -1,4 +1,3 @@
-
 'use client';
 
 import { useState, useEffect, Suspense, useMemo } from 'react';
@@ -57,15 +56,13 @@ function RegisterForm() {
   const [phone, setPhone] = useState('');
   const [fullName, setFullName] = useState('');
   const [searchQuery, setSearchQuery] = useState('');
-  const [durationStatus, setDurationStatus] = useState<'active' | 'non-active'>('active');
+  const [subscriptionType, setSubscriptionType] = useState<'active' | 'non-active'>('active');
   const [price, setPrice] = useState('');
   const [description, setDescription] = useState('');
   
-  // Date states
   const [startDate, setStartDate] = useState<Date | undefined>(undefined);
   const [endDate, setEndDate] = useState<Date | undefined>(undefined);
   
-  // Popover open states
   const [isStartDateOpen, setIsStartDateOpen] = useState(false);
   const [isEndDateOpen, setIsEndDateOpen] = useState(false);
   
@@ -81,7 +78,7 @@ function RegisterForm() {
           const data = snap.data();
           setPhone(data.phone || '');
           setFullName(data.fullName || '');
-          setDurationStatus(data.status || 'active');
+          setSubscriptionType(data.status || 'active');
           setPrice(data.price?.toString() || '');
           setDescription(data.description || '');
           setStartDate(data.startDate ? new Date(data.startDate) : undefined);
@@ -102,7 +99,7 @@ function RegisterForm() {
         const data = docSnap.data();
         setPhone(data.phone);
         setFullName(data.fullName);
-        setDurationStatus(data.status);
+        setSubscriptionType(data.status);
         setPrice(data.price?.toString() || '');
         setDescription(data.description || '');
         setStartDate(data.startDate ? new Date(data.startDate) : undefined);
@@ -133,7 +130,7 @@ function RegisterForm() {
     const memberData: any = {
       fullName,
       phone,
-      status: durationStatus,
+      status: subscriptionType,
       type: 'group',
       price: parseFloat(price) || 0,
       description: description || '',
@@ -150,10 +147,8 @@ function RegisterForm() {
     const docRef = doc(db, 'members', phone);
     
     try {
-      // 1. Save member profile
       await setDoc(docRef, memberData, { merge: true });
 
-      // 2. If it's a NEW registration, log the sale automatically
       if (!isEditMode && parseFloat(price) > 0) {
         await addDoc(collection(db, 'sales'), {
           memberId: phone,
@@ -197,7 +192,7 @@ function RegisterForm() {
     setSearchQuery('');
     setStartDate(today);
     setEndDate(undefined);
-    setDurationStatus('active');
+    setSubscriptionType('active');
     router.replace('/admin/register');
   };
 
@@ -255,17 +250,17 @@ function RegisterForm() {
 
             <div className="grid grid-cols-1 md:grid-cols-2 gap-6">
               <div className="space-y-4">
-                <Label className="text-[10px] uppercase font-black tracking-[0.2em] opacity-40">Contract Status</Label>
-                <Select value={durationStatus} onValueChange={(val: any) => setDurationStatus(val)}>
+                <Label className="text-[10px] uppercase font-black tracking-[0.2em] opacity-40">Duration Logic (Label Only)</Label>
+                <Select value={subscriptionType} onValueChange={(val: any) => setSubscriptionType(val)}>
                   <SelectTrigger className="h-12 bg-black/20 border-white/10 rounded-xl">
                     <div className="flex items-center gap-3">
-                      {durationStatus === 'active' ? <ShieldCheck className="h-4 w-4 text-green-500" /> : <ShieldX className="h-4 w-4 text-destructive" />}
-                      <SelectValue placeholder="Select Status" />
+                      {subscriptionType === 'active' ? <ShieldCheck className="h-4 w-4 text-green-500" /> : <ShieldX className="h-4 w-4 text-destructive" />}
+                      <SelectValue placeholder="Select Category" />
                     </div>
                   </SelectTrigger>
                   <SelectContent>
-                    <SelectItem value="active">Active Subscriber</SelectItem>
-                    <SelectItem value="non-active">Non-Active / Expired</SelectItem>
+                    <SelectItem value="active">Active Term</SelectItem>
+                    <SelectItem value="non-active">Non-Active Term</SelectItem>
                   </SelectContent>
                 </Select>
               </div>
@@ -287,7 +282,7 @@ function RegisterForm() {
             </div>
 
             <div className="space-y-4">
-              <Label className="text-[10px] uppercase font-black tracking-[0.2em] opacity-40">Membership Lifecycle</Label>
+              <Label className="text-[10px] uppercase font-black tracking-[0.2em] opacity-40">Membership Lifecycle (Hard Access Control)</Label>
               <div className="grid grid-cols-1 md:grid-cols-2 gap-4">
                   <div className="space-y-2 flex flex-col">
                     <Popover open={isStartDateOpen} onOpenChange={setIsStartDateOpen}>
@@ -367,17 +362,6 @@ function RegisterForm() {
           </CardFooter>
         </Card>
       </form>
-
-      <div className="bg-primary/5 border border-primary/10 rounded-2xl p-6 flex items-start gap-4">
-          <Info className="h-5 w-5 text-primary mt-1 shrink-0" />
-          <div className="space-y-2">
-              <p className="text-[10px] font-black uppercase tracking-[0.3em] text-primary">Biometric Note</p>
-              <p className="text-xs text-muted-foreground leading-relaxed">
-                Face ID enrollment must be completed at the <b>Entrance Kiosk</b> by selecting the "Enrollment" tab. 
-                This ensures high-quality capture using the actual entry sensors.
-              </p>
-          </div>
-      </div>
     </div>
   );
 }

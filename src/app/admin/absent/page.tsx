@@ -4,7 +4,7 @@ import { useMemo } from 'react';
 import { Clock, AlertTriangle, UserMinus, Phone, Calendar, Loader2 } from 'lucide-react';
 import { collection, query } from 'firebase/firestore';
 import { useFirestore, useCollection } from '@/firebase';
-import { differenceInDays, format } from 'date-fns';
+import { differenceInDays, format, isAfter, parseISO, startOfDay } from 'date-fns';
 
 import { Button } from '@/components/ui/button';
 import {
@@ -26,6 +26,7 @@ import { Badge } from '@/components/ui/badge';
 
 export default function FrequentAbsentPage() {
   const db = useFirestore();
+  const todayDate = useMemo(() => startOfDay(new Date()), []);
   const membersRef = useMemo(() => db ? query(collection(db, 'members')) : null, [db]);
   const { data: members, loading } = useCollection<any>(membersRef);
 
@@ -35,18 +36,21 @@ export default function FrequentAbsentPage() {
     const now = new Date();
     return members
       .map((m: any) => {
-        // Use lastCheckIn or fallback to createdAt
         const lastSeenTimestamp = m.lastCheckIn || m.createdAt;
         const lastSeenDate = lastSeenTimestamp?.seconds 
           ? new Date(lastSeenTimestamp.seconds * 1000) 
           : null;
         
         const days = lastSeenDate ? differenceInDays(now, lastSeenDate) : 99;
-        return { ...m, daysAbsent: days, lastSeenDate };
+        
+        const expiryDate = m.endDate ? parseISO(m.endDate) : null;
+        const isActiveByDate = expiryDate ? !isAfter(todayDate, expiryDate) : true;
+        
+        return { ...m, daysAbsent: days, lastSeenDate, isActiveByDate };
       })
-      .filter(m => m.daysAbsent >= 2 && m.status === 'active')
+      .filter(m => m.daysAbsent >= 2 && m.isActiveByDate)
       .sort((a, b) => b.daysAbsent - a.daysAbsent);
-  }, [members]);
+  }, [members, todayDate]);
 
   const severeAbsents = absentMembers.filter(a => a.daysAbsent > 5).length;
   const recentAbsents = absentMembers.filter(a => a.daysAbsent >= 2 && a.daysAbsent <= 5).length;

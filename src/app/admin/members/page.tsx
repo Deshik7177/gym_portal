@@ -5,21 +5,12 @@ import {
   Search, 
   User, 
   MoreHorizontal, 
-  ArrowUpRight, 
   Loader2, 
-  Trash2, 
   Plus, 
   Calendar as CalendarIcon,
-  CreditCard,
   QrCode,
-  Download,
-  Filter,
-  X,
-  UserCheck,
   History,
-  ShieldAlert,
-  CalendarDays,
-  FileText
+  UserCheck
 } from 'lucide-react';
 import { collection, query, doc, deleteDoc, updateDoc, setDoc, serverTimestamp, addDoc, where, orderBy, limit } from 'firebase/firestore';
 import { useFirestore, useCollection, useProfile } from '@/firebase';
@@ -41,17 +32,8 @@ import {
   DropdownMenu,
   DropdownMenuContent,
   DropdownMenuItem,
-  DropdownMenuLabel,
   DropdownMenuTrigger,
-  DropdownMenuSeparator,
 } from '@/components/ui/dropdown-menu';
-import {
-  Select,
-  SelectContent,
-  SelectItem,
-  SelectTrigger,
-  SelectValue,
-} from '@/components/ui/select';
 import { Input } from '@/components/ui/input';
 import {
   Table,
@@ -61,34 +43,13 @@ import {
   TableHeader,
   TableRow,
 } from '@/components/ui/table';
-import {
-  AlertDialog,
-  AlertDialogAction,
-  AlertDialogCancel,
-  AlertDialogContent,
-  AlertDialogDescription,
-  AlertDialogFooter,
-  AlertDialogHeader,
-  AlertDialogTitle,
-} from "@/components/ui/alert-dialog";
 import { 
   Dialog,
   DialogContent,
-  DialogDescription,
-  DialogFooter,
   DialogHeader,
   DialogTitle,
 } from "@/components/ui/dialog";
-import { Label } from '@/components/ui/label';
 import { useToast } from '@/hooks/use-toast';
-import { errorEmitter } from '@/firebase/error-emitter';
-import { FirestorePermissionError, type SecurityRuleContext } from '@/firebase/errors';
-import { Calendar } from "@/components/ui/calendar";
-import {
-  Popover,
-  PopoverContent,
-  PopoverTrigger,
-} from "@/components/ui/popover";
 import { cn } from '@/lib/utils';
 
 export default function MembersListPage() {
@@ -98,27 +59,10 @@ export default function MembersListPage() {
   const { isAdmin, isStaff, loading: profileLoading } = useProfile();
   
   const [searchTerm, setSearchTerm] = useState('');
-  const [filterStatus, setFilterStatus] = useState('all');
-  const [filterType, setFilterType] = useState('all');
-  
-  const [filterDateFrom, setFilterDateFrom] = useState<Date | undefined>(undefined);
-  const [filterDateTo, setFilterDateTo] = useState<Date | undefined>(undefined);
-  const [isFilterFromOpen, setIsFilterFromOpen] = useState(false);
-  const [isFilterToOpen, setIsFilterToOpen] = useState(false);
-  
-  const [memberToDelete, setMemberToDelete] = useState<any>(null);
-  const [memberForPT, setMemberForPT] = useState<any>(null);
   const [memberQrToShow, setMemberQrToShow] = useState<any>(null);
   const [memberForHistory, setMemberForHistory] = useState<any>(null);
-  const [isUpdatingPT, setIsUpdatingPT] = useState(false);
   const [isProcessingCheckIn, setIsProcessingCheckIn] = useState<string | null>(null);
   
-  const [ptPrice, setPtPrice] = useState('');
-  const [ptStartDate, setPtStartDate] = useState<Date | undefined>(undefined);
-  const [ptEndDate, setPtEndDate] = useState<Date | undefined>(undefined);
-  const [isPtStartDateOpen, setIsPtStartDateOpen] = useState(false);
-  const [isPtEndDateOpen, setIsPtEndDateOpen] = useState(false);
-
   const qrRef = useRef<HTMLDivElement>(null);
   const today = useMemo(() => startOfDay(new Date()), []);
 
@@ -135,64 +79,43 @@ export default function MembersListPage() {
     );
   }, [db, memberForHistory]);
 
-  const { data: memberLogs, loading: logsLoading } = useCollection<any>(attendanceQuery);
-
-  const ptLimits = useMemo(() => {
-    if (!memberForPT) return null;
-    return {
-      start: memberForPT.startDate ? parseISO(memberForPT.startDate) : today,
-      end: memberForPT.endDate ? parseISO(memberForPT.endDate) : undefined
-    };
-  }, [memberForPT, today]);
+  const { data: memberLogs } = useCollection<any>(attendanceQuery);
 
   const filteredMembers = useMemo(() => {
     if (!members) return [];
     return members.filter(m => {
-      const matchesSearch = (m.fullName?.toLowerCase().includes(searchTerm.toLowerCase()) || 
-                             m.phone?.includes(searchTerm));
-      const matchesStatus = filterStatus === 'all' || m.status === filterStatus;
-      const matchesType = filterType === 'all' || m.type === filterType;
-      
-      let matchesDate = true;
-      if (filterDateFrom || filterDateTo) {
-        if (m.endDate) {
-          const expiryDate = parseISO(m.endDate);
-          if (filterDateFrom && expiryDate < startOfDay(filterDateFrom)) matchesDate = false;
-          if (filterDateTo && expiryDate > endOfDay(filterDateTo)) matchesDate = false;
-        } else {
-          matchesDate = false;
-        }
-      }
-      
-      return matchesSearch && matchesStatus && matchesType && matchesDate;
+      return (m.fullName?.toLowerCase().includes(searchTerm.toLowerCase()) || 
+              m.phone?.includes(searchTerm));
     });
-  }, [members, searchTerm, filterStatus, filterType, filterDateFrom, filterDateTo]);
+  }, [members, searchTerm]);
 
   const stats = useMemo(() => {
     if (!members) return { total: 0, active: 0, personal: 0 };
     return {
       total: members.length,
-      active: members.filter(m => m.status === 'active' && (m.endDate ? !isAfter(today, parseISO(m.endDate)) : true)).length,
+      active: members.filter(m => {
+        const expiryDate = m.endDate ? parseISO(m.endDate) : null;
+        const startDate = m.startDate ? parseISO(m.startDate) : null;
+        return (expiryDate ? !isAfter(today, expiryDate) : true) && (startDate ? !isAfter(startDate, today) : true);
+      }).length,
       personal: members.filter(m => m.type === 'personal').length,
     };
   }, [members, today]);
 
-  const handleDeleteMember = () => {
-    if (!db || !memberToDelete || !isAdmin) return;
-    deleteDoc(doc(db, 'members', memberToDelete.phone))
-      .then(() => {
-        toast({ title: "Member Removed" });
-        setMemberToDelete(null);
-      });
-  };
-
   const handleManualCheckIn = async (member: any) => {
     if (!db || isProcessingCheckIn) return;
 
-    // Check for expiration
-    const isExpired = member.endDate ? isAfter(today, parseISO(member.endDate)) : false;
-    if (isExpired || member.status !== 'active') {
-        toast({ variant: "destructive", title: "Access Denied", description: isExpired ? "Membership has expired." : "Membership is inactive." });
+    const expiryDate = member.endDate ? parseISO(member.endDate) : null;
+    const startDate = member.startDate ? parseISO(member.startDate) : null;
+    const isExpired = expiryDate ? isAfter(today, expiryDate) : false;
+    const notStarted = startDate ? isAfter(startDate, today) : false;
+
+    if (isExpired || notStarted) {
+        toast({ 
+          variant: "destructive", 
+          title: "Access Denied", 
+          description: isExpired ? "Membership has expired." : "Access not yet active." 
+        });
         return;
     }
 
@@ -253,44 +176,6 @@ export default function MembersListPage() {
     }
   };
 
-  const handleSavePT = async () => {
-    if (!db || !memberForPT) return;
-    if (!ptPrice || !ptStartDate || !ptEndDate) {
-      toast({ variant: "destructive", title: "Missing Data" });
-      return;
-    }
-    setIsUpdatingPT(true);
-    const saleData = {
-      memberId: memberForPT.phone,
-      memberName: memberForPT.fullName,
-      amount: parseFloat(ptPrice) || 0,
-      date: new Date().toISOString().split('T')[0],
-      category: 'personal training',
-      description: `PT: ${format(ptStartDate, 'MMM dd')} to ${format(ptEndDate, 'MMM dd')}`,
-      createdAt: serverTimestamp()
-    };
-    try {
-      await addDoc(collection(db, 'sales'), saleData);
-      await updateDoc(doc(db, 'members', memberForPT.phone), {
-        type: 'personal',
-        updatedAt: serverTimestamp()
-      });
-      toast({ title: "PT Session Added" });
-      setMemberForPT(null);
-    } catch (e: any) {
-    } finally {
-      setIsUpdatingPT(false);
-    }
-  };
-
-  const resetFilters = () => {
-    setSearchTerm('');
-    setFilterStatus('all');
-    setFilterType('all');
-    setFilterDateFrom(undefined);
-    setFilterDateTo(undefined);
-  };
-
   if (loading || profileLoading) return <div className="flex h-60 w-full items-center justify-center"><Loader2 className="h-8 w-8 animate-spin text-primary" /></div>;
 
   return (
@@ -316,7 +201,7 @@ export default function MembersListPage() {
          </Card>
          <Card className="bg-green-500/5 border-green-500/10 shadow-none">
             <CardHeader className="pb-2">
-                <CardTitle className="text-[10px] font-black uppercase tracking-[0.3em] opacity-40">Valid Contracts</CardTitle>
+                <CardTitle className="text-[10px] font-black uppercase tracking-[0.3em] opacity-40">Current Active</CardTitle>
             </CardHeader>
             <CardContent>
                 <div className="text-3xl font-black text-green-500">{stats.active}</div>
@@ -348,7 +233,7 @@ export default function MembersListPage() {
             <TableHeader className="bg-white/[0.02]">
               <TableRow className="border-white/5">
                 <TableHead className="pl-8 font-black uppercase text-[9px] tracking-[0.3em]">Member</TableHead>
-                <TableHead className="font-black uppercase text-[9px] tracking-[0.3em]">Package & Status</TableHead>
+                <TableHead className="font-black uppercase text-[9px] tracking-[0.3em]">Status & Plan</TableHead>
                 <TableHead className="font-black uppercase text-[9px] tracking-[0.3em]">Membership Term</TableHead>
                 <TableHead className="font-black uppercase text-[9px] tracking-[0.3em]">Phone ID</TableHead>
                 <TableHead className="text-right pr-8 font-black uppercase text-[9px] tracking-[0.3em]">Control</TableHead>
@@ -356,7 +241,13 @@ export default function MembersListPage() {
             </TableHeader>
             <TableBody>
               {filteredMembers.length > 0 ? filteredMembers.map((member) => {
-                const isExpired = member.endDate ? isAfter(today, parseISO(member.endDate)) : false;
+                const expiryDate = member.endDate ? parseISO(member.endDate) : null;
+                const startDate = member.startDate ? parseISO(member.startDate) : null;
+                
+                const isExpired = expiryDate ? isAfter(today, expiryDate) : false;
+                const notStarted = startDate ? isAfter(startDate, today) : false;
+                const isValid = !isExpired && !notStarted;
+
                 return (
                   <TableRow key={member.phone} className="border-white/5 hover:bg-white/[0.02] transition-colors">
                     <TableCell className="pl-8 py-4">
@@ -368,23 +259,19 @@ export default function MembersListPage() {
                       </div>
                     </TableCell>
                     <TableCell>
-                      <div className="flex flex-col gap-1.5">
-                        <div className="flex items-center gap-2">
-                          <Badge variant={member.status === 'active' && !isExpired ? 'default' : 'destructive'} className={cn("text-[8px] font-black uppercase", member.status === 'active' && !isExpired ? "bg-green-500/20 text-green-500" : "bg-destructive/20 text-destructive")}>
-                            {isExpired ? 'EXPIRED' : member.status}
-                          </Badge>
-                          <Badge variant="outline" className="bg-primary/10 text-primary text-[8px] font-black uppercase border-none">{member.type}</Badge>
-                        </div>
+                      <div className="flex items-center gap-2">
+                        <Badge variant={isValid ? 'default' : 'destructive'} className={cn("text-[8px] font-black uppercase", isValid ? "bg-green-500/20 text-green-500" : "bg-destructive/20 text-destructive")}>
+                          {isExpired ? 'EXPIRED' : notStarted ? 'FUTURE' : 'ACTIVE'}
+                        </Badge>
+                        <Badge variant="outline" className="bg-primary/10 text-primary text-[8px] font-black uppercase border-none">{member.type}</Badge>
                       </div>
                     </TableCell>
                     <TableCell>
-                      <div className="flex items-center gap-3 text-[10px] font-bold">
-                         <div className="flex flex-col">
-                            <span className="text-muted-foreground uppercase text-[8px] opacity-40">Ends</span>
-                            <span className={cn(isExpired ? "text-destructive" : "text-foreground/80")}>
-                              {member.endDate ? format(parseISO(member.endDate), 'MMM dd, yyyy') : 'N/A'}
-                            </span>
-                         </div>
+                      <div className="flex flex-col text-[10px] font-bold">
+                        <span className="text-muted-foreground uppercase text-[8px] opacity-40">Ends</span>
+                        <span className={cn(isExpired ? "text-destructive" : "text-foreground/80")}>
+                          {member.endDate ? format(parseISO(member.endDate), 'MMM dd, yyyy') : 'N/A'}
+                        </span>
                       </div>
                     </TableCell>
                     <TableCell className="font-mono text-xs opacity-40 text-foreground">{member.phone}</TableCell>
@@ -396,7 +283,7 @@ export default function MembersListPage() {
                           </Button>
                         </DropdownMenuTrigger>
                         <DropdownMenuContent align="end" className="w-56 bg-popover border-border rounded-xl">
-                          <DropdownMenuItem onSelect={() => handleManualCheckIn(member)} className={cn("p-3 gap-3 cursor-pointer", isExpired ? "text-muted-foreground opacity-50" : "text-green-500")}>
+                          <DropdownMenuItem onSelect={() => handleManualCheckIn(member)} className={cn("p-3 gap-3 cursor-pointer", !isValid ? "text-muted-foreground opacity-50" : "text-green-500")}>
                             <UserCheck className="h-4 w-4" /> Manual Check-In
                           </DropdownMenuItem>
                           <DropdownMenuItem onSelect={() => setMemberForHistory(member)} className="p-3 gap-3 cursor-pointer"><History className="h-4 w-4 text-accent" /> View History</DropdownMenuItem>
@@ -414,7 +301,6 @@ export default function MembersListPage() {
         </CardContent>
       </Card>
 
-      {/* History Dialog */}
       <Dialog open={!!memberForHistory} onOpenChange={(open) => !open && setMemberForHistory(null)}>
         <DialogContent className="sm:max-w-lg bg-popover border-border rounded-3xl p-6">
           <DialogHeader>
@@ -438,7 +324,6 @@ export default function MembersListPage() {
         </DialogContent>
       </Dialog>
 
-      {/* QR Dialog */}
       <Dialog open={!!memberQrToShow} onOpenChange={(open) => !open && setMemberQrToShow(null)}>
         <DialogContent className="sm:max-w-md bg-popover border-border rounded-3xl p-6">
           <div className="flex flex-col items-center py-6 gap-6">

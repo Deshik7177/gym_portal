@@ -23,10 +23,10 @@ import { useFirestore } from '@/firebase';
 import { Html5Qrcode, Html5QrcodeSupportedFormats } from 'html5-qrcode';
 import { cn } from '@/lib/utils';
 import { validateQrPayload } from '@/lib/qr-logic';
-import { isToday, parseISO, isAfter, startOfDay } from 'date-fns';
+import { isToday, parseISO, isAfter, startOfDay, isBefore, endOfDay } from 'date-fns';
 
 import { Button } from '@/components/ui/button';
-import { Card, CardContent, CardHeader, CardTitle, CardDescription } from '@//components/ui/card';
+import { Card, CardContent, CardHeader, CardTitle, CardDescription } from '@/components/ui/card';
 import { Badge } from '@/components/ui/badge';
 import { useToast } from '@/hooks/use-toast';
 import { Table, TableBody, TableCell, TableRow } from '@/components/ui/table';
@@ -44,12 +44,10 @@ export default function SmartEntrancePage() {
   const [isCameraActive, setIsCameraActive] = useState(false);
   const [isInitializing, setIsInitializing] = useState(false);
   const [identifiedMember, setIdentifiedMember] = useState<any>(null);
-  const [scanResult, setScanResult] = useState<'success' | 'failure' | 'expired' | null>(null);
+  const [scanResult, setScanResult] = useState<'success' | 'failure' | 'expired' | 'not_started' | null>(null);
   const [recentLogs, setRecentLogs] = useState<any[]>([]);
   const [isSyncing, setIsSyncing] = useState(false);
-  const [torchOn, setTorchOn] = useState(false);
 
-  // Enrollment states
   const [enrollPhone, setEnrollPhone] = useState('');
   const [memberToEnroll, setMemberToEnroll] = useState<any>(null);
   const [isEnrolling, setIsEnrolling] = useState(false);
@@ -89,23 +87,30 @@ export default function SmartEntrancePage() {
     };
   }, [db]);
 
-  // Filter members for face scanner: only those who are active AND not expired
   const activeValidMembers = useMemo(() => {
     return cachedMembersRef.current.filter(m => {
-      const isActive = m.status === 'active';
-      const isNotExpired = m.endDate ? !isAfter(today, parseISO(m.endDate)) : true;
-      return isActive && isNotExpired;
+      const expiryDate = m.endDate ? parseISO(m.endDate) : null;
+      const startDate = m.startDate ? parseISO(m.startDate) : null;
+      
+      const isExpired = expiryDate ? isAfter(today, expiryDate) : false;
+      const hasStarted = startDate ? !isAfter(startDate, today) : true;
+      
+      return hasStarted && !isExpired;
     });
   }, [cachedMembersRef.current, today]);
 
   const triggerAccess = useCallback(async (member: any, method: 'qr' | 'face' | 'manual') => {
     if (!db || !member || isProcessingRef.current) return;
     
-    // Final check for expiration before triggering
-    const isExpired = member.endDate ? isAfter(today, parseISO(member.endDate)) : false;
-    if (isExpired || member.status !== 'active') {
+    const expiryDate = member.endDate ? parseISO(member.endDate) : null;
+    const startDate = member.startDate ? parseISO(member.startDate) : null;
+
+    const isExpired = expiryDate ? isAfter(today, expiryDate) : false;
+    const notStarted = startDate ? isAfter(startDate, today) : false;
+
+    if (isExpired || notStarted) {
         isProcessingRef.current = true;
-        setScanResult(isExpired ? 'expired' : 'failure');
+        setScanResult(isExpired ? 'expired' : 'not_started');
         setIdentifiedMember(member);
         return;
     }
@@ -217,7 +222,6 @@ export default function SmartEntrancePage() {
     } catch (e) {
     } finally {
       setIsCameraActive(false);
-      setTorchOn(false);
       isProcessingRef.current = false;
     }
   };
@@ -277,7 +281,7 @@ export default function SmartEntrancePage() {
               Entry Portal
            </h1>
            <div className="flex items-center gap-2">
-              <p className="text-muted-foreground italic text-xs uppercase tracking-widest font-bold opacity-60">Unified Biometric Pipeline Active</p>
+              <p className="text-muted-foreground italic text-xs uppercase tracking-widest font-bold opacity-60">Biometric Pipeline Active</p>
               {isSyncing && <Badge variant="outline" className="h-5 text-[9px] animate-pulse border-primary/20 bg-primary/5 text-primary"><Cloud className="h-2 w-2 mr-1" /> SYNCING CACHE</Badge>}
            </div>
         </div>
@@ -352,12 +356,12 @@ export default function SmartEntrancePage() {
               </div>
             )}
 
-            {(scanResult === 'failure' || scanResult === 'expired') && (
+            {(scanResult === 'failure' || scanResult === 'expired' || scanResult === 'not_started') && (
               <div className="absolute inset-0 flex flex-col items-center justify-center z-[100] animate-in zoom-in duration-300 bg-destructive/95 backdrop-blur-3xl text-center px-6">
                 <ShieldX className="h-48 w-48 text-destructive-foreground mb-8" />
                 <h2 className="text-7xl font-black font-headline text-destructive-foreground mb-2 tracking-tighter italic uppercase">Denied</h2>
                 <p className="text-3xl text-destructive-foreground font-black uppercase tracking-widest">
-                    {scanResult === 'expired' ? 'Subscription Expired' : 'Access Restricted'}
+                    {scanResult === 'expired' ? 'Subscription Expired' : scanResult === 'not_started' ? 'Access Not Yet Active' : 'Access Restricted'}
                 </p>
                 {identifiedMember && <p className="text-xl text-destructive-foreground/60 font-bold mt-2">{identifiedMember.fullName}</p>}
               </div>

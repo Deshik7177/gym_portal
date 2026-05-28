@@ -35,6 +35,7 @@ import {
   TableRow,
 } from '@/components/ui/table';
 import { useToast } from '@/hooks/use-toast';
+import { cn } from '@/lib/utils';
 
 export default function CounterPage() {
   const db = useFirestore();
@@ -69,12 +70,24 @@ export default function CounterPage() {
 
       if (docSnap.exists()) {
         const data = docSnap.data();
-        const isExpired = data.endDate ? isAfter(today, parseISO(data.endDate)) : false;
-        setVerifiedMember({ ...data, id: docSnap.id, isExpired });
-        toast({
-          title: "Member Found",
-          description: isExpired ? "Subscription is expired." : "Account active."
-        });
+        const expiryDate = data.endDate ? parseISO(data.endDate) : null;
+        const startDate = data.startDate ? parseISO(data.startDate) : null;
+        
+        const isExpired = expiryDate ? isAfter(today, expiryDate) : false;
+        const notStarted = startDate ? isAfter(startDate, today) : false;
+        const isValid = !isExpired && !notStarted;
+
+        setVerifiedMember({ ...data, id: docSnap.id, isExpired, notStarted, isValid });
+        
+        if (!isValid) {
+          toast({ 
+            variant: "destructive", 
+            title: "Access Denied", 
+            description: isExpired ? "Subscription is expired." : "Access not yet active." 
+          });
+        } else {
+          toast({ title: "Member Found", description: "Account active." });
+        }
       } else {
         toast({ variant: "destructive", title: "Not Found" });
       }
@@ -88,9 +101,12 @@ export default function CounterPage() {
   const markAttendance = async () => {
     if (!verifiedMember || !db) return;
     
-    // Explicit block for expired memberships
-    if (verifiedMember.isExpired || verifiedMember.status !== 'active') {
-        toast({ variant: "destructive", title: "Access Denied", description: "Membership has expired or is inactive." });
+    if (!verifiedMember.isValid) {
+        toast({ 
+          variant: "destructive", 
+          title: "Access Denied", 
+          description: verifiedMember.isExpired ? "Membership has expired." : "Membership is not yet active." 
+        });
         return;
     }
 
@@ -190,10 +206,12 @@ export default function CounterPage() {
                              </div>
                            )}
 
-                           {verifiedMember.isExpired && (
+                           {!verifiedMember.isValid && (
                               <div className="absolute inset-0 bg-destructive/20 backdrop-blur-[2px] flex flex-col items-center justify-center">
                                  <ShieldX className="h-24 w-24 text-destructive" />
-                                 <span className="bg-destructive text-white px-4 py-1 rounded-full text-sm font-bold mt-4 tracking-widest uppercase">Expired</span>
+                                 <span className="bg-destructive text-white px-4 py-1 rounded-full text-sm font-bold mt-4 tracking-widest uppercase">
+                                    {verifiedMember.isExpired ? 'Expired' : 'Not Started'}
+                                 </span>
                               </div>
                            )}
                         </div>
@@ -201,8 +219,8 @@ export default function CounterPage() {
                         <div className="p-4 rounded-xl border bg-muted/30 space-y-3">
                            <div className="flex items-center justify-between">
                               <h3 className="font-bold text-xl font-headline text-foreground">{verifiedMember.fullName}</h3>
-                              <Badge variant={verifiedMember.status === 'active' && !verifiedMember.isExpired ? 'default' : 'destructive'}>
-                                {verifiedMember.isExpired ? 'EXPIRED' : verifiedMember.status?.toUpperCase()}
+                              <Badge variant={verifiedMember.isValid ? 'default' : 'destructive'}>
+                                {verifiedMember.isExpired ? 'EXPIRED' : verifiedMember.notStarted ? 'FUTURE' : 'ACTIVE'}
                               </Badge>
                            </div>
                            
@@ -222,8 +240,8 @@ export default function CounterPage() {
 
                         {!verifiedMember.authenticated ? (
                           <div className="grid grid-cols-2 gap-3">
-                             <Button onClick={markAttendance} className="h-14 text-lg font-bold" disabled={verifiedMember.status !== 'active' || verifiedMember.isExpired}>
-                                {verifiedMember.isExpired ? 'Access Denied' : 'Grant Access'}
+                             <Button onClick={markAttendance} className="h-14 text-lg font-bold" disabled={!verifiedMember.isValid}>
+                                {verifiedMember.isValid ? 'Grant Access' : 'Access Denied'}
                              </Button>
                              <Button variant="outline" onClick={resetSearch} className="h-14">Clear</Button>
                           </div>
