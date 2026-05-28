@@ -1,4 +1,3 @@
-
 'use client';
 
 import { useState, useMemo, useRef } from 'react';
@@ -8,7 +7,6 @@ import {
   MoreHorizontal, 
   Loader2, 
   Plus, 
-  Calendar as CalendarIcon,
   QrCode,
   History,
   UserCheck,
@@ -20,7 +18,7 @@ import { collection, query, doc, deleteDoc, updateDoc, setDoc, serverTimestamp, 
 import { useFirestore, useCollection, useProfile } from '@/firebase';
 import Link from 'next/link';
 import { useRouter } from 'next/navigation';
-import { format, startOfDay, isToday, parseISO, endOfDay, isAfter } from 'date-fns';
+import { format, startOfDay, isToday, parseISO, isAfter } from 'date-fns';
 import { QRCodeCanvas } from 'qrcode.react';
 import { generateMemberQrPayload } from '@/lib/qr-logic';
 
@@ -58,6 +56,8 @@ import {
 } from "@/components/ui/dialog";
 import { useToast } from '@/hooks/use-toast';
 import { cn } from '@/lib/utils';
+import { errorEmitter } from '@/firebase/error-emitter';
+import { FirestorePermissionError } from '@/firebase/errors';
 
 export default function MembersListPage() {
   const db = useFirestore();
@@ -104,8 +104,7 @@ export default function MembersListPage() {
       total: members.length,
       active: members.filter(m => {
         const expiryDate = m.endDate ? parseISO(m.endDate) : null;
-        const startDate = m.startDate ? parseISO(m.startDate) : null;
-        return (expiryDate ? !isAfter(today, expiryDate) : true) && (startDate ? !isAfter(startDate, today) : true);
+        return expiryDate ? !isAfter(today, expiryDate) : true;
       }).length,
       personal: members.filter(m => m.type === 'personal').length,
     };
@@ -129,48 +128,60 @@ export default function MembersListPage() {
     }
 
     setIsProcessingCheckIn(member.phone);
-    try {
-      const timestamp = serverTimestamp();
-      const expiresAt = Date.now() + 5000;
-      
-      const lastCheckInDate = member.lastCheckIn?.seconds 
-        ? new Date(member.lastCheckIn.seconds * 1000) 
-        : null;
+    const memberId = member.phone || member.id;
+    const timestamp = serverTimestamp();
+    const expiresAt = Date.now() + 5000;
+    
+    const lastCheckInDate = member.lastCheckIn?.seconds 
+      ? new Date(member.lastCheckIn.seconds * 1000) 
+      : null;
 
-      const alreadyLoggedToday = lastCheckInDate && isToday(lastCheckInDate);
+    const alreadyLoggedToday = lastCheckInDate && isToday(lastCheckInDate);
 
-      const tasks: Promise<any>[] = [
-        updateDoc(doc(db, 'members', member.phone), {
-          lastCheckIn: timestamp,
-          updatedAt: timestamp
-        }),
-        setDoc(doc(db, 'gateControl', 'latest'), {
-          command: 'OPEN',
-          status: 'pending',
-          timestamp: timestamp,
-          expiresAt: expiresAt,
-          memberId: member.phone,
-          method: 'manual'
-        })
-      ];
+    // GATE COMMAND (FIXED PATH)
+    setDoc(doc(db, 'gateControl', 'latest'), {
+      command: 'OPEN',
+      status: 'pending',
+      timestamp: timestamp,
+      expiresAt: expiresAt,
+      memberId: memberId,
+      method: 'manual'
+    }).catch(err => {
+      errorEmitter.emit('permission-error', new FirestorePermissionError({
+        path: 'gateControl/latest',
+        operation: 'write'
+      }));
+    });
 
-      if (!alreadyLoggedToday) {
-        tasks.push(addDoc(collection(db, 'attendance'), {
-          memberId: member.phone,
-          memberName: member.fullName,
-          timestamp: timestamp,
-          method: 'manual',
-          latency: 0
+    // PROFILE UPDATE
+    updateDoc(doc(db, 'members', memberId), {
+      lastCheckIn: timestamp,
+      updatedAt: timestamp
+    }).catch(err => {
+      errorEmitter.emit('permission-error', new FirestorePermissionError({
+        path: `members/${memberId}`,
+        operation: 'update'
+      }));
+    });
+
+    // ATTENDANCE LOG (ONCE PER DAY)
+    if (!alreadyLoggedToday) {
+      addDoc(collection(db, 'attendance'), {
+        memberId: memberId,
+        memberName: member.fullName,
+        timestamp: timestamp,
+        method: 'manual',
+        latency: 0
+      }).catch(err => {
+        errorEmitter.emit('permission-error', new FirestorePermissionError({
+          path: 'attendance',
+          operation: 'create'
         }));
-      }
-
-      await Promise.all(tasks);
-      toast({ title: alreadyLoggedToday ? "Welcome Back!" : "Attendance Recorded" });
-    } catch (e: any) {
-      toast({ variant: "destructive", title: "Check-In Failed" });
-    } finally {
-      setIsProcessingCheckIn(null);
+      });
     }
+
+    toast({ title: alreadyLoggedToday ? "Welcome Back!" : "Attendance Recorded" });
+    setIsProcessingCheckIn(null);
   };
 
   const handleDeleteMember = async () => {
@@ -246,7 +257,7 @@ export default function MembersListPage() {
             <div className="flex flex-col lg:flex-row items-center gap-4">
               <div className="relative flex-1 w-full">
                 <Search className="absolute left-3.5 top-1/2 -translate-y-1/2 h-4 w-4 text-muted-foreground" />
-                <Input placeholder="Search member ID or name..." className="pl-10 h-11 bg-black/20 border-white/5 rounded-xl w-full" value={searchTerm} onChange={(e) => setSearchTerm(e.target.value)} />
+                <Input placeholder="Search member ID or name..." className="pl-10 h-11 bg-black/20 border-white/10 rounded-xl w-full" value={searchTerm} onChange={(e) => setSearchTerm(e.target.value)} />
               </div>
             </div>
           </div>
@@ -266,7 +277,6 @@ export default function MembersListPage() {
               {filteredMembers.length > 0 ? filteredMembers.map((member) => {
                 const expiryDate = member.endDate ? parseISO(member.endDate) : null;
                 const startDate = member.startDate ? parseISO(member.startDate) : null;
-                
                 const isExpired = expiryDate ? isAfter(today, expiryDate) : false;
                 const notStarted = startDate ? isAfter(startDate, today) : false;
                 const isValid = !isExpired && !notStarted;

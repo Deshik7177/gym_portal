@@ -11,39 +11,43 @@ import {
   DropdownMenuTrigger,
 } from '@/components/ui/dropdown-menu';
 import { PlaceHolderImages } from '@/lib/placeholder-images';
+import { useUser, useProfile } from '@/firebase';
 import Link from 'next/link';
 
 export default function UserNav() {
-    const userAvatar = PlaceHolderImages.find((image) => image.id === 'user-avatar-1');
+  const { user } = useUser();
+  const { profile } = useProfile();
+  const userAvatar = PlaceHolderImages.find((image) => image.id === 'user-avatar-1');
+
   return (
     <DropdownMenu>
       <DropdownMenuTrigger asChild>
         <Button variant="ghost" className="relative h-8 w-8 rounded-full">
           <Avatar className="h-9 w-9 border-2 border-primary/20">
             <AvatarImage src={userAvatar?.imageUrl} alt="Staff" data-ai-hint={userAvatar?.imageHint} />
-            <AvatarFallback>S</AvatarFallback>
+            <AvatarFallback>{user?.email?.charAt(0).toUpperCase() || 'S'}</AvatarFallback>
           </Avatar>
         </Button>
       </DropdownMenuTrigger>
-      <DropdownMenuContent className="w-56" align="end" forceMount>
+      <DropdownMenuContent className="w-56 bg-popover border-border rounded-xl" align="end" forceMount>
         <DropdownMenuLabel className="font-normal">
           <div className="flex flex-col space-y-1">
-            <p className="text-sm font-medium leading-none">Staff Member</p>
-            <p className="text-xs leading-none text-muted-foreground">admin@thrivefit.com</p>
+            <p className="text-sm font-medium leading-none">{profile?.name || 'Staff Member'}</p>
+            <p className="text-xs leading-none text-muted-foreground">{user?.email || 'admin@thrivefit.com'}</p>
           </div>
         </DropdownMenuLabel>
         <DropdownMenuSeparator />
         <DropdownMenuGroup>
           <Link href="/admin/profile">
-            <DropdownMenuItem>
+            <DropdownMenuItem className="cursor-pointer">
                 Profile
             </DropdownMenuItem>
           </Link>
-          <DropdownMenuItem>Settings</DropdownMenuItem>
+          <DropdownMenuItem className="cursor-pointer">Settings</DropdownMenuItem>
         </DropdownMenuGroup>
         <DropdownMenuSeparator />
         <Link href="/login">
-            <DropdownMenuItem>
+            <DropdownMenuItem className="cursor-pointer">
                 Log out
             </DropdownMenuItem>
         </Link>

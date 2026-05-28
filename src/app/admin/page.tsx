@@ -13,12 +13,12 @@ import {
   Sparkles,
   UserCircle,
   DoorOpen,
-  Wifi,
   Zap
 } from 'lucide-react';
 import Link from 'next/link';
 import { collection, query, orderBy, limit, doc, setDoc, serverTimestamp } from 'firebase/firestore';
 import { useFirestore, useCollection } from '@/firebase';
+import { parseISO, isAfter, startOfDay } from 'date-fns';
 
 import { Button } from '@/components/ui/button';
 import {
@@ -40,6 +40,7 @@ export default function ReceptionDashboard() {
   const db = useFirestore();
   const { toast } = useToast();
   const [isOpening, setIsOpening] = useState(false);
+  const today = useMemo(() => startOfDay(new Date()), []);
   
   const membersRef = useMemo(() => db ? query(collection(db, 'members')) : null, [db]);
   const { data: members, loading: membersLoading } = useCollection<any>(membersRef);
@@ -54,15 +55,21 @@ export default function ReceptionDashboard() {
   const { data: sales } = useCollection<any>(salesRef);
 
   const stats = useMemo(() => {
-    if (!members) return { total: 0, group: 0, personal: 0, active: 0, nonActive: 0 };
+    if (!members) return { total: 0, group: 0, personal: 0, active: 0, expired: 0 };
+    
+    const activeMembers = members.filter(m => {
+      const expiryDate = m.endDate ? parseISO(m.endDate) : null;
+      return expiryDate ? !isAfter(today, expiryDate) : true;
+    });
+
     return {
       total: members.length,
       group: members.filter(m => m.type === 'group').length,
       personal: members.filter(m => m.type === 'personal').length,
-      active: members.filter(m => m.status === 'active').length,
-      nonActive: members.filter(m => m.status === 'non-active').length
+      active: activeMembers.length,
+      expired: members.length - activeMembers.length
     };
-  }, [members]);
+  }, [members, today]);
 
   const totalRevenue = useMemo(() => {
     if (!sales) return 0;
@@ -73,10 +80,8 @@ export default function ReceptionDashboard() {
     if (!db || isOpening) return;
     setIsOpening(true);
     try {
-      // SAFETY: Command expires in 5 seconds to prevent ghost triggers
       const expiresAt = Date.now() + 5000;
 
-      // DISPATCH COMMAND TO FIXED DOCUMENT
       await setDoc(doc(db, 'gateControl', 'latest'), {
         command: 'OPEN',
         status: 'pending',
@@ -167,12 +172,12 @@ export default function ReceptionDashboard() {
         <Card className="hover:border-primary transition-all cursor-pointer group shadow-md border-border/40">
           <Link href="/admin/absent" aria-label="View Retention Alerts">
             <CardHeader className="flex flex-row items-center justify-between space-y-0 pb-2">
-              <CardTitle className="text-sm font-medium">At Risk</CardTitle>
+              <CardTitle className="text-sm font-medium">Expired</CardTitle>
               <Clock className="h-4 w-4 text-destructive" />
             </CardHeader>
             <CardContent>
-              <div className="text-2xl font-bold text-foreground">{stats.nonActive}</div>
-              <p className="text-xs text-muted-foreground">Members with lapsed subs</p>
+              <div className="text-2xl font-bold text-foreground">{stats.expired}</div>
+              <p className="text-xs text-muted-foreground">Subscription lapsed</p>
             </CardContent>
           </Link>
         </Card>

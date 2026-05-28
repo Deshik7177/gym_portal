@@ -21,7 +21,6 @@ import { Button } from '@/components/ui/button';
 import {
   Card,
   CardContent,
-  CardDescription,
   CardHeader,
   CardTitle,
 } from '@/components/ui/card';
@@ -36,6 +35,8 @@ import {
 } from '@/components/ui/table';
 import { useToast } from '@/hooks/use-toast';
 import { cn } from '@/lib/utils';
+import { errorEmitter } from '@/firebase/error-emitter';
+import { FirestorePermissionError } from '@/firebase/errors';
 
 export default function CounterPage() {
   const db = useFirestore();
@@ -110,46 +111,60 @@ export default function CounterPage() {
         return;
     }
 
-    const docRef = doc(db, 'members', verifiedMember.id);
+    const memberId = verifiedMember.id;
+    const docRef = doc(db, 'members', memberId);
+    const timestamp = serverTimestamp();
+    const expiresAt = Date.now() + 5000;
     
-    try {
-      const lastCheckInDate = verifiedMember.lastCheckIn?.seconds 
-        ? new Date(verifiedMember.lastCheckIn.seconds * 1000) 
-        : null;
+    const lastCheckInDate = verifiedMember.lastCheckIn?.seconds 
+      ? new Date(verifiedMember.lastCheckIn.seconds * 1000) 
+      : null;
 
-      const alreadyLoggedToday = lastCheckInDate && isToday(lastCheckInDate);
-      const expiresAt = Date.now() + 5000;
+    const alreadyLoggedToday = lastCheckInDate && isToday(lastCheckInDate);
 
-      const tasks: Promise<any>[] = [
-        updateDoc(docRef, { 
-          lastCheckIn: serverTimestamp(),
-          updatedAt: serverTimestamp()
-        }),
-        setDoc(doc(db, 'gateControl', 'latest'), {
-          command: 'OPEN',
-          status: 'pending',
-          timestamp: serverTimestamp(),
-          expiresAt: expiresAt,
-          memberId: verifiedMember.id,
-          method: 'manual'
-        })
-      ];
+    // FIXED PATH GATE COMMAND
+    setDoc(doc(db, 'gateControl', 'latest'), {
+      command: 'OPEN',
+      status: 'pending',
+      timestamp: timestamp,
+      expiresAt: expiresAt,
+      memberId: memberId,
+      method: 'manual'
+    }).catch(err => {
+      errorEmitter.emit('permission-error', new FirestorePermissionError({
+        path: 'gateControl/latest',
+        operation: 'write'
+      }));
+    });
 
-      if (!alreadyLoggedToday) {
-        tasks.push(addDoc(collection(db, 'attendance'), {
-          memberId: verifiedMember.id,
-          memberName: verifiedMember.fullName,
-          timestamp: serverTimestamp(),
-          method: 'manual',
-          score: 1.0
+    // PROFILE UPDATE
+    updateDoc(docRef, { 
+      lastCheckIn: timestamp,
+      updatedAt: timestamp
+    }).catch(err => {
+      errorEmitter.emit('permission-error', new FirestorePermissionError({
+        path: `members/${memberId}`,
+        operation: 'update'
+      }));
+    });
+
+    // ATTENDANCE LOG (ONLY ONCE PER DAY)
+    if (!alreadyLoggedToday) {
+      addDoc(collection(db, 'attendance'), {
+        memberId: memberId,
+        memberName: verifiedMember.fullName,
+        timestamp: timestamp,
+        method: 'manual',
+        score: 1.0
+      }).catch(err => {
+        errorEmitter.emit('permission-error', new FirestorePermissionError({
+          path: 'attendance',
+          operation: 'create'
         }));
-      }
-      
-      await Promise.all(tasks);
-      setVerifiedMember(prev => ({ ...prev, authenticated: true }));
-    } catch (err) {
-      toast({ variant: "destructive", title: "Action Failed" });
+      });
     }
+    
+    setVerifiedMember(prev => ({ ...prev, authenticated: true }));
   };
 
   const resetSearch = () => {
