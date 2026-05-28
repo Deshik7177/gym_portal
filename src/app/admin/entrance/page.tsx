@@ -113,15 +113,20 @@ export default function SmartEntrancePage() {
 
       const alreadyLoggedToday = lastCheckInDate && isToday(lastCheckInDate);
 
+      // SAFETY: Command expires in 5 seconds to prevent ghost triggers
+      const expiresAt = Date.now() + 5000;
+
       const tasks: Promise<any>[] = [
         updateDoc(doc(db, 'members', memberId), {
           lastCheckIn: serverTimestamp(),
           updatedAt: serverTimestamp()
         }),
-        // DISPATCH TRANSIENT GATE COMMAND
+        // DISPATCH SECURE GATE COMMAND
         addDoc(collection(db, 'gateControl'), {
           command: 'OPEN',
+          status: 'pending',
           timestamp: serverTimestamp(),
+          expiresAt: expiresAt,
           memberId: memberId,
           method: method
         })
@@ -416,7 +421,7 @@ export default function SmartEntrancePage() {
                   </Badge>
                   <div className="flex items-center gap-2 text-green-500 animate-pulse mt-2">
                     <Link2 className="h-4 w-4" />
-                    <span className="text-[10px] font-black uppercase tracking-widest">Gate Command Dispatched</span>
+                    <span className="text-[10px] font-black uppercase tracking-widest">Secure Command Dispatched</span>
                   </div>
                 </div>
               </div>
@@ -498,9 +503,9 @@ export default function SmartEntrancePage() {
           <div className="bg-primary/5 border border-primary/10 rounded-2xl p-4 flex items-start gap-3">
              <AlertCircle className="h-5 w-5 text-primary mt-0.5" />
              <div className="space-y-1">
-                <p className="text-[10px] font-black uppercase tracking-widest text-primary">Hardware Status</p>
+                <p className="text-[10px] font-black uppercase tracking-widest text-primary">Hardware Reliability</p>
                 <p className="text-[11px] text-muted-foreground leading-relaxed">
-                    Successful matches dispatch a **transient command**. Your ESP32 should process and **self-delete** the command document immediately to maintain a lean database.
+                    Commands now include a <b>5s expiry window</b>. This prevents stale commands from triggering the gate after hardware reconnections.
                 </p>
              </div>
           </div>

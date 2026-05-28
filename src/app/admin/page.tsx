@@ -1,3 +1,4 @@
+
 'use client';
 
 import { useMemo, useState } from 'react';
@@ -18,7 +19,7 @@ import {
 } from 'lucide-react';
 import Link from 'next/link';
 import { collection, query, orderBy, limit, addDoc, serverTimestamp } from 'firebase/firestore';
-import { useFirestore, useCollection } from '@/firebase';
+import { useFirestore } from '@/firebase';
 
 import { Button } from '@/components/ui/button';
 import {
@@ -73,15 +74,20 @@ export default function ReceptionDashboard() {
     if (!db || isOpening) return;
     setIsOpening(true);
     try {
+      // SAFETY: Command expires in 5 seconds to prevent ghost triggers
+      const expiresAt = Date.now() + 5000;
+
       await addDoc(collection(db, 'gateControl'), {
         command: 'OPEN',
+        status: 'pending',
         method: 'manual',
         memberId: 'DASHBOARD_OVERRIDE',
-        timestamp: serverTimestamp()
+        timestamp: serverTimestamp(),
+        expiresAt: expiresAt
       });
       toast({
-        title: "Gate Command Sent",
-        description: "The ESP32 override command has been dispatched.",
+        title: "Override Dispatched",
+        description: "Secure command sent to ESP32 queue (Expires in 5s).",
       });
     } catch (e) {
       toast({
@@ -108,7 +114,7 @@ export default function ReceptionDashboard() {
         <div className="flex flex-col gap-1">
           <div className="flex items-center gap-2 mb-1">
             <Sparkles className="h-5 w-5 text-primary animate-pulse" />
-            <h1 className="text-3xl font-bold font-headline tracking-tight">Hello, Staff</h1>
+            <h1 className="text-3xl font-bold font-headline tracking-tight text-foreground">Hello, Staff</h1>
           </div>
           <p className="text-muted-foreground">Welcome to your Thrive Fit project overview.</p>
         </div>
@@ -118,7 +124,7 @@ export default function ReceptionDashboard() {
             <p className="text-[10px] font-black uppercase tracking-widest text-primary/60">Hardware Link</p>
             <div className="flex items-center gap-2">
               <div className="h-2 w-2 rounded-full bg-green-500 animate-pulse" />
-              <span className="text-xs font-bold uppercase">ESP32 Online</span>
+              <span className="text-xs font-bold uppercase text-foreground">ESP32 Online</span>
             </div>
           </div>
           <Button 
@@ -140,7 +146,7 @@ export default function ReceptionDashboard() {
               <TrendingUp className="h-4 w-4 text-green-500" />
             </CardHeader>
             <CardContent>
-              <div className="text-2xl font-bold tabular-nums">₹{totalRevenue.toLocaleString()}</div>
+              <div className="text-2xl font-bold tabular-nums text-foreground">₹{totalRevenue.toLocaleString()}</div>
               <p className="text-xs text-muted-foreground">Total collections synced</p>
             </CardContent>
           </Link>
@@ -152,7 +158,7 @@ export default function ReceptionDashboard() {
               <Users className="h-4 w-4 text-muted-foreground group-hover:text-primary" />
             </CardHeader>
             <CardContent>
-              <div className="text-2xl font-bold">{stats.total}</div>
+              <div className="text-2xl font-bold text-foreground">{stats.total}</div>
               <p className="text-xs text-muted-foreground">Cloud database count</p>
             </CardContent>
           </Link>
@@ -164,7 +170,7 @@ export default function ReceptionDashboard() {
               <Clock className="h-4 w-4 text-destructive" />
             </CardHeader>
             <CardContent>
-              <div className="text-2xl font-bold">{stats.nonActive}</div>
+              <div className="text-2xl font-bold text-foreground">{stats.nonActive}</div>
               <p className="text-xs text-muted-foreground">Members with lapsed subs</p>
             </CardContent>
           </Link>
@@ -205,7 +211,7 @@ export default function ReceptionDashboard() {
                           )}
                         </div>
                         <div>
-                          <p className="text-sm font-bold">{member.fullName}</p>
+                          <p className="text-sm font-bold text-foreground">{member.fullName}</p>
                           <p className="text-[10px] text-muted-foreground">{member.phone}</p>
                         </div>
                       </div>
@@ -226,7 +232,7 @@ export default function ReceptionDashboard() {
         <div className="col-span-3 space-y-4">
           <Card className="shadow-md border-border/40">
             <CardHeader className="pb-3">
-              <CardTitle className="text-lg font-black uppercase tracking-tighter flex items-center gap-2">
+              <CardTitle className="text-lg font-black uppercase tracking-tighter flex items-center gap-2 text-foreground">
                 <Zap className="h-4 w-4 text-primary" /> Command Center
               </CardTitle>
               <CardDescription>Manual hardware triggers</CardDescription>
@@ -245,14 +251,14 @@ export default function ReceptionDashboard() {
                     {isOpening ? <Loader2 className="h-5 w-5 animate-spin mr-2" /> : <DoorOpen className="h-5 w-5 mr-2" />}
                     Pulse Gate Relay
                   </Button>
-                  <p className="text-[9px] text-muted-foreground text-center italic">Sends transient OPEN command to ESP32 queue</p>
+                  <p className="text-[9px] text-muted-foreground text-center italic">Sends secure pending command with 5s expiry window</p>
                </div>
             </CardContent>
           </Card>
 
           <Card className="shadow-md border-border/40 h-fit">
             <CardHeader>
-              <CardTitle className="flex items-center gap-2">
+              <CardTitle className="flex items-center gap-2 text-foreground">
                 <Activity className="h-5 w-5 text-primary" />
                 Breakdown
               </CardTitle>
@@ -263,9 +269,9 @@ export default function ReceptionDashboard() {
                 <div className="flex items-center justify-between">
                   <div className="flex items-center gap-2">
                     <div className="w-3 h-3 rounded-full bg-primary" />
-                    <span className="text-sm font-medium">Group Members</span>
+                    <span className="text-sm font-medium text-foreground">Group Members</span>
                   </div>
-                  <span className="font-bold">{stats.group}</span>
+                  <span className="font-bold text-foreground">{stats.group}</span>
                 </div>
                 <div className="w-full bg-muted rounded-full h-2">
                   <div 
@@ -279,9 +285,9 @@ export default function ReceptionDashboard() {
                 <div className="flex items-center justify-between">
                   <div className="flex items-center gap-2">
                     <div className="w-3 h-3 rounded-full bg-accent/60" />
-                    <span className="text-sm font-medium">Personal Training</span>
+                    <span className="text-sm font-medium text-foreground">Personal Training</span>
                   </div>
-                  <span className="font-bold">{stats.personal}</span>
+                  <span className="font-bold text-foreground">{stats.personal}</span>
                 </div>
                 <div className="w-full bg-muted rounded-full h-2">
                   <div 
@@ -293,7 +299,7 @@ export default function ReceptionDashboard() {
 
               <div className="pt-6 border-t border-border/50">
                 <div className="flex items-center justify-between">
-                  <span className="text-sm font-medium">System Status</span>
+                  <span className="text-sm font-medium text-foreground">System Status</span>
                   <span className="text-sm text-green-500 font-bold flex items-center gap-1 uppercase tracking-tighter">
                     Active: {stats.active}
                   </span>

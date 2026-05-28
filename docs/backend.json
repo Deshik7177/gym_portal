@@ -38,7 +38,9 @@
       "type": "object",
       "properties": {
         "command": { "type": "string", "enum": ["OPEN", "CLOSE"] },
+        "status": { "type": "string", "enum": ["pending", "processing", "completed"] },
         "timestamp": { "type": "string", "format": "date-time" },
+        "expiresAt": { "type": "number", "description": "Unix timestamp (ms) after which command is invalid" },
         "memberId": { "type": "string" },
         "method": { "type": "string", "enum": ["qr", "manual", "face"] }
       }

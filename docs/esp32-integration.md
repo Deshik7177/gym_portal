@@ -1,37 +1,25 @@
-# ESP32 Gate Integration Guide
+
+# ESP32 Gate Integration Guide | Production Spec
 
 This document provides the necessary details to connect your ESP32 hardware to the Thrive Fit gate control system.
 
 ## Hardware Specifications
 - **Microcontroller:** ESP32
 - **Relay Pin:** GPIO 26 (Recommended)
+- **Circuitry:** Use a 4.7kΩ pull-down resistor on GPIO 26 to prevent relay "flicker" on boot.
 - **Library:** [Firebase-ESP-Client](https://github.com/mobizt/Firebase-ESP-Client)
 
 ## Network Architecture: Cloud-Based Sync
 **Crucial Note:** The Staff Portal and the ESP32 **DO NOT** need to be on the same local network (SSID).
 - The Portal writes a command to the Google Cloud (Firestore).
-- The ESP32 listens to that same cloud location.
-- Both devices only require a stable internet connection to communicate. You can control the gate from anywhere in the world.
+- The ESP32 listens to that same cloud location via a real-time stream.
+- Latency: 300ms - 800ms.
 
-## Performance & Latency
-Expected latency from portal trigger to physical relay is **300ms - 800ms**.
-To maintain low latency:
-1. **Use Real-time Listeners:** Ensure your ESP32 uses the `listen` or `stream` function of the Firebase library rather than polling.
-2. **Signal Strength:** Keep the ESP32 within -65dBm or better WiFi signal range.
-3. **Consumer Pattern:** The ESP32 must delete the document immediately after processing to keep the snapshot payload small.
-
-## Firestore Schema
-The ESP32 should listen to the `gateControl` collection. Documents are created with:
-- `command`: "OPEN"
-- `memberId`: The phone number of the member or "DASHBOARD_OVERRIDE"
-- `method`: "face", "qr", or "manual"
-- `timestamp`: Firestore Server Timestamp
-
-## Logic: Process and Cleanup
-To prevent the Firestore collection from getting cluttered, the ESP32 follows a **Consumer Pattern**:
-1. Listen for a new document in `gateControl`.
-2. Trigger the physical relay (GPIO 26 HIGH).
-3. **Delete the document** from Firestore using its ID immediately after the gate pulse.
+## Production Logic: Safety & Expiry
+To prevent "ghost entries" (commands executing minutes later after a WiFi reconnect), the ESP32 follows these rules:
+1. **Expiry Check:** Only execute if `now < expiresAt`. 
+2. **State Transition:** Immediately update `status` to `processing` to "claim" the command.
+3. **Consumer Pattern:** Delete the document after pulsing the relay.
 
 ## Prompt for Code Generation
 Copy and paste this into an AI to generate your firmware:
@@ -39,24 +27,29 @@ Copy and paste this into an AI to generate your firmware:
 ```text
 Write Arduino C++ code for an ESP32 board using the 'Firebase-ESP-Client' library by mobizt. 
 
-Goal: Connect to Firestore, trigger a relay, and delete the command document after execution.
+Goal: Connect to Firestore, trigger a relay safely, and clean up the command queue.
+
+Hardware Requirements:
+- Use GPIO 26 for the Relay.
+- IMPORTANT: Initialize GPIO 26 as OUTPUT and set to LOW immediately in setup() to prevent boot flicker.
 
 Firebase Config:
 - Project ID: studio-1536246552-55579
 - API Key: AIzaSyC7MOBvS0RvcMn2810Z5I3N8n4RK3IVki4
-- Collection Path: gateControl
-
-Hardware Requirements:
-- Use GPIO 26 to trigger a Relay (active HIGH).
-- Include WiFi connection logic.
 
 Logic:
-1. Initialize Firestore connection and listen for new documents in 'gateControl'.
-2. When a document is added where the 'command' field is "OPEN":
-   - Set GPIO 26 to HIGH for 3 seconds, then set it to LOW.
-   - Delete this specific document from Firestore immediately after the 3-second pulse to clear the queue.
-3. Handle WiFi reconnections automatically.
+1. Initialize Firestore and listen for new documents in the 'gateControl' collection.
+2. When a document is received with field 'command' == "OPEN" and 'status' == "pending":
+   - GET current Unix time (ms).
+   - If (currentTime < doc.expiresAt):
+     - UPDATE document 'status' to "processing".
+     - SET GPIO 26 to HIGH for 3 seconds.
+     - SET GPIO 26 to LOW.
+     - DELETE the document from Firestore.
+   - Else (if expired):
+     - DELETE the document without triggering the relay.
+3. Handle WiFi reconnections automatically using a non-blocking watchdog pattern.
 ```
 
 ## Security Note
-Use Firebase **Anonymous Authentication** on the ESP32. Ensure your Firestore Security Rules allow the ESP32 to read and delete from the `gateControl` collection.
+Use Firebase **Anonymous Authentication** on the ESP32 for production. Ensure your Firestore Security Rules allow the ESP32 to read/update/delete from the `gateControl` collection.
