@@ -1,3 +1,4 @@
+
 'use client';
 
 import { useState, useMemo, useRef } from 'react';
@@ -10,7 +11,8 @@ import {
   Calendar as CalendarIcon,
   QrCode,
   History,
-  UserCheck
+  UserCheck,
+  Edit3
 } from 'lucide-react';
 import { collection, query, doc, deleteDoc, updateDoc, setDoc, serverTimestamp, addDoc, where, orderBy, limit } from 'firebase/firestore';
 import { useFirestore, useCollection, useProfile } from '@/firebase';
@@ -286,6 +288,11 @@ export default function MembersListPage() {
                           <DropdownMenuItem onSelect={() => handleManualCheckIn(member)} className={cn("p-3 gap-3 cursor-pointer", !isValid ? "text-muted-foreground opacity-50" : "text-green-500")}>
                             <UserCheck className="h-4 w-4" /> Manual Check-In
                           </DropdownMenuItem>
+                          {(isAdmin || isStaff) && (
+                            <DropdownMenuItem onSelect={() => router.push(`/admin/register?edit=${member.phone}`)} className="p-3 gap-3 cursor-pointer">
+                              <Edit3 className="h-4 w-4 text-primary" /> Edit Profile
+                            </DropdownMenuItem>
+                          )}
                           <DropdownMenuItem onSelect={() => setMemberForHistory(member)} className="p-3 gap-3 cursor-pointer"><History className="h-4 w-4 text-accent" /> View History</DropdownMenuItem>
                           <DropdownMenuItem onSelect={() => setMemberQrToShow(member)} className="p-3 gap-3 cursor-pointer"><QrCode className="h-4 w-4 text-primary" /> View Entry QR</DropdownMenuItem>
                         </DropdownMenuContent>
