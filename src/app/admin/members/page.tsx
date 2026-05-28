@@ -12,7 +12,9 @@ import {
   QrCode,
   History,
   UserCheck,
-  Edit3
+  Edit3,
+  Trash2,
+  AlertTriangle
 } from 'lucide-react';
 import { collection, query, doc, deleteDoc, updateDoc, setDoc, serverTimestamp, addDoc, where, orderBy, limit } from 'firebase/firestore';
 import { useFirestore, useCollection, useProfile } from '@/firebase';
@@ -35,6 +37,7 @@ import {
   DropdownMenuContent,
   DropdownMenuItem,
   DropdownMenuTrigger,
+  DropdownMenuSeparator
 } from '@/components/ui/dropdown-menu';
 import { Input } from '@/components/ui/input';
 import {
@@ -50,6 +53,8 @@ import {
   DialogContent,
   DialogHeader,
   DialogTitle,
+  DialogDescription,
+  DialogFooter
 } from "@/components/ui/dialog";
 import { useToast } from '@/hooks/use-toast';
 import { cn } from '@/lib/utils';
@@ -63,7 +68,9 @@ export default function MembersListPage() {
   const [searchTerm, setSearchTerm] = useState('');
   const [memberQrToShow, setMemberQrToShow] = useState<any>(null);
   const [memberForHistory, setMemberForHistory] = useState<any>(null);
+  const [memberToDelete, setMemberToDelete] = useState<any>(null);
   const [isProcessingCheckIn, setIsProcessingCheckIn] = useState<string | null>(null);
+  const [isDeleting, setIsDeleting] = useState(false);
   
   const qrRef = useRef<HTMLDivElement>(null);
   const today = useMemo(() => startOfDay(new Date()), []);
@@ -163,6 +170,20 @@ export default function MembersListPage() {
       toast({ variant: "destructive", title: "Check-In Failed" });
     } finally {
       setIsProcessingCheckIn(null);
+    }
+  };
+
+  const handleDeleteMember = async () => {
+    if (!db || !memberToDelete || !isAdmin) return;
+    setIsDeleting(true);
+    try {
+      await deleteDoc(doc(db, 'members', memberToDelete.phone));
+      toast({ title: "Member Deleted", description: "Records removed from registry." });
+      setMemberToDelete(null);
+    } catch (e) {
+      toast({ variant: "destructive", title: "Delete Failed" });
+    } finally {
+      setIsDeleting(false);
     }
   };
 
@@ -295,6 +316,15 @@ export default function MembersListPage() {
                           )}
                           <DropdownMenuItem onSelect={() => setMemberForHistory(member)} className="p-3 gap-3 cursor-pointer"><History className="h-4 w-4 text-accent" /> View History</DropdownMenuItem>
                           <DropdownMenuItem onSelect={() => setMemberQrToShow(member)} className="p-3 gap-3 cursor-pointer"><QrCode className="h-4 w-4 text-primary" /> View Entry QR</DropdownMenuItem>
+                          
+                          {isAdmin && (
+                            <>
+                              <DropdownMenuSeparator className="bg-border" />
+                              <DropdownMenuItem onSelect={() => setMemberToDelete(member)} className="p-3 gap-3 cursor-pointer text-destructive focus:bg-destructive/10">
+                                <Trash2 className="h-4 w-4" /> Delete Member
+                              </DropdownMenuItem>
+                            </>
+                          )}
                         </DropdownMenuContent>
                       </DropdownMenu>
                     </TableCell>
@@ -340,6 +370,27 @@ export default function MembersListPage() {
              <p className="text-[9px] font-mono opacity-40 uppercase text-foreground">Valid Passport ID: {memberQrToShow?.phone}</p>
              <Button className="w-full h-12 rounded-2xl font-black uppercase" onClick={handleExportQr}>Download Passport</Button>
           </div>
+        </DialogContent>
+      </Dialog>
+
+      <Dialog open={!!memberToDelete} onOpenChange={(open) => !open && !isDeleting && setMemberToDelete(null)}>
+        <DialogContent className="sm:max-w-md bg-popover border-border rounded-3xl p-8">
+          <DialogHeader>
+            <div className="h-12 w-12 rounded-full bg-destructive/10 flex items-center justify-center mb-4">
+              <AlertTriangle className="h-6 w-6 text-destructive" />
+            </div>
+            <DialogTitle className="text-2xl font-black font-headline tracking-tight text-foreground uppercase">Delete Registry?</DialogTitle>
+            <DialogDescription className="pt-2 text-muted-foreground">
+              Are you sure you want to remove <b>{memberToDelete?.fullName}</b> from the system? This action is irreversible and will purge their biometric passport.
+            </DialogDescription>
+          </DialogHeader>
+          <DialogFooter className="flex gap-2 sm:gap-0 mt-6">
+            <Button variant="ghost" onClick={() => setMemberToDelete(null)} disabled={isDeleting} className="flex-1 rounded-xl">Cancel</Button>
+            <Button variant="destructive" onClick={handleDeleteMember} disabled={isDeleting} className="flex-1 rounded-xl font-bold">
+              {isDeleting ? <Loader2 className="h-4 w-4 animate-spin mr-2" /> : <Trash2 className="h-4 w-4 mr-2" />}
+              Purge Member
+            </Button>
+          </DialogFooter>
         </DialogContent>
       </Dialog>
     </div>

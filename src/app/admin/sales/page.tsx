@@ -354,7 +354,7 @@ export default function SalesReportPage() {
                           <div className="flex items-center justify-between">
                             <div className="flex items-center gap-2">
                               <span className="font-bold text-foreground group-hover:text-primary transition-colors">{sale.memberName}</span>
-                              <ChevronRight className="h-3 w-3 opacity-0 group-hover:opacity-40 transition-all -translate-x-1 group-hover:translate-x-0" />
+                              <ChevronRight className="h-3 w-3 opacity-40 transition-all" />
                             </div>
                           </div>
                         </TableCell>
@@ -375,15 +375,15 @@ export default function SalesReportPage() {
                              {isAdmin && (
                                <DropdownMenu>
                                  <DropdownMenuTrigger asChild>
-                                   <Button variant="ghost" size="icon" className="h-7 w-7 opacity-0 group-hover:opacity-100 transition-opacity">
-                                      <MoreHorizontal className="h-3 w-3" />
+                                   <Button variant="ghost" size="icon" className="h-8 w-8 hover:bg-white/5 transition-colors">
+                                      <MoreHorizontal className="h-4 w-4" />
                                    </Button>
                                  </DropdownMenuTrigger>
                                  <DropdownMenuContent align="end" className="bg-popover border-border rounded-xl">
                                    <DropdownMenuItem onSelect={() => handleOpenEdit(sale)} className="gap-2 cursor-pointer">
                                      <Edit3 className="h-3 w-3 text-primary" /> Edit Transaction
                                    </DropdownMenuItem>
-                                   <DropdownMenuItem onSelect={() => handleDeleteSale(sale.id)} className="text-destructive gap-2 cursor-pointer">
+                                   <DropdownMenuItem onSelect={() => handleDeleteSale(sale.id)} className="text-destructive gap-2 cursor-pointer focus:bg-destructive/10">
                                      <Trash2 className="h-3 w-3" /> Void Transaction
                                    </DropdownMenuItem>
                                  </DropdownMenuContent>
