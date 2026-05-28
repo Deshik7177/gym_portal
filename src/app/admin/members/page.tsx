@@ -138,7 +138,7 @@ export default function MembersListPage() {
 
     const alreadyLoggedToday = lastCheckInDate && isToday(lastCheckInDate);
 
-    // GATE COMMAND (FIXED PATH)
+    // FIXED PATH GATE COMMAND
     setDoc(doc(db, 'gateControl', 'latest'), {
       command: 'OPEN',
       status: 'pending',

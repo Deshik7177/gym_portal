@@ -23,7 +23,7 @@ import { useFirestore } from '@/firebase';
 import { Html5Qrcode, Html5QrcodeSupportedFormats } from 'html5-qrcode';
 import { cn } from '@/lib/utils';
 import { validateQrPayload } from '@/lib/qr-logic';
-import { isToday, parseISO, isAfter, startOfDay, isBefore, endOfDay } from 'date-fns';
+import { isToday, parseISO, isAfter, startOfDay } from 'date-fns';
 
 import { Button } from '@/components/ui/button';
 import { Card, CardContent, CardHeader, CardTitle, CardDescription } from '@/components/ui/card';
