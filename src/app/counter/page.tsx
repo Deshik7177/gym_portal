@@ -1,8 +1,7 @@
-
 'use client';
 
 import { useState, useEffect } from 'react';
-import { doc, getDoc, serverTimestamp, updateDoc, collection, addDoc } from 'firebase/firestore';
+import { doc, getDoc, serverTimestamp, updateDoc, collection, addDoc, setDoc } from 'firebase/firestore';
 import { useFirestore } from '@/firebase';
 import { 
   Search, 
@@ -101,6 +100,7 @@ export default function CounterPage() {
         : null;
 
       const alreadyLoggedToday = lastCheckInDate && isToday(lastCheckInDate);
+      const expiresAt = Date.now() + 5000;
 
       const tasks: Promise<any>[] = [
         // Always update the member record for real-time tracking
@@ -108,10 +108,12 @@ export default function CounterPage() {
           lastCheckIn: serverTimestamp(),
           updatedAt: serverTimestamp()
         }),
-        // Always signal hardware gate via real-time queue
-        addDoc(collection(db, 'gateControl'), {
+        // ALWAYS signal hardware gate via fixed document path gateControl/latest
+        setDoc(doc(db, 'gateControl', 'latest'), {
           command: 'OPEN',
+          status: 'pending',
           timestamp: serverTimestamp(),
+          expiresAt: expiresAt,
           memberId: verifiedMember.id,
           method: 'manual'
         })
@@ -134,8 +136,8 @@ export default function CounterPage() {
       toast({ 
         title: alreadyLoggedToday ? "Welcome Back!" : "Check-In Success", 
         description: alreadyLoggedToday 
-          ? `Gate signal sent for ${verifiedMember.fullName}. (Daily attendance already logged)` 
-          : `Attendance logged and gate opened for ${verifiedMember.fullName}.` 
+          ? `Gate signal sent to gateControl/latest.` 
+          : `Attendance logged and gate opened.` 
       });
     } catch (err) {
       toast({ variant: "destructive", title: "Action Failed" });

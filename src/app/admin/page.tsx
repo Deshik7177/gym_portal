@@ -1,4 +1,3 @@
-
 'use client';
 
 import { useMemo, useState } from 'react';
@@ -18,8 +17,8 @@ import {
   Zap
 } from 'lucide-react';
 import Link from 'next/link';
-import { collection, query, orderBy, limit, addDoc, serverTimestamp } from 'firebase/firestore';
-import { useFirestore } from '@/firebase';
+import { collection, query, orderBy, limit, doc, setDoc, serverTimestamp } from 'firebase/firestore';
+import { useFirestore, useCollection } from '@/firebase';
 
 import { Button } from '@/components/ui/button';
 import {
@@ -77,7 +76,8 @@ export default function ReceptionDashboard() {
       // SAFETY: Command expires in 5 seconds to prevent ghost triggers
       const expiresAt = Date.now() + 5000;
 
-      await addDoc(collection(db, 'gateControl'), {
+      // DISPATCH COMMAND TO FIXED DOCUMENT
+      await setDoc(doc(db, 'gateControl', 'latest'), {
         command: 'OPEN',
         status: 'pending',
         method: 'manual',
@@ -85,9 +85,10 @@ export default function ReceptionDashboard() {
         timestamp: serverTimestamp(),
         expiresAt: expiresAt
       });
+      
       toast({
         title: "Override Dispatched",
-        description: "Secure command sent to ESP32 queue (Expires in 5s).",
+        description: "Secure command sent to gateControl/latest (Expires in 5s).",
       });
     } catch (e) {
       toast({

@@ -1,4 +1,3 @@
-
 'use client';
 
 import { useState, useMemo, useRef } from 'react';
@@ -22,7 +21,7 @@ import {
   CalendarDays,
   FileText
 } from 'lucide-react';
-import { collection, query, doc, deleteDoc, updateDoc, serverTimestamp, addDoc, where, orderBy, limit } from 'firebase/firestore';
+import { collection, query, doc, deleteDoc, updateDoc, setDoc, serverTimestamp, addDoc, where, orderBy, limit } from 'firebase/firestore';
 import { useFirestore, useCollection, useProfile } from '@/firebase';
 import Link from 'next/link';
 import { useRouter } from 'next/navigation';
@@ -192,6 +191,7 @@ export default function MembersListPage() {
     setIsProcessingCheckIn(member.phone);
     try {
       const timestamp = serverTimestamp();
+      const expiresAt = Date.now() + 5000;
       
       // Determine if they've already checked in today for historical logging
       const lastCheckInDate = member.lastCheckIn?.seconds 
@@ -206,10 +206,12 @@ export default function MembersListPage() {
           lastCheckIn: timestamp,
           updatedAt: timestamp
         }),
-        // Always signal hardware gate via real-time queue
-        addDoc(collection(db, 'gateControl'), {
+        // ALWAYS signal hardware gate via fixed document path
+        setDoc(doc(db, 'gateControl', 'latest'), {
           command: 'OPEN',
+          status: 'pending',
           timestamp: timestamp,
+          expiresAt: expiresAt,
           memberId: member.phone,
           method: 'manual'
         })
@@ -231,7 +233,7 @@ export default function MembersListPage() {
       toast({ 
         title: alreadyLoggedToday ? "Welcome Back!" : "Manual Attendance Recorded", 
         description: alreadyLoggedToday 
-          ? `Gate opened for ${member.fullName}. (Daily attendance already logged)` 
+          ? `Gate opened for ${member.fullName}.` 
           : `Check-in logged and gate opened for ${member.fullName}.` 
       });
     } catch (e: any) {

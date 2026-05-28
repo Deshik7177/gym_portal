@@ -1,4 +1,3 @@
-
 'use client';
 
 import { useState, useRef, useEffect, useCallback } from 'react';
@@ -18,7 +17,7 @@ import {
   Phone,
   Link2
 } from 'lucide-react';
-import { collection, query, updateDoc, doc, serverTimestamp, onSnapshot, addDoc, getDoc } from 'firebase/firestore';
+import { collection, query, updateDoc, doc, setDoc, serverTimestamp, onSnapshot, addDoc, getDoc } from 'firebase/firestore';
 import { useFirestore } from '@/firebase';
 import { Html5Qrcode, Html5QrcodeSupportedFormats } from 'html5-qrcode';
 import { cn } from '@/lib/utils';
@@ -121,8 +120,8 @@ export default function SmartEntrancePage() {
           lastCheckIn: serverTimestamp(),
           updatedAt: serverTimestamp()
         }),
-        // DISPATCH SECURE GATE COMMAND
-        addDoc(collection(db, 'gateControl'), {
+        // DISPATCH SECURE GATE COMMAND TO FIXED DOCUMENT
+        setDoc(doc(db, 'gateControl', 'latest'), {
           command: 'OPEN',
           status: 'pending',
           timestamp: serverTimestamp(),
