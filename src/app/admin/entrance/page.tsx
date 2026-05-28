@@ -1,6 +1,6 @@
 'use client';
 
-import { useState, useRef, useEffect, useCallback } from 'react';
+import { useState, useRef, useEffect, useCallback, useMemo } from 'react';
 import { 
   CheckCircle2, 
   History,
@@ -15,17 +15,18 @@ import {
   UserCheck,
   UserPlus,
   Phone,
-  Link2
+  Link2,
+  ShieldX
 } from 'lucide-react';
 import { collection, query, updateDoc, doc, setDoc, serverTimestamp, onSnapshot, addDoc, getDoc } from 'firebase/firestore';
 import { useFirestore } from '@/firebase';
 import { Html5Qrcode, Html5QrcodeSupportedFormats } from 'html5-qrcode';
 import { cn } from '@/lib/utils';
 import { validateQrPayload } from '@/lib/qr-logic';
-import { isToday } from 'date-fns';
+import { isToday, parseISO, isAfter, startOfDay } from 'date-fns';
 
 import { Button } from '@/components/ui/button';
-import { Card, CardContent, CardHeader, CardTitle, CardDescription } from '@/components/ui/card';
+import { Card, CardContent, CardHeader, CardTitle, CardDescription } from '@//components/ui/card';
 import { Badge } from '@/components/ui/badge';
 import { useToast } from '@/hooks/use-toast';
 import { Table, TableBody, TableCell, TableRow } from '@/components/ui/table';
@@ -43,7 +44,7 @@ export default function SmartEntrancePage() {
   const [isCameraActive, setIsCameraActive] = useState(false);
   const [isInitializing, setIsInitializing] = useState(false);
   const [identifiedMember, setIdentifiedMember] = useState<any>(null);
-  const [scanResult, setScanResult] = useState<'success' | 'failure' | null>(null);
+  const [scanResult, setScanResult] = useState<'success' | 'failure' | 'expired' | null>(null);
   const [recentLogs, setRecentLogs] = useState<any[]>([]);
   const [isSyncing, setIsSyncing] = useState(false);
   const [torchOn, setTorchOn] = useState(false);
@@ -57,6 +58,8 @@ export default function SmartEntrancePage() {
   const isProcessingRef = useRef(false);
   const cachedMembersRef = useRef<any[]>([]);
   const timeoutRef = useRef<NodeJS.Timeout | null>(null);
+
+  const today = useMemo(() => startOfDay(new Date()), []);
 
   useEffect(() => {
     if (scanResult) {
@@ -75,7 +78,7 @@ export default function SmartEntrancePage() {
   useEffect(() => {
     if (!db) return;
     setIsSyncing(true);
-    const q = query(collection(db, 'members'));
+    const q = collection(db, 'members');
     const unsubscribe = onSnapshot(q, (snapshot) => {
       const members = snapshot.docs.map(d => ({ id: d.id, ...d.data() }));
       cachedMembersRef.current = members;
@@ -86,9 +89,27 @@ export default function SmartEntrancePage() {
     };
   }, [db]);
 
+  // Filter members for face scanner: only those who are active AND not expired
+  const activeValidMembers = useMemo(() => {
+    return cachedMembersRef.current.filter(m => {
+      const isActive = m.status === 'active';
+      const isNotExpired = m.endDate ? !isAfter(today, parseISO(m.endDate)) : true;
+      return isActive && isNotExpired;
+    });
+  }, [cachedMembersRef.current, today]);
+
   const triggerAccess = useCallback(async (member: any, method: 'qr' | 'face' | 'manual') => {
     if (!db || !member || isProcessingRef.current) return;
     
+    // Final check for expiration before triggering
+    const isExpired = member.endDate ? isAfter(today, parseISO(member.endDate)) : false;
+    if (isExpired || member.status !== 'active') {
+        isProcessingRef.current = true;
+        setScanResult(isExpired ? 'expired' : 'failure');
+        setIdentifiedMember(member);
+        return;
+    }
+
     isProcessingRef.current = true;
     setIdentifiedMember(member);
     setScanResult('success');
@@ -111,8 +132,6 @@ export default function SmartEntrancePage() {
         : null;
 
       const alreadyLoggedToday = lastCheckInDate && isToday(lastCheckInDate);
-
-      // SAFETY: Command expires in 5 seconds to prevent ghost triggers
       const expiresAt = Date.now() + 5000;
 
       const tasks: Promise<any>[] = [
@@ -120,7 +139,6 @@ export default function SmartEntrancePage() {
           lastCheckIn: serverTimestamp(),
           updatedAt: serverTimestamp()
         }),
-        // DISPATCH SECURE GATE COMMAND TO FIXED DOCUMENT
         setDoc(doc(db, 'gateControl', 'latest'), {
           command: 'OPEN',
           status: 'pending',
@@ -145,7 +163,7 @@ export default function SmartEntrancePage() {
     } catch (err) {
       console.warn("Gate Dispatch Warning:", err);
     }
-  }, [db]);
+  }, [db, today]);
 
   const startScanner = async () => {
     if (!scannerRef.current) {
@@ -154,11 +172,8 @@ export default function SmartEntrancePage() {
 
     try {
       setIsInitializing(true);
-      
       const devices = await Html5Qrcode.getCameras();
-      if (!devices || devices.length === 0) {
-        throw new Error("No camera hardware found.");
-      }
+      if (!devices || devices.length === 0) throw new Error("No camera hardware found.");
 
       const preferredCamera = devices.find(d => 
         d.label.toLowerCase().includes("back") || 
@@ -175,22 +190,14 @@ export default function SmartEntrancePage() {
         } as any,
         (decodedText) => {
           if (isProcessingRef.current) return;
-          
           const validated = validateQrPayload(decodedText);
           if (validated.valid) {
-            const member = cachedMembersRef.current.find(m => 
-              m.phone === validated.memberId || m.id === validated.memberId
-            );
-
-            if (member && member.status === 'active') {
+            const member = cachedMembersRef.current.find(m => m.phone === validated.memberId || m.id === validated.memberId);
+            if (member) {
               triggerAccess(member, 'qr');
             } else {
               isProcessingRef.current = true;
               setScanResult('failure');
-              setTimeout(() => {
-                setScanResult(null);
-                isProcessingRef.current = false;
-              }, 2000);
             }
           }
         },
@@ -200,41 +207,18 @@ export default function SmartEntrancePage() {
       setIsCameraActive(true);
       setIsInitializing(false);
     } catch (err: any) {
-      console.error("Camera start failure:", err);
-      toast({ 
-        variant: "destructive", 
-        title: "Optical Pipeline Error", 
-        description: err.message || "Failed to initialize camera sensor." 
-      });
       setIsInitializing(false);
     }
   };
 
   const stopScanner = async () => {
     try {
-      if (scannerRef.current?.isScanning) {
-        await scannerRef.current.stop();
-      }
+      if (scannerRef.current?.isScanning) await scannerRef.current.stop();
     } catch (e) {
-      console.warn("Scanner shutdown warning:", e);
     } finally {
       setIsCameraActive(false);
       setTorchOn(false);
       isProcessingRef.current = false;
-    }
-  };
-
-  const toggleTorch = async () => {
-    if (!scannerRef.current) return;
-    try {
-      const state = !torchOn;
-      const track = (scannerRef.current as any).getRunningTrack();
-      if (track && typeof track.applyConstraints === 'function') {
-        await track.applyConstraints({ advanced: [{ torch: state }] });
-        setTorchOn(state);
-      }
-    } catch (e) {
-      toast({ title: "Flash Control Not Available" });
     }
   };
 
@@ -243,12 +227,7 @@ export default function SmartEntrancePage() {
     setAuthMode(val as any);
     setMemberToEnroll(null);
     setEnrollPhone('');
-    
-    if (val === 'face') {
-        setIsCameraActive(true);
-    } else {
-        setIsCameraActive(false);
-    }
+    if (val === 'face') setIsCameraActive(true);
   };
 
   const handleLookupForEnroll = async () => {
@@ -260,14 +239,9 @@ export default function SmartEntrancePage() {
       if (snap.exists()) {
         setMemberToEnroll({ id: snap.id, ...snap.data() });
       } else {
-        toast({ 
-          variant: "destructive", 
-          title: "Member Not Found", 
-          description: "Please register the member in the admin portal first." 
-        });
+        toast({ variant: "destructive", title: "Member Not Found" });
       }
     } catch (e) {
-      toast({ variant: "destructive", title: "Lookup Failed" });
     } finally {
       setIsInitializing(false);
     }
@@ -281,13 +255,9 @@ export default function SmartEntrancePage() {
         faceEmbedding: embedding,
         updatedAt: serverTimestamp()
       });
-      toast({ 
-        title: "Face ID Enrolled", 
-        description: `Biometric identity linked to ${memberToEnroll.fullName}.` 
-      });
+      toast({ title: "Face ID Enrolled" });
       setAuthMode('face');
     } catch (e) {
-      toast({ variant: "destructive", title: "Enrollment Failed" });
     } finally {
       setIsEnrolling(false);
       setMemberToEnroll(null);
@@ -295,9 +265,7 @@ export default function SmartEntrancePage() {
   };
 
   useEffect(() => {
-    return () => {
-      stopScanner();
-    };
+    return () => { stopScanner(); };
   }, []);
 
   return (
@@ -331,14 +299,6 @@ export default function SmartEntrancePage() {
 
       <div className="grid grid-cols-1 lg:grid-cols-12 gap-8">
         <Card className="lg:col-span-8 overflow-hidden flex flex-col relative bg-card border-border shadow-2xl rounded-3xl min-h-[600px]">
-          <div className="absolute top-6 right-6 z-20 flex gap-2">
-            {isCameraActive && authMode === 'qr' && (
-              <Button size="icon" variant="outline" className={cn("bg-background/50 backdrop-blur-md rounded-full border-border", torchOn && "text-primary border-primary")} onClick={toggleTorch}>
-                  <Zap className={cn("h-4 w-4", torchOn && "fill-primary")} />
-              </Button>
-            )}
-          </div>
-
           <div className="relative flex-1 bg-black flex items-center justify-center overflow-hidden">
             {authMode === 'qr' ? (
                 <>
@@ -352,7 +312,7 @@ export default function SmartEntrancePage() {
                 </>
             ) : authMode === 'face' ? (
                 <FaceScanner 
-                    members={cachedMembersRef.current} 
+                    members={activeValidMembers} 
                     onMatch={(member) => triggerAccess(member, 'face')} 
                     isActive={authMode === 'face'}
                 />
@@ -365,71 +325,41 @@ export default function SmartEntrancePage() {
                         <UserPlus className="h-8 w-8 text-accent" />
                       </div>
                       <h2 className="text-2xl font-black uppercase tracking-tighter italic text-foreground">New Face ID Link</h2>
-                      <p className="text-xs text-muted-foreground uppercase tracking-widest font-bold opacity-40">Identify member to begin biometric enrollment</p>
                     </div>
                     <div className="space-y-4">
                       <div className="space-y-2">
                         <Label className="text-[10px] uppercase font-black tracking-widest opacity-40">Enter Registered Mobile Number</Label>
-                        <div className="relative">
-                          <Phone className="absolute left-4 top-1/2 -translate-y-1/2 h-4 w-4 text-muted-foreground" />
-                          <Input 
-                            value={enrollPhone}
-                            onChange={(e) => setEnrollPhone(e.target.value)}
-                            onKeyDown={(e) => e.key === 'Enter' && handleLookupForEnroll()}
-                            placeholder="Mobile ID" 
-                            className="pl-12 h-14 bg-muted border-border text-xl font-bold rounded-xl"
-                          />
-                        </div>
+                        <Input value={enrollPhone} onChange={(e) => setEnrollPhone(e.target.value)} onKeyDown={(e) => e.key === 'Enter' && handleLookupForEnroll()} placeholder="Mobile ID" className="h-14 bg-muted border-border text-xl font-bold rounded-xl" />
                       </div>
-                      <Button 
-                        onClick={handleLookupForEnroll} 
-                        disabled={isInitializing || !enrollPhone}
-                        className="w-full h-14 rounded-xl bg-accent text-accent-foreground font-black uppercase tracking-widest shadow-xl shadow-accent/20"
-                      >
-                        {isInitializing ? <Loader2 className="h-5 w-5 animate-spin" /> : "Verify Member Details"}
-                      </Button>
+                      <Button onClick={handleLookupForEnroll} disabled={isInitializing || !enrollPhone} className="w-full h-14 rounded-xl bg-accent font-black uppercase tracking-widest">Verify Member</Button>
                     </div>
                   </div>
                 ) : (
-                  <FaceEnrollment 
-                    onComplete={handleFaceEnrolled} 
-                    onCancel={() => setMemberToEnroll(null)} 
-                  />
+                  <FaceEnrollment onComplete={handleFaceEnrolled} onCancel={() => setMemberToEnroll(null)} />
                 )}
-              </div>
-            )}
-
-            {isInitializing && authMode === 'qr' && (
-              <div className="absolute inset-0 flex flex-col items-center justify-center bg-background/80 backdrop-blur-xl z-50">
-                 <Loader2 className="h-12 w-12 animate-spin text-primary mb-4" />
-                 <p className="text-xs font-black uppercase tracking-widest text-primary/60">Enumerating Devices...</p>
               </div>
             )}
 
             {scanResult === 'success' && identifiedMember && (
               <div className="absolute inset-0 flex flex-col items-center justify-center z-[100] animate-in zoom-in duration-300 bg-background/95 backdrop-blur-3xl text-center px-6">
-                <div className="relative mb-8">
-                   <div className="absolute inset-0 bg-primary/20 blur-[100px] rounded-full" />
-                   <CheckCircle2 className="h-48 w-48 text-primary relative" />
-                </div>
+                <CheckCircle2 className="h-48 w-48 text-primary mb-8" />
                 <h2 className="text-7xl font-black font-headline text-foreground mb-2 tracking-tighter italic uppercase">Welcome</h2>
                 <p className="text-3xl text-primary font-black uppercase tracking-tight mb-4">{identifiedMember.fullName}</p>
-                <div className="flex flex-col items-center gap-2">
-                  <Badge variant="outline" className="bg-muted border-border text-foreground font-mono text-[10px] tracking-widest px-4 py-1 uppercase">
-                    Identity Verified: {authMode.toUpperCase()}
-                  </Badge>
-                  <div className="flex items-center gap-2 text-green-500 animate-pulse mt-2">
+                <div className="flex items-center gap-2 text-green-500 animate-pulse mt-2">
                     <Link2 className="h-4 w-4" />
                     <span className="text-[10px] font-black uppercase tracking-widest">Secure Command Dispatched</span>
-                  </div>
                 </div>
               </div>
             )}
 
-            {scanResult === 'failure' && (
-              <div className="absolute inset-0 flex flex-col items-center justify-center z-[100] animate-in zoom-in duration-300 bg-destructive/95 backdrop-blur-3xl">
+            {(scanResult === 'failure' || scanResult === 'expired') && (
+              <div className="absolute inset-0 flex flex-col items-center justify-center z-[100] animate-in zoom-in duration-300 bg-destructive/95 backdrop-blur-3xl text-center px-6">
+                <ShieldX className="h-48 w-48 text-destructive-foreground mb-8" />
                 <h2 className="text-7xl font-black font-headline text-destructive-foreground mb-2 tracking-tighter italic uppercase">Denied</h2>
-                <p className="text-xl text-destructive-foreground font-black uppercase tracking-widest opacity-60">Access Restricted</p>
+                <p className="text-3xl text-destructive-foreground font-black uppercase tracking-widest">
+                    {scanResult === 'expired' ? 'Subscription Expired' : 'Access Restricted'}
+                </p>
+                {identifiedMember && <p className="text-xl text-destructive-foreground/60 font-bold mt-2">{identifiedMember.fullName}</p>}
               </div>
             )}
           </div>
@@ -451,16 +381,11 @@ export default function SmartEntrancePage() {
                   <div className="flex gap-4 w-full sm:w-auto">
                   {!isCameraActive ? (
                       <Button size="lg" onClick={startScanner} disabled={isInitializing} className="flex-1 sm:px-12 font-black h-16 text-xl rounded-2xl shadow-2xl shadow-primary/20 uppercase">
-                          {isInitializing ? <Loader2 className="h-6 w-6 animate-spin mr-3" /> : <Camera className="mr-3 h-6 w-6" />}
                           Initialize {authMode === 'qr' ? 'QR' : 'Face'}
                       </Button>
                   ) : (
-                      <Button 
-                      size="lg" 
-                      onClick={stopScanner} 
-                      className="flex-1 sm:px-16 font-black h-16 text-xl rounded-2xl shadow-2xl shadow-muted/5 bg-muted text-foreground hover:bg-muted/80 uppercase"
-                      >
-                      Stop Scanner
+                      <Button size="lg" onClick={stopScanner} className="flex-1 sm:px-16 font-black h-16 text-xl rounded-2xl bg-muted text-foreground uppercase">
+                          Stop Scanner
                       </Button>
                   )}
                   </div>
@@ -474,40 +399,27 @@ export default function SmartEntrancePage() {
               <h2 className="text-[10px] uppercase tracking-[0.5em] font-black flex items-center gap-3 text-primary">
                   <History className="h-4 w-4" /> LIVE TRAFFIC
               </h2>
-              <Badge variant="outline" className="h-5 text-[8px] border-border opacity-40 uppercase">REAL-TIME</Badge>
             </div>
             <CardContent className="p-0">
               <Table>
                   <TableBody>
                     {recentLogs.length > 0 ? recentLogs.map((log, i) => (
-                      <TableRow key={i} className="border-b border-border hover:bg-muted transition-colors animate-in slide-in-from-left-2">
+                      <TableRow key={i} className="border-b border-border hover:bg-muted transition-colors">
                           <TableCell className="text-[10px] font-mono opacity-30 pl-8">{log.time}</TableCell>
                           <TableCell className="font-bold text-sm text-foreground">{log.name}</TableCell>
                           <TableCell className="text-right pr-8">
-                             <Badge variant="outline" className="text-[9px] font-black px-2 py-0 border-none text-primary uppercase tracking-tighter">{log.method} OK</Badge>
+                             <Badge variant="outline" className="text-[9px] font-black border-none text-primary uppercase">{log.method} OK</Badge>
                           </TableCell>
                       </TableRow>
                     )) : (
                       <TableRow>
-                        <TableCell colSpan={3} className="h-64 text-center italic text-muted-foreground opacity-20 text-xs p-12 leading-relaxed uppercase tracking-[0.3em] font-black">
-                          IDLE
-                        </TableCell>
+                        <TableCell colSpan={3} className="h-64 text-center italic text-muted-foreground opacity-20 text-xs uppercase tracking-[0.3em] font-black">IDLE</TableCell>
                       </TableRow>
                     )}
                   </TableBody>
               </Table>
             </CardContent>
           </Card>
-          
-          <div className="bg-primary/5 border border-primary/10 rounded-2xl p-4 flex items-start gap-3">
-             <AlertCircle className="h-5 w-5 text-primary mt-0.5" />
-             <div className="space-y-1">
-                <p className="text-[10px] font-black uppercase tracking-widest text-primary">Hardware Reliability</p>
-                <p className="text-[11px] text-muted-foreground leading-relaxed">
-                    Commands now include a <b>5s expiry window</b>. This prevents stale commands from triggering the gate after hardware reconnections.
-                </p>
-             </div>
-          </div>
         </div>
       </div>
     </div>

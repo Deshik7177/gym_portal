@@ -1,6 +1,6 @@
 'use client';
 
-import { useState, useEffect } from 'react';
+import { useState, useEffect, useMemo } from 'react';
 import { doc, getDoc, serverTimestamp, updateDoc, collection, addDoc, setDoc } from 'firebase/firestore';
 import { useFirestore } from '@/firebase';
 import { 
@@ -12,8 +12,9 @@ import {
   History,
   WifiOff,
   UserX,
+  ShieldX
 } from 'lucide-react';
-import { isToday } from 'date-fns';
+import { isToday, parseISO, isAfter, startOfDay } from 'date-fns';
 
 import { Badge } from '@/components/ui/badge';
 import { Button } from '@/components/ui/button';
@@ -43,6 +44,8 @@ export default function CounterPage() {
   const [verifiedMember, setVerifiedMember] = useState<any>(null);
   const [isOnline, setIsOnline] = useState(true);
 
+  const today = useMemo(() => startOfDay(new Date()), []);
+
   useEffect(() => {
     setIsOnline(navigator.onLine);
     const handleOnline = () => setIsOnline(true);
@@ -66,24 +69,17 @@ export default function CounterPage() {
 
       if (docSnap.exists()) {
         const data = docSnap.data();
-        setVerifiedMember({ ...data, id: docSnap.id });
+        const isExpired = data.endDate ? isAfter(today, parseISO(data.endDate)) : false;
+        setVerifiedMember({ ...data, id: docSnap.id, isExpired });
         toast({
           title: "Member Found",
-          description: `Identity pulled from ${isOnline ? 'cloud' : 'local cache'}.`
+          description: isExpired ? "Subscription is expired." : "Account active."
         });
       } else {
-        toast({
-          variant: "destructive",
-          title: "Not Found",
-          description: "No member found."
-        });
+        toast({ variant: "destructive", title: "Not Found" });
       }
     } catch (e) {
-      toast({
-        variant: "destructive",
-        title: "Error",
-        description: "Could not fetch member."
-      });
+      toast({ variant: "destructive", title: "Error" });
     } finally {
       setLoading(false);
     }
@@ -91,10 +87,16 @@ export default function CounterPage() {
 
   const markAttendance = async () => {
     if (!verifiedMember || !db) return;
+    
+    // Explicit block for expired memberships
+    if (verifiedMember.isExpired || verifiedMember.status !== 'active') {
+        toast({ variant: "destructive", title: "Access Denied", description: "Membership has expired or is inactive." });
+        return;
+    }
+
     const docRef = doc(db, 'members', verifiedMember.id);
     
     try {
-      // Logic: Log attendance once per day, but always allow entry
       const lastCheckInDate = verifiedMember.lastCheckIn?.seconds 
         ? new Date(verifiedMember.lastCheckIn.seconds * 1000) 
         : null;
@@ -103,12 +105,10 @@ export default function CounterPage() {
       const expiresAt = Date.now() + 5000;
 
       const tasks: Promise<any>[] = [
-        // Always update the member record for real-time tracking
         updateDoc(docRef, { 
           lastCheckIn: serverTimestamp(),
           updatedAt: serverTimestamp()
         }),
-        // ALWAYS signal hardware gate via fixed document path gateControl/latest
         setDoc(doc(db, 'gateControl', 'latest'), {
           command: 'OPEN',
           status: 'pending',
@@ -119,7 +119,6 @@ export default function CounterPage() {
         })
       ];
 
-      // ONLY add to historical attendance ledger if it's the first time today
       if (!alreadyLoggedToday) {
         tasks.push(addDoc(collection(db, 'attendance'), {
           memberId: verifiedMember.id,
@@ -131,14 +130,7 @@ export default function CounterPage() {
       }
       
       await Promise.all(tasks);
-
       setVerifiedMember(prev => ({ ...prev, authenticated: true }));
-      toast({ 
-        title: alreadyLoggedToday ? "Welcome Back!" : "Check-In Success", 
-        description: alreadyLoggedToday 
-          ? `Gate signal sent to gateControl/latest.` 
-          : `Attendance logged and gate opened.` 
-      });
     } catch (err) {
       toast({ variant: "destructive", title: "Action Failed" });
     }
@@ -157,7 +149,6 @@ export default function CounterPage() {
                 <WifiOff className="h-5 w-5 text-destructive shrink-0 mt-0.5" />
                 <div className="space-y-1">
                    <p className="font-bold text-sm text-destructive uppercase">Offline Mode</p>
-                   <p className="text-xs opacity-80 leading-relaxed">System is syncing locally.</p>
                 </div>
               </div>
             )}
@@ -168,21 +159,12 @@ export default function CounterPage() {
                         <UserCheck className="h-5 w-5" />
                         Reception Check-In
                     </CardTitle>
-                    <CardDescription>
-                        Visual verification desk.
-                    </CardDescription>
                 </CardHeader>
                 <CardContent className="space-y-6 pt-6">
                     <div className="flex gap-2">
                         <div className="relative flex-1">
                             <Phone className="absolute left-2.5 top-2.5 h-4 w-4 text-muted-foreground" />
-                            <Input 
-                                placeholder="Phone Number..." 
-                                className="pl-8 h-12 text-lg"
-                                value={searchPhone}
-                                onChange={(e) => setSearchPhone(e.target.value)}
-                                onKeyDown={(e) => e.key === 'Enter' && handleSearch()}
-                            />
+                            <Input placeholder="Phone Number..." className="pl-8 h-12 text-lg" value={searchPhone} onChange={(e) => setSearchPhone(e.target.value)} onKeyDown={(e) => e.key === 'Enter' && handleSearch()} />
                         </div>
                         <Button onClick={handleSearch} disabled={loading} variant="secondary" className="h-12 w-12 p-0">
                             {loading ? <Loader2 className="h-5 w-5 animate-spin" /> : <Search className="h-5 w-5" />}
@@ -203,29 +185,36 @@ export default function CounterPage() {
                            
                            {verifiedMember.authenticated && (
                              <div className="absolute inset-0 bg-green-500/20 backdrop-blur-[2px] flex flex-col items-center justify-center animate-in zoom-in duration-500">
-                                <CheckCircle className="h-24 w-24 text-green-500 drop-shadow-lg" />
+                                <CheckCircle className="h-24 w-24 text-green-500" />
                                 <span className="bg-green-500 text-white px-4 py-1 rounded-full text-sm font-bold mt-4 tracking-widest uppercase">Verified</span>
                              </div>
+                           )}
+
+                           {verifiedMember.isExpired && (
+                              <div className="absolute inset-0 bg-destructive/20 backdrop-blur-[2px] flex flex-col items-center justify-center">
+                                 <ShieldX className="h-24 w-24 text-destructive" />
+                                 <span className="bg-destructive text-white px-4 py-1 rounded-full text-sm font-bold mt-4 tracking-widest uppercase">Expired</span>
+                              </div>
                            )}
                         </div>
 
                         <div className="p-4 rounded-xl border bg-muted/30 space-y-3">
                            <div className="flex items-center justify-between">
-                              <h3 className="font-bold text-xl font-headline">{verifiedMember.fullName}</h3>
-                              <Badge variant={verifiedMember.status === 'active' ? 'default' : 'destructive'}>
-                                {verifiedMember.status?.toUpperCase()}
+                              <h3 className="font-bold text-xl font-headline text-foreground">{verifiedMember.fullName}</h3>
+                              <Badge variant={verifiedMember.status === 'active' && !verifiedMember.isExpired ? 'default' : 'destructive'}>
+                                {verifiedMember.isExpired ? 'EXPIRED' : verifiedMember.status?.toUpperCase()}
                               </Badge>
                            </div>
                            
-                           <div className="grid grid-cols-2 gap-3 text-sm">
+                           <div className="grid grid-cols-2 gap-3 text-sm text-foreground">
                               <div className="space-y-1">
                                  <p className="text-muted-foreground text-[10px] uppercase">Plan</p>
                                  <p className="font-semibold capitalize">{verifiedMember.type}</p>
                               </div>
                               <div className="space-y-1">
-                                 <p className="text-muted-foreground text-[10px] uppercase">Last Seen</p>
-                                 <p className="font-semibold">
-                                    {verifiedMember.lastCheckIn ? new Date(verifiedMember.lastCheckIn.seconds * 1000).toLocaleDateString() : 'Never'}
+                                 <p className="text-muted-foreground text-[10px] uppercase">Expiry</p>
+                                 <p className={cn("font-semibold", verifiedMember.isExpired && "text-destructive")}>
+                                    {verifiedMember.endDate ? verifiedMember.endDate : 'N/A'}
                                  </p>
                               </div>
                            </div>
@@ -233,17 +222,13 @@ export default function CounterPage() {
 
                         {!verifiedMember.authenticated ? (
                           <div className="grid grid-cols-2 gap-3">
-                             <Button onClick={markAttendance} className="h-14 text-lg font-bold" disabled={verifiedMember.status === 'non-active'}>
-                                {verifiedMember.status === 'active' ? 'Grant Access' : 'Inactive'}
+                             <Button onClick={markAttendance} className="h-14 text-lg font-bold" disabled={verifiedMember.status !== 'active' || verifiedMember.isExpired}>
+                                {verifiedMember.isExpired ? 'Access Denied' : 'Grant Access'}
                              </Button>
-                             <Button variant="outline" onClick={resetSearch} className="h-14">
-                                Clear
-                             </Button>
+                             <Button variant="outline" onClick={resetSearch} className="h-14">Clear</Button>
                           </div>
                         ) : (
-                          <Button variant="outline" onClick={resetSearch} className="w-full h-12">
-                             Next Search
-                          </Button>
+                          <Button variant="outline" onClick={resetSearch} className="w-full h-12">Next Search</Button>
                         )}
                       </div>
                     ) : (
@@ -263,9 +248,6 @@ export default function CounterPage() {
                       <History className="h-5 w-5" />
                       Session Log
                   </CardTitle>
-                  <CardDescription>
-                      Manual entry verification.
-                  </CardDescription>
                 </div>
             </CardHeader>
             <CardContent className="flex-1 p-0">
@@ -286,7 +268,7 @@ export default function CounterPage() {
                               </TableCell>
                               <TableCell>
                                  <div className="flex flex-col">
-                                    <span className="font-bold text-sm">{verifiedMember.fullName}</span>
+                                    <span className="font-bold text-sm text-foreground">{verifiedMember.fullName}</span>
                                     <span className="text-[10px] text-muted-foreground">{verifiedMember.phone}</span>
                                  </div>
                               </TableCell>
@@ -300,9 +282,7 @@ export default function CounterPage() {
                         ) : null}
                         
                         <TableRow>
-                           <TableCell colSpan={4} className="h-24 text-center text-muted-foreground italic text-xs">
-                              End of session feed.
-                           </TableCell>
+                           <TableCell colSpan={4} className="h-24 text-center text-muted-foreground italic text-xs">End of session feed.</TableCell>
                         </TableRow>
                     </TableBody>
                 </Table>

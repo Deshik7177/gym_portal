@@ -25,7 +25,7 @@ import { collection, query, doc, deleteDoc, updateDoc, setDoc, serverTimestamp, 
 import { useFirestore, useCollection, useProfile } from '@/firebase';
 import Link from 'next/link';
 import { useRouter } from 'next/navigation';
-import { format, startOfDay, isToday, parseISO, endOfDay } from 'date-fns';
+import { format, startOfDay, isToday, parseISO, endOfDay, isAfter } from 'date-fns';
 import { QRCodeCanvas } from 'qrcode.react';
 import { generateMemberQrPayload } from '@/lib/qr-logic';
 
@@ -172,10 +172,10 @@ export default function MembersListPage() {
     if (!members) return { total: 0, active: 0, personal: 0 };
     return {
       total: members.length,
-      active: members.filter(m => m.status === 'active').length,
+      active: members.filter(m => m.status === 'active' && (m.endDate ? !isAfter(today, parseISO(m.endDate)) : true)).length,
       personal: members.filter(m => m.type === 'personal').length,
     };
-  }, [members]);
+  }, [members, today]);
 
   const handleDeleteMember = () => {
     if (!db || !memberToDelete || !isAdmin) return;
@@ -188,12 +188,19 @@ export default function MembersListPage() {
 
   const handleManualCheckIn = async (member: any) => {
     if (!db || isProcessingCheckIn) return;
+
+    // Check for expiration
+    const isExpired = member.endDate ? isAfter(today, parseISO(member.endDate)) : false;
+    if (isExpired || member.status !== 'active') {
+        toast({ variant: "destructive", title: "Access Denied", description: isExpired ? "Membership has expired." : "Membership is inactive." });
+        return;
+    }
+
     setIsProcessingCheckIn(member.phone);
     try {
       const timestamp = serverTimestamp();
       const expiresAt = Date.now() + 5000;
       
-      // Determine if they've already checked in today for historical logging
       const lastCheckInDate = member.lastCheckIn?.seconds 
         ? new Date(member.lastCheckIn.seconds * 1000) 
         : null;
@@ -201,12 +208,10 @@ export default function MembersListPage() {
       const alreadyLoggedToday = lastCheckInDate && isToday(lastCheckInDate);
 
       const tasks: Promise<any>[] = [
-        // Always update the member record for real-time tracking
         updateDoc(doc(db, 'members', member.phone), {
           lastCheckIn: timestamp,
           updatedAt: timestamp
         }),
-        // ALWAYS signal hardware gate via fixed document path
         setDoc(doc(db, 'gateControl', 'latest'), {
           command: 'OPEN',
           status: 'pending',
@@ -217,7 +222,6 @@ export default function MembersListPage() {
         })
       ];
 
-      // ONLY add to historical attendance ledger if it's the first time today
       if (!alreadyLoggedToday) {
         tasks.push(addDoc(collection(db, 'attendance'), {
           memberId: member.phone,
@@ -229,13 +233,7 @@ export default function MembersListPage() {
       }
 
       await Promise.all(tasks);
-      
-      toast({ 
-        title: alreadyLoggedToday ? "Welcome Back!" : "Manual Attendance Recorded", 
-        description: alreadyLoggedToday 
-          ? `Gate opened for ${member.fullName}.` 
-          : `Check-in logged and gate opened for ${member.fullName}.` 
-      });
+      toast({ title: alreadyLoggedToday ? "Welcome Back!" : "Attendance Recorded" });
     } catch (e: any) {
       toast({ variant: "destructive", title: "Check-In Failed" });
     } finally {
@@ -252,7 +250,6 @@ export default function MembersListPage() {
       link.download = `Passport_${memberQrToShow.fullName.replace(/\s+/g, '_')}.png`;
       link.href = url;
       link.click();
-      toast({ title: "Export Success", description: "Member Passport saved." });
     }
   };
 
@@ -280,11 +277,7 @@ export default function MembersListPage() {
       });
       toast({ title: "PT Session Added" });
       setMemberForPT(null);
-      setPtPrice('');
-      setPtStartDate(undefined);
-      setPtEndDate(undefined);
     } catch (e: any) {
-      errorEmitter.emit('permission-error', new FirestorePermissionError({ path: `sales/new`, operation: 'create', requestResourceData: saleData }));
     } finally {
       setIsUpdatingPT(false);
     }
@@ -318,12 +311,12 @@ export default function MembersListPage() {
                 <CardTitle className="text-[10px] font-black uppercase tracking-[0.3em] opacity-40">Registered Population</CardTitle>
             </CardHeader>
             <CardContent>
-                <div className="text-3xl font-black">{stats.total}</div>
+                <div className="text-3xl font-black text-foreground">{stats.total}</div>
             </CardContent>
          </Card>
          <Card className="bg-green-500/5 border-green-500/10 shadow-none">
             <CardHeader className="pb-2">
-                <CardTitle className="text-[10px] font-black uppercase tracking-[0.3em] opacity-40">Active Contracts</CardTitle>
+                <CardTitle className="text-[10px] font-black uppercase tracking-[0.3em] opacity-40">Valid Contracts</CardTitle>
             </CardHeader>
             <CardContent>
                 <div className="text-3xl font-black text-green-500">{stats.active}</div>
@@ -339,99 +332,14 @@ export default function MembersListPage() {
          </Card>
       </div>
 
-      {!isAdmin && (
-        <div className="bg-orange-500/10 border border-orange-500/20 p-4 rounded-xl flex items-center gap-3">
-           <ShieldAlert className="h-5 w-5 text-orange-500" />
-           <p className="text-xs font-bold text-orange-500 uppercase tracking-widest">Limited View: Edit Profile/Delete Restricted to Admins</p>
-        </div>
-      )}
-
       <Card className="border-none bg-card/40 backdrop-blur-xl shadow-2xl rounded-2xl overflow-hidden">
         <CardHeader className="border-b border-white/5 py-6">
           <div className="flex flex-col gap-4">
             <div className="flex flex-col lg:flex-row items-center gap-4">
               <div className="relative flex-1 w-full">
                 <Search className="absolute left-3.5 top-1/2 -translate-y-1/2 h-4 w-4 text-muted-foreground" />
-                <Input
-                  placeholder="Search member ID or name..."
-                  className="pl-10 h-11 bg-black/20 border-white/5 focus:border-primary/50 rounded-xl w-full"
-                  value={searchTerm}
-                  onChange={(e) => setSearchTerm(e.target.value)}
-                />
+                <Input placeholder="Search member ID or name..." className="pl-10 h-11 bg-black/20 border-white/5 rounded-xl w-full" value={searchTerm} onChange={(e) => setSearchTerm(e.target.value)} />
               </div>
-              <div className="flex items-center gap-3 w-full lg:w-auto">
-                <Select value={filterStatus} onValueChange={setFilterStatus}>
-                  <SelectTrigger className="h-11 bg-black/20 border-white/5 rounded-xl lg:w-40">
-                    <div className="flex items-center gap-2">
-                      <Filter className="h-3.5 w-3.5 opacity-40" />
-                      <SelectValue placeholder="Status" />
-                    </div>
-                  </SelectTrigger>
-                  <SelectContent>
-                    <SelectItem value="all">All Status</SelectItem>
-                    <SelectItem value="active">Active</SelectItem>
-                    <SelectItem value="non-active">Non-Active</SelectItem>
-                  </SelectContent>
-                </Select>
-
-                <Select value={filterType} onValueChange={setFilterType}>
-                  <SelectTrigger className="h-11 bg-black/20 border-white/5 rounded-xl lg:w-40">
-                    <div className="flex items-center gap-2">
-                      <Filter className="h-3.5 w-3.5 opacity-40" />
-                      <SelectValue placeholder="Category" />
-                    </div>
-                  </SelectTrigger>
-                  <SelectContent>
-                    <SelectItem value="all">All Categories</SelectItem>
-                    <SelectItem value="group">Group</SelectItem>
-                    <SelectItem value="personal">Personal Training</SelectItem>
-                  </SelectContent>
-                </Select>
-              </div>
-            </div>
-
-            <div className="flex flex-col lg:flex-row items-center gap-4 pt-2 border-t border-white/5 mt-2">
-               <span className="text-[10px] font-black uppercase tracking-widest opacity-40 whitespace-nowrap">Expiration Range:</span>
-               <div className="flex items-center gap-2 w-full lg:w-auto">
-                <Popover open={isFilterFromOpen} onOpenChange={setIsFilterFromOpen}>
-                  <PopoverTrigger asChild>
-                    <Button variant="outline" className={cn("h-10 text-[10px] font-bold bg-black/20 border-white/5 rounded-lg lg:w-36 justify-start", !filterDateFrom && "text-muted-foreground")}>
-                      <CalendarIcon className="mr-2 h-3 w-3 text-primary/60" />
-                      {filterDateFrom ? format(filterDateFrom, "MMM dd, yyyy") : "Starts From"}
-                    </Button>
-                  </PopoverTrigger>
-                  <PopoverContent className="w-auto p-0" align="start">
-                    <Calendar
-                      mode="single"
-                      selected={filterDateFrom}
-                      onSelect={(date) => { setFilterDateFrom(date); setIsFilterFromOpen(false); }}
-                    />
-                  </PopoverContent>
-                </Popover>
-
-                <Popover open={isFilterToOpen} onOpenChange={setIsFilterToOpen}>
-                  <PopoverTrigger asChild>
-                    <Button variant="outline" className={cn("h-10 text-[10px] font-bold bg-black/20 border-white/5 rounded-lg lg:w-36 justify-start", !filterDateTo && "text-muted-foreground")}>
-                      <CalendarIcon className="mr-2 h-3 w-3 text-primary/60" />
-                      {filterDateTo ? format(filterDateTo, "MMM dd, yyyy") : "Ends At"}
-                    </Button>
-                  </PopoverTrigger>
-                  <PopoverContent className="w-auto p-0" align="start">
-                    <Calendar
-                      mode="single"
-                      selected={filterDateTo}
-                      onSelect={(date) => { setFilterDateTo(date); setIsFilterToOpen(false); }}
-                      disabled={(date) => filterDateFrom ? date < filterDateFrom : false}
-                    />
-                  </PopoverContent>
-                </Popover>
-
-                {(searchTerm || filterStatus !== 'all' || filterType !== 'all' || filterDateFrom || filterDateTo) && (
-                  <Button variant="ghost" size="sm" onClick={resetFilters} className="h-10 px-4 hover:bg-destructive/10 hover:text-destructive rounded-lg flex items-center gap-2 text-[10px] font-black uppercase">
-                    <X className="h-3.5 w-3.5" /> Clear All
-                  </Button>
-                )}
-               </div>
             </div>
           </div>
         </CardHeader>
@@ -447,275 +355,101 @@ export default function MembersListPage() {
               </TableRow>
             </TableHeader>
             <TableBody>
-              {filteredMembers.length > 0 ? filteredMembers.map((member) => (
-                <TableRow key={member.phone} className="border-white/5 hover:bg-white/[0.02] transition-colors">
-                  <TableCell className="pl-8">
-                    <div className="flex items-center gap-4 py-2">
-                      <div className="h-10 w-10 rounded-full bg-primary/10 flex items-center justify-center overflow-hidden border border-primary/20">
-                        {member.photoData ? <img src={member.photoData} className="w-full h-full object-cover" alt={member.fullName} /> : <User className="h-5 w-5 text-primary" />}
+              {filteredMembers.length > 0 ? filteredMembers.map((member) => {
+                const isExpired = member.endDate ? isAfter(today, parseISO(member.endDate)) : false;
+                return (
+                  <TableRow key={member.phone} className="border-white/5 hover:bg-white/[0.02] transition-colors">
+                    <TableCell className="pl-8 py-4">
+                      <div className="flex items-center gap-4">
+                        <div className="h-10 w-10 rounded-full bg-primary/10 flex items-center justify-center overflow-hidden">
+                          {member.photoData ? <img src={member.photoData} className="w-full h-full object-cover" alt={member.fullName} /> : <User className="h-5 w-5 text-primary" />}
+                        </div>
+                        <span className="font-bold text-sm text-foreground">{member.fullName}</span>
                       </div>
-                      <span className="font-bold text-sm tracking-tight">{member.fullName}</span>
-                    </div>
-                  </TableCell>
-                  <TableCell>
-                    <div className="flex flex-col gap-1.5">
-                      <div className="flex items-center gap-2">
-                        <Badge variant={member.status === 'active' ? 'default' : 'secondary'} className={cn("rounded-sm px-2 text-[8px] font-black uppercase tracking-widest border-none h-4", member.status === 'active' ? "bg-green-500/20 text-green-500" : "bg-white/5 text-white/40")}>
-                          {member.status}
-                        </Badge>
-                        <Badge variant="outline" className={cn("rounded-sm border-none bg-primary/10 text-primary text-[8px] font-black uppercase tracking-widest h-4")}>{member.type}</Badge>
+                    </TableCell>
+                    <TableCell>
+                      <div className="flex flex-col gap-1.5">
+                        <div className="flex items-center gap-2">
+                          <Badge variant={member.status === 'active' && !isExpired ? 'default' : 'destructive'} className={cn("text-[8px] font-black uppercase", member.status === 'active' && !isExpired ? "bg-green-500/20 text-green-500" : "bg-destructive/20 text-destructive")}>
+                            {isExpired ? 'EXPIRED' : member.status}
+                          </Badge>
+                          <Badge variant="outline" className="bg-primary/10 text-primary text-[8px] font-black uppercase border-none">{member.type}</Badge>
+                        </div>
                       </div>
-                      {member.description && (
-                        <p className="text-[9px] text-muted-foreground italic flex items-center gap-1 max-w-[180px] truncate">
-                          <FileText className="h-2.5 w-2.5 shrink-0 opacity-50" /> {member.description}
-                        </p>
-                      )}
-                    </div>
-                  </TableCell>
-                  <TableCell>
-                    <div className="flex items-center gap-3 text-[10px] font-bold">
-                       <div className="flex flex-col">
-                          <span className="text-muted-foreground uppercase text-[8px] opacity-40">Starts</span>
-                          <span className="text-white/80">{member.startDate ? format(parseISO(member.startDate), 'MMM dd, yyyy') : 'N/A'}</span>
-                       </div>
-                       <div className="w-px h-6 bg-white/5" />
-                       <div className="flex flex-col">
-                          <span className="text-muted-foreground uppercase text-[8px] opacity-40">Ends</span>
-                          <span className={cn(member.endDate && parseISO(member.endDate) < today ? "text-destructive" : "text-white/80")}>
-                            {member.endDate ? format(parseISO(member.endDate), 'MMM dd, yyyy') : 'N/A'}
-                          </span>
-                       </div>
-                    </div>
-                  </TableCell>
-                  <TableCell className="font-mono text-xs opacity-40 tracking-tighter">{member.phone}</TableCell>
-                  <TableCell className="text-right pr-8">
-                    <DropdownMenu>
-                      <DropdownMenuTrigger asChild>
-                        <Button variant="ghost" size="icon" className="rounded-xl hover:bg-white/5">
-                          {isProcessingCheckIn === member.phone ? <Loader2 className="h-4 w-4 animate-spin text-primary" /> : <MoreHorizontal className="h-4 w-4" />}
-                        </Button>
-                      </DropdownMenuTrigger>
-                      <DropdownMenuContent align="end" className="w-56 bg-popover border-border rounded-xl shadow-2xl">
-                        <DropdownMenuLabel className="text-[10px] uppercase font-black tracking-widest opacity-40 p-4">Member Control</DropdownMenuLabel>
-                        <DropdownMenuItem onSelect={() => handleManualCheckIn(member)} className="p-3 gap-3 rounded-lg mx-1 cursor-pointer text-green-500"><UserCheck className="h-4 w-4" /> Manual Check-In</DropdownMenuItem>
-                        <DropdownMenuItem onSelect={() => setMemberForHistory(member)} className="p-3 gap-3 rounded-lg mx-1 cursor-pointer"><History className="h-4 w-4 text-accent" /> View History</DropdownMenuItem>
-                        <DropdownMenuItem onSelect={() => setMemberQrToShow(member)} className="p-3 gap-3 rounded-lg mx-1 cursor-pointer"><QrCode className="h-4 w-4 text-primary" /> View Entry QR</DropdownMenuItem>
-                        <DropdownMenuItem onSelect={() => setMemberForPT(member)} className="p-3 gap-3 rounded-lg mx-1 cursor-pointer"><CreditCard className="h-4 w-4" /> Add PT Session</DropdownMenuItem>
-                        
-                        {isAdmin && (
-                          <>
-                            <DropdownMenuSeparator className="bg-white/5" />
-                            <DropdownMenuItem onSelect={() => router.push(`/admin/register?edit=${member.phone}`)} className="p-3 gap-3 rounded-lg mx-1 cursor-pointer"><ArrowUpRight className="h-4 w-4" /> Edit Profile</DropdownMenuItem>
-                            <DropdownMenuItem className="p-3 gap-3 rounded-lg mx-1 text-destructive cursor-pointer" onSelect={() => setMemberToDelete(member)}><Trash2 className="h-4 w-4" /> Terminate Record</DropdownMenuItem>
-                          </>
-                        )}
-                      </DropdownMenuContent>
-                    </DropdownMenu>
-                  </TableCell>
-                </TableRow>
-              )) : (
-                <TableRow>
-                  <TableCell colSpan={5} className="h-64 text-center text-muted-foreground opacity-30 italic font-medium uppercase tracking-[0.2em]">No members found</TableCell>
-                </TableRow>
+                    </TableCell>
+                    <TableCell>
+                      <div className="flex items-center gap-3 text-[10px] font-bold">
+                         <div className="flex flex-col">
+                            <span className="text-muted-foreground uppercase text-[8px] opacity-40">Ends</span>
+                            <span className={cn(isExpired ? "text-destructive" : "text-foreground/80")}>
+                              {member.endDate ? format(parseISO(member.endDate), 'MMM dd, yyyy') : 'N/A'}
+                            </span>
+                         </div>
+                      </div>
+                    </TableCell>
+                    <TableCell className="font-mono text-xs opacity-40 text-foreground">{member.phone}</TableCell>
+                    <TableCell className="text-right pr-8">
+                      <DropdownMenu>
+                        <DropdownMenuTrigger asChild>
+                          <Button variant="ghost" size="icon" className="rounded-xl hover:bg-white/5">
+                            {isProcessingCheckIn === member.phone ? <Loader2 className="h-4 w-4 animate-spin text-primary" /> : <MoreHorizontal className="h-4 w-4 text-foreground" />}
+                          </Button>
+                        </DropdownMenuTrigger>
+                        <DropdownMenuContent align="end" className="w-56 bg-popover border-border rounded-xl">
+                          <DropdownMenuItem onSelect={() => handleManualCheckIn(member)} className={cn("p-3 gap-3 cursor-pointer", isExpired ? "text-muted-foreground opacity-50" : "text-green-500")}>
+                            <UserCheck className="h-4 w-4" /> Manual Check-In
+                          </DropdownMenuItem>
+                          <DropdownMenuItem onSelect={() => setMemberForHistory(member)} className="p-3 gap-3 cursor-pointer"><History className="h-4 w-4 text-accent" /> View History</DropdownMenuItem>
+                          <DropdownMenuItem onSelect={() => setMemberQrToShow(member)} className="p-3 gap-3 cursor-pointer"><QrCode className="h-4 w-4 text-primary" /> View Entry QR</DropdownMenuItem>
+                        </DropdownMenuContent>
+                      </DropdownMenu>
+                    </TableCell>
+                  </TableRow>
+                );
+              }) : (
+                <TableRow><TableCell colSpan={5} className="h-64 text-center text-muted-foreground opacity-30 uppercase tracking-widest">No members found</TableCell></TableRow>
               )}
             </TableBody>
           </Table>
         </CardContent>
       </Card>
 
+      {/* History Dialog */}
       <Dialog open={!!memberForHistory} onOpenChange={(open) => !open && setMemberForHistory(null)}>
         <DialogContent className="sm:max-w-lg bg-popover border-border rounded-3xl p-6">
-          <DialogHeader className="mb-4">
-            <div className="flex items-center gap-3">
-              <div className="h-10 w-10 rounded-xl bg-accent/10 flex items-center justify-center">
-                <History className="h-5 w-5 text-accent" />
-              </div>
-              <div>
-                <DialogTitle className="text-xl font-black font-headline uppercase tracking-tight">Entry History</DialogTitle>
-                <DialogDescription className="text-[10px] font-bold uppercase tracking-widest opacity-60">{memberForHistory?.fullName}</DialogDescription>
-              </div>
-            </div>
+          <DialogHeader>
+            <DialogTitle className="text-xl font-black font-headline text-foreground uppercase tracking-tight">Entry History</DialogTitle>
           </DialogHeader>
           <div className="max-h-[400px] overflow-auto rounded-xl border border-border bg-muted/20">
              <Table>
-               <TableHeader className="bg-white/[0.02]">
-                 <TableRow className="border-white/5">
-                   <TableHead className="text-[9px] font-black uppercase tracking-widest pl-6">Time</TableHead>
-                   <TableHead className="text-[9px] font-black uppercase tracking-widest">Method</TableHead>
-                   <TableHead className="text-[9px] font-black uppercase tracking-widest text-right pr-6">Status</TableHead>
-                 </TableRow>
-               </TableHeader>
+               <TableHeader><TableRow><TableHead className="text-[9px] font-black uppercase pl-6">Time</TableHead><TableHead className="text-[9px] font-black uppercase text-right pr-6">Status</TableHead></TableRow></TableHeader>
                <TableBody>
-                 {logsLoading ? (
-                   <TableRow>
-                     <TableCell colSpan={3} className="h-32 text-center">
-                       <Loader2 className="h-5 w-5 animate-spin text-accent mx-auto" />
-                     </TableCell>
-                   </TableRow>
-                 ) : memberLogs && memberLogs.length > 0 ? memberLogs.map((log: any) => (
-                   <TableRow key={log.id} className="border-white/5 hover:bg-white/[0.01]">
+                 {memberLogs && memberLogs.length > 0 ? memberLogs.map((log: any) => (
+                   <TableRow key={log.id} className="border-white/5">
                       <TableCell className="pl-6 py-4">
-                        <div className="flex flex-col">
-                          <span className="text-xs font-bold">{log.timestamp ? format(log.timestamp.toDate(), 'MMM dd') : 'Recent'}</span>
-                          <span className="text-[10px] opacity-40 font-mono">{log.timestamp ? format(log.timestamp.toDate(), 'HH:mm:ss') : '--:--:--'}</span>
-                        </div>
+                        <span className="text-xs font-bold text-foreground">{log.timestamp ? format(log.timestamp.toDate(), 'MMM dd, HH:mm') : 'Recent'}</span>
                       </TableCell>
-                      <TableCell>
-                        <Badge variant="outline" className="text-[9px] font-black uppercase py-0 px-2 h-5 border-border opacity-60">
-                          {log.method || 'manual'}
-                        </Badge>
-                      </TableCell>
-                      <TableCell className="text-right pr-6">
-                         <span className="text-[10px] font-black text-green-500 uppercase">Verified</span>
-                      </TableCell>
+                      <TableCell className="text-right pr-6"><span className="text-[10px] font-black text-green-500 uppercase">Verified</span></TableCell>
                    </TableRow>
-                 )) : (
-                   <TableRow>
-                     <TableCell colSpan={3} className="h-32 text-center text-muted-foreground text-xs italic font-medium uppercase tracking-widest opacity-20">No entry logs found</TableCell>
-                   </TableRow>
-                 )}
+                 )) : <TableRow><TableCell colSpan={2} className="h-32 text-center opacity-20">No logs</TableCell></TableRow>}
                </TableBody>
              </Table>
           </div>
-          <div className="mt-6">
-            <Button variant="outline" className="w-full h-12 rounded-xl border-border hover:bg-muted/50 uppercase font-black text-xs tracking-widest" onClick={() => setMemberForHistory(null)}>
-              Close Audit
-            </Button>
-          </div>
         </DialogContent>
       </Dialog>
 
+      {/* QR Dialog */}
       <Dialog open={!!memberQrToShow} onOpenChange={(open) => !open && setMemberQrToShow(null)}>
         <DialogContent className="sm:max-w-md bg-popover border-border rounded-3xl p-6">
-          <div className="flex flex-col items-center text-center gap-4">
-            <div className="h-12 w-12 bg-primary/10 rounded-xl flex items-center justify-center">
-              <QrCode className="h-6 w-6 text-primary" />
-            </div>
-            <DialogTitle className="text-2xl font-black font-headline tracking-tighter uppercase">Member Passport</DialogTitle>
-            <DialogDescription className="text-[10px] font-bold uppercase tracking-widest opacity-60">Permanent Entry ID: {memberQrToShow?.fullName}</DialogDescription>
-          </div>
-          <div className="flex flex-col items-center justify-center py-6 gap-6">
+          <div className="flex flex-col items-center py-6 gap-6">
              <div ref={qrRef} className="bg-white p-4 rounded-2xl shadow-2xl border-4 border-muted">
-                {memberQrToShow && (
-                  <QRCodeCanvas 
-                    value={generateMemberQrPayload(memberQrToShow.phone)} 
-                    size={256}
-                    level="M"
-                    includeMargin={true}
-                  />
-                )}
+                {memberQrToShow && <QRCodeCanvas value={generateMemberQrPayload(memberQrToShow.phone)} size={256} level="M" includeMargin={true} />}
              </div>
-             <p className="text-[9px] font-mono opacity-40 tracking-widest uppercase">Valid Passport ID: {memberQrToShow?.phone}</p>
+             <p className="text-[9px] font-mono opacity-40 uppercase text-foreground">Valid Passport ID: {memberQrToShow?.phone}</p>
+             <Button className="w-full h-12 rounded-2xl font-black uppercase" onClick={handleExportQr}>Download Passport</Button>
           </div>
-          <DialogFooter className="sm:justify-center">
-            <Button className="w-full h-12 rounded-2xl font-black text-sm shadow-xl shadow-primary/20 uppercase tracking-widest" onClick={handleExportQr}>
-               <Download className="mr-2 h-4 w-4" /> Export Passport
-            </Button>
-          </DialogFooter>
         </DialogContent>
       </Dialog>
-
-      <Dialog open={!!memberForPT} onOpenChange={(open) => !open && setMemberForPT(null)}>
-        <DialogContent className="sm:max-w-md bg-popover border-border rounded-3xl p-8">
-          <DialogHeader>
-            <DialogTitle className="text-2xl font-black font-headline tracking-tighter text-primary flex items-center gap-3">
-              <CreditCard className="h-6 w-6" /> ADD PT SESSION
-            </DialogTitle>
-            <DialogDescription className="text-xs font-bold uppercase tracking-widest opacity-60">For {memberForPT?.fullName}</DialogDescription>
-          </DialogHeader>
-          {memberForPT && (
-            <div className="bg-primary/5 border border-primary/10 p-3 rounded-xl mb-4 flex items-center gap-3">
-               <CalendarDays className="h-4 w-4 text-primary" />
-               <div className="text-[10px]">
-                  <p className="font-black uppercase tracking-widest opacity-40">Membership Window</p>
-                  <p className="font-bold">
-                    {memberForPT.startDate ? format(parseISO(memberForPT.startDate), 'MMM dd, yyyy') : 'N/A'} 
-                    <span className="mx-2">→</span>
-                    {memberForPT.endDate ? format(parseISO(memberForPT.endDate), 'MMM dd, yyyy') : 'N/A'}
-                  </p>
-               </div>
-            </div>
-          )}
-          <div className="space-y-6 py-6">
-            <div className="space-y-2">
-              <Label className="text-[10px] uppercase font-black tracking-widest opacity-40">Package Price (INR)</Label>
-              <div className="relative">
-                <span className="absolute left-4 top-1/2 -translate-y-1/2 text-primary font-black">₹</span>
-                <Input type="number" className="pl-8 h-12 bg-muted/20 border-border font-bold text-lg" placeholder="0.00" value={ptPrice} onChange={(e) => setPtPrice(e.target.value)} />
-              </div>
-            </div>
-            <div className="grid grid-cols-2 gap-4">
-              <div className="space-y-2">
-                <Label className="text-[10px] uppercase font-black tracking-widest opacity-40">Start Date</Label>
-                <Popover open={isPtStartDateOpen} onOpenChange={setIsPtStartDateOpen}>
-                  <PopoverTrigger asChild>
-                    <Button variant="outline" className="w-full h-12 justify-start font-bold bg-muted/20 border-border">
-                      <CalendarIcon className="mr-2 h-4 w-4 text-primary" />
-                      {ptStartDate ? format(ptStartDate, "MMM dd") : "Pick"}
-                    </Button>
-                  </PopoverTrigger>
-                  <PopoverContent className="w-auto p-0" align="start">
-                    <Calendar 
-                      mode="single" 
-                      selected={ptStartDate} 
-                      onSelect={(date) => { setPtStartDate(date); setIsPtStartDateOpen(false); }} 
-                      disabled={(date) => {
-                        if (!ptLimits) return false;
-                        const isBeforeMembership = date < ptLimits.start;
-                        const isAfterMembership = ptLimits.end ? date > ptLimits.end : false;
-                        const isBeforeToday = date < today;
-                        return isBeforeMembership || isAfterMembership || isBeforeToday;
-                      }}
-                    />
-                  </PopoverContent>
-                </Popover>
-              </div>
-              <div className="space-y-2">
-                <Label className="text-[10px] uppercase font-black tracking-widest opacity-40">End Date</Label>
-                <Popover open={isPtEndDateOpen} onOpenChange={setIsPtEndDateOpen}>
-                  <PopoverTrigger asChild>
-                    <Button variant="outline" className="w-full h-12 justify-start font-bold bg-muted/20 border-border">
-                      <CalendarIcon className="mr-2 h-4 w-4 text-primary" />
-                      {ptEndDate ? format(ptEndDate, "MMM dd") : "Pick"}
-                    </Button>
-                  </PopoverTrigger>
-                  <PopoverContent className="w-auto p-0" align="start">
-                    <Calendar 
-                      mode="single" 
-                      selected={ptEndDate} 
-                      onSelect={(date) => { setPtEndDate(date); setIsPtEndDateOpen(false); }} 
-                      disabled={(date) => {
-                        if (!ptLimits) return false;
-                        const isBeforePtStart = date < (ptStartDate || today);
-                        const isAfterMembership = ptLimits.end ? date > ptLimits.end : false;
-                        return isBeforePtStart || isAfterMembership;
-                      }}
-                    />
-                  </PopoverContent>
-                </Popover>
-              </div>
-            </div>
-          </div>
-          <DialogFooter>
-            <Button className="w-full h-14 rounded-2xl font-black text-lg shadow-xl shadow-primary/20" onClick={handleSavePT} disabled={isUpdatingPT}>
-              {isUpdatingPT ? <Loader2 className="h-5 w-5 animate-spin" /> : "CONFIRM & LOG SALE"}
-            </Button>
-          </DialogFooter>
-        </DialogContent>
-      </Dialog>
-
-      <AlertDialog open={!!memberToDelete} onOpenChange={(open) => !open && setMemberToDelete(null)}>
-        <AlertDialogContent className="bg-popover border-border rounded-3xl p-8">
-          <AlertDialogHeader>
-            <AlertDialogTitle className="text-xl font-bold font-headline text-primary">Permanently Delete Record?</AlertDialogTitle>
-            <AlertDialogDescription>This will remove all biometric and transaction data for <b>{memberToDelete?.fullName}</b>.</AlertDialogDescription>
-          </AlertDialogHeader>
-          <AlertDialogFooter className="mt-6">
-            <AlertDialogCancel className="rounded-xl h-12">Cancel</AlertDialogCancel>
-            <AlertDialogAction onClick={handleDeleteMember} className="bg-destructive hover:bg-destructive/90 rounded-xl h-12">Confirm Deletion</AlertDialogAction>
-          </AlertDialogFooter>
-        </AlertDialogContent>
-      </AlertDialog>
     </div>
   );
 }
