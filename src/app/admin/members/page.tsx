@@ -230,14 +230,14 @@ export default function MembersListPage() {
     const formattedEnd = format(ptEndDate, 'yyyy-MM-dd');
 
     try {
+      // Update member type and add PT session details to description
       await updateDoc(doc(db, 'members', memberId), {
         type: 'personal',
-        startDate: formattedStart,
-        endDate: formattedEnd,
         description: memberForPT.description ? `${memberForPT.description} | PT Package (${formattedStart} to ${formattedEnd})` : `PT Package (${formattedStart} to ${formattedEnd}): ${ptDescription}`,
         updatedAt: serverTimestamp()
       });
 
+      // Log the sale
       await addDoc(collection(db, 'sales'), {
         memberId: memberId,
         memberName: memberForPT.fullName,
@@ -486,7 +486,7 @@ export default function MembersListPage() {
               <DialogHeader>
                 <Dumbbell className="h-10 w-10 text-accent mb-4" />
                 <DialogTitle className="text-2xl font-black font-headline uppercase">Enroll in PT</DialogTitle>
-                <DialogDescription>Add a Personal Training package for <b>{memberForPT?.fullName}</b>. This will log a new sale and update their profile dates.</DialogDescription>
+                <DialogDescription>Add a Personal Training package for <b>{memberForPT?.fullName}</b>. This will log a new sale and update their profile status.</DialogDescription>
               </DialogHeader>
               <div className="space-y-6 py-6">
                 <div className="grid grid-cols-2 gap-4">
@@ -500,7 +500,18 @@ export default function MembersListPage() {
                         </Button>
                       </PopoverTrigger>
                       <PopoverContent className="w-auto p-0" align="start">
-                        <Calendar mode="single" selected={ptStartDate} onSelect={setPtStartDate} initialFocus />
+                        <Calendar 
+                          mode="single" 
+                          selected={ptStartDate} 
+                          onSelect={setPtStartDate} 
+                          initialFocus 
+                          disabled={(date) => {
+                            if (!memberForPT) return false;
+                            const mStart = memberForPT.startDate ? parseISO(memberForPT.startDate) : startOfDay(new Date());
+                            const mEnd = memberForPT.endDate ? parseISO(memberForPT.endDate) : endOfDay(new Date());
+                            return date < startOfDay(mStart) || date > endOfDay(mEnd);
+                          }}
+                        />
                       </PopoverContent>
                     </Popover>
                   </div>
@@ -514,7 +525,19 @@ export default function MembersListPage() {
                         </Button>
                       </PopoverTrigger>
                       <PopoverContent className="w-auto p-0" align="start">
-                        <Calendar mode="single" selected={ptEndDate} onSelect={setPtEndDate} disabled={(date) => ptStartDate ? date < ptStartDate : false} initialFocus />
+                        <Calendar 
+                          mode="single" 
+                          selected={ptEndDate} 
+                          onSelect={setPtEndDate} 
+                          initialFocus 
+                          disabled={(date) => {
+                            if (!memberForPT) return false;
+                            const mStart = memberForPT.startDate ? parseISO(memberForPT.startDate) : startOfDay(new Date());
+                            const mEnd = memberForPT.endDate ? parseISO(memberForPT.endDate) : endOfDay(new Date());
+                            const minDate = ptStartDate || mStart;
+                            return date < startOfDay(minDate) || date > endOfDay(mEnd);
+                          }}
+                        />
                       </PopoverContent>
                     </Popover>
                   </div>
