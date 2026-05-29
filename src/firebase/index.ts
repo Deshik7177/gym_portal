@@ -1,40 +1,56 @@
-
 'use client';
 
-import { initializeApp, getApps, getApp } from 'firebase/app';
+import { initializeApp, getApps, getApp, type FirebaseApp } from 'firebase/app';
 import { 
   getFirestore, 
   persistentLocalCache, 
   persistentMultipleTabManager,
   initializeFirestore,
-  enableNetwork
+  enableNetwork,
+  type Firestore
 } from 'firebase/firestore';
-import { getAuth } from 'firebase/auth';
+import { getAuth, type Auth } from 'firebase/auth';
 import { firebaseConfig } from './config';
+
+// Singleton instances to prevent lease errors during hot-reloads
+let firebaseAppInstance: FirebaseApp | null = null;
+let firestoreInstance: Firestore | null = null;
+let authInstance: Auth | null = null;
 
 /**
  * Initializes Firebase with local persistence.
+ * Uses a singleton pattern to prevent "Failed to obtain primary lease" errors.
  */
 export function initializeFirebase() {
-  const firebaseApp = getApps().length === 0 ? initializeApp(firebaseConfig) : getApp();
+  if (!firebaseAppInstance) {
+    firebaseAppInstance = getApps().length === 0 ? initializeApp(firebaseConfig) : getApp();
+  }
   
-  let firestore;
-  try {
-    firestore = initializeFirestore(firebaseApp, {
-      localCache: persistentLocalCache({
-        tabManager: persistentMultipleTabManager(),
-      }),
-    });
-  } catch (e) {
-    firestore = getFirestore(firebaseApp);
+  if (!firestoreInstance) {
+    try {
+      firestoreInstance = initializeFirestore(firebaseAppInstance, {
+        localCache: persistentLocalCache({
+          tabManager: persistentMultipleTabManager(),
+        }),
+      });
+    } catch (e) {
+      // If firestore was already initialized (e.g. during HMR), grab the existing instance
+      firestoreInstance = getFirestore(firebaseAppInstance);
+    }
+
+    // Ensure network is enabled to trigger cloud sync
+    enableNetwork(firestoreInstance).catch(() => {});
   }
 
-  // Ensure network is enabled to trigger cloud sync
-  enableNetwork(firestore).catch(() => {});
+  if (!authInstance) {
+    authInstance = getAuth(firebaseAppInstance);
+  }
 
-  const auth = getAuth(firebaseApp);
-
-  return { firebaseApp, firestore, auth };
+  return { 
+    firebaseApp: firebaseAppInstance, 
+    firestore: firestoreInstance, 
+    auth: authInstance 
+  };
 }
 
 export * from './provider';
