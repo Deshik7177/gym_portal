@@ -17,7 +17,8 @@ import {
   Calendar as CalendarIcon,
   X,
   CheckCircle,
-  Dumbbell
+  Dumbbell,
+  ShieldAlert
 } from 'lucide-react';
 import { collection, query, doc, deleteDoc, updateDoc, setDoc, serverTimestamp, where, orderBy, limit, addDoc } from 'firebase/firestore';
 import { useFirestore, useCollection, useProfile } from '@/firebase';
@@ -208,7 +209,11 @@ export default function MembersListPage() {
   };
 
   const handleAddPT = async () => {
-    if (!db || !memberForPT) return;
+    if (!db || !memberForPT || !isAdmin) {
+      if (!isAdmin) toast({ variant: "destructive", title: "Denied", description: "Only Administrators can add PT packages." });
+      return;
+    }
+    
     if (!ptStartDate || !ptEndDate) {
       toast({ variant: "destructive", title: "Dates Required", description: "Please select start and end dates for the PT session." });
       return;
@@ -222,7 +227,6 @@ export default function MembersListPage() {
     const formattedEnd = format(ptEndDate, 'yyyy-MM-dd');
 
     try {
-      // 1. Update Member Type and Description and Dates
       await updateDoc(doc(db, 'members', memberId), {
         type: 'personal',
         startDate: formattedStart,
@@ -231,7 +235,6 @@ export default function MembersListPage() {
         updatedAt: serverTimestamp()
       });
 
-      // 2. Add Sale to Ledger
       await addDoc(collection(db, 'sales'), {
         memberId: memberId,
         memberName: memberForPT.fullName,
@@ -249,7 +252,7 @@ export default function MembersListPage() {
       setPtStartDate(new Date());
       setPtEndDate(undefined);
     } catch (e) {
-      toast({ variant: "destructive", title: "Error", description: "Failed to add PT package." });
+      toast({ variant: "destructive", title: "Error", description: "Failed to add PT package. Check permissions." });
     } finally {
       setIsAddingPT(false);
     }
@@ -287,9 +290,11 @@ export default function MembersListPage() {
           <h1 className="text-3xl font-bold font-headline uppercase tracking-tighter text-primary">Vault Directory</h1>
           <p className="text-muted-foreground text-xs font-bold tracking-widest uppercase opacity-60">System Registry</p>
         </div>
-        <Button asChild className="h-12 px-8 rounded-xl font-bold">
-          <Link href="/admin/register"><Plus className="mr-2 h-4 w-4" /> Enroll New Member</Link>
-        </Button>
+        {isAdmin && (
+          <Button asChild className="h-12 px-8 rounded-xl font-bold">
+            <Link href="/admin/register"><Plus className="mr-2 h-4 w-4" /> Enroll New Member</Link>
+          </Button>
+        )}
       </div>
 
       <div className="grid gap-4 md:grid-cols-3">
@@ -424,17 +429,22 @@ export default function MembersListPage() {
                           <DropdownMenuItem onSelect={() => handleManualCheckIn(member)} className={cn("p-3 gap-3", isExpired ? "opacity-50" : "text-green-500")} disabled={isExpired}>
                             <UserCheck className="h-4 w-4" /> Manual Check-In
                           </DropdownMenuItem>
-                          <DropdownMenuItem onSelect={() => setMemberForPT(member)} className="p-3 gap-3 text-accent font-bold">
-                            <Dumbbell className="h-4 w-4" /> Add PT Package
-                          </DropdownMenuItem>
-                          <DropdownMenuSeparator />
-                          {(isAdmin || isStaff) && (
-                            <DropdownMenuItem onSelect={() => router.push(`/admin/register?edit=${member.phone}`)} className="p-3 gap-3">
-                              <Edit3 className="h-4 w-4 text-primary" /> Edit Profile
-                            </DropdownMenuItem>
+                          
+                          {isAdmin && (
+                            <>
+                              <DropdownMenuItem onSelect={() => setMemberForPT(member)} className="p-3 gap-3 text-accent font-bold">
+                                <Dumbbell className="h-4 w-4" /> Add PT Package
+                              </DropdownMenuItem>
+                              <DropdownMenuSeparator />
+                              <DropdownMenuItem onSelect={() => router.push(`/admin/register?edit=${member.phone}`)} className="p-3 gap-3">
+                                <Edit3 className="h-4 w-4 text-primary" /> Edit Profile
+                              </DropdownMenuItem>
+                            </>
                           )}
+                          
                           <DropdownMenuItem onSelect={() => setMemberForHistory(member)} className="p-3 gap-3"><History className="h-4 w-4 text-accent" /> View History</DropdownMenuItem>
                           <DropdownMenuItem onSelect={() => setMemberQrToShow(member)} className="p-3 gap-3"><QrCode className="h-4 w-4 text-primary" /> View Entry QR</DropdownMenuItem>
+                          
                           {isAdmin && (
                             <DropdownMenuItem onSelect={() => setMemberToDelete(member)} className="p-3 gap-3 text-destructive"><Trash2 className="h-4 w-4" /> Delete Member</DropdownMenuItem>
                           )}
@@ -449,73 +459,85 @@ export default function MembersListPage() {
         </CardContent>
       </Card>
 
+      {/* Admin Protected Dialog: PT Enrollment */}
       <Dialog open={!!memberForPT} onOpenChange={(open) => !open && !isAddingPT && setMemberForPT(null)}>
         <DialogContent className="sm:max-w-md bg-popover border-border rounded-3xl p-8">
-          <DialogHeader>
-            <Dumbbell className="h-10 w-10 text-accent mb-4" />
-            <DialogTitle className="text-2xl font-black font-headline uppercase">Enroll in PT</DialogTitle>
-            <DialogDescription>Add a Personal Training package for <b>{memberForPT?.fullName}</b>. This will log a new sale and update their profile dates.</DialogDescription>
-          </DialogHeader>
-          <div className="space-y-6 py-6">
-            <div className="grid grid-cols-2 gap-4">
-              <div className="space-y-2">
-                <Label className="text-[10px] uppercase font-black tracking-widest opacity-40">PT Start Date</Label>
-                <Popover>
-                  <PopoverTrigger asChild>
-                    <Button variant="outline" className="w-full h-12 bg-muted/50 border-border rounded-xl justify-start text-left font-bold">
-                      <CalendarIcon className="mr-2 h-4 w-4 opacity-40" />
-                      {ptStartDate ? format(ptStartDate, "MMM dd, yyyy") : "Start Date"}
-                    </Button>
-                  </PopoverTrigger>
-                  <PopoverContent className="w-auto p-0" align="start">
-                    <Calendar mode="single" selected={ptStartDate} onSelect={setPtStartDate} initialFocus />
-                  </PopoverContent>
-                </Popover>
-              </div>
-              <div className="space-y-2">
-                <Label className="text-[10px] uppercase font-black tracking-widest opacity-40">PT End Date</Label>
-                <Popover>
-                  <PopoverTrigger asChild>
-                    <Button variant="outline" className="w-full h-12 bg-muted/50 border-border rounded-xl justify-start text-left font-bold">
-                      <CalendarIcon className="mr-2 h-4 w-4 opacity-40" />
-                      {ptEndDate ? format(ptEndDate, "MMM dd, yyyy") : "End Date"}
-                    </Button>
-                  </PopoverTrigger>
-                  <PopoverContent className="w-auto p-0" align="start">
-                    <Calendar mode="single" selected={ptEndDate} onSelect={setPtEndDate} disabled={(date) => ptStartDate ? date < ptStartDate : false} initialFocus />
-                  </PopoverContent>
-                </Popover>
-              </div>
+          {!isAdmin ? (
+            <div className="flex flex-col items-center justify-center py-10 text-center gap-4">
+              <ShieldAlert className="h-16 w-16 text-destructive" />
+              <h2 className="text-xl font-black uppercase">Administrator Access Required</h2>
+              <p className="text-muted-foreground text-sm">Staff members are not permitted to modify financial packages.</p>
+              <Button variant="outline" onClick={() => setMemberForPT(null)} className="rounded-xl w-full">Close</Button>
             </div>
-            <div className="space-y-2">
-              <Label className="text-[10px] uppercase font-black tracking-widest opacity-40">Package Price (INR)</Label>
-              <div className="relative">
-                <span className="absolute left-4 top-1/2 -translate-y-1/2 text-primary font-black">₹</span>
-                <Input 
-                  type="number" 
-                  className="pl-8 h-12 bg-muted/50 border-border font-bold text-lg rounded-xl" 
-                  placeholder="0"
-                  value={ptAmount}
-                  onChange={(e) => setPtAmount(e.target.value)}
-                />
+          ) : (
+            <>
+              <DialogHeader>
+                <Dumbbell className="h-10 w-10 text-accent mb-4" />
+                <DialogTitle className="text-2xl font-black font-headline uppercase">Enroll in PT</DialogTitle>
+                <DialogDescription>Add a Personal Training package for <b>{memberForPT?.fullName}</b>. This will log a new sale and update their profile dates.</DialogDescription>
+              </DialogHeader>
+              <div className="space-y-6 py-6">
+                <div className="grid grid-cols-2 gap-4">
+                  <div className="space-y-2">
+                    <Label className="text-[10px] uppercase font-black tracking-widest opacity-40">PT Start Date</Label>
+                    <Popover>
+                      <PopoverTrigger asChild>
+                        <Button variant="outline" className="w-full h-12 bg-muted/50 border-border rounded-xl justify-start text-left font-bold">
+                          <CalendarIcon className="mr-2 h-4 w-4 opacity-40" />
+                          {ptStartDate ? format(ptStartDate, "MMM dd, yyyy") : "Start Date"}
+                        </Button>
+                      </PopoverTrigger>
+                      <PopoverContent className="w-auto p-0" align="start">
+                        <Calendar mode="single" selected={ptStartDate} onSelect={setPtStartDate} initialFocus />
+                      </PopoverContent>
+                    </Popover>
+                  </div>
+                  <div className="space-y-2">
+                    <Label className="text-[10px] uppercase font-black tracking-widest opacity-40">PT End Date</Label>
+                    <Popover>
+                      <PopoverTrigger asChild>
+                        <Button variant="outline" className="w-full h-12 bg-muted/50 border-border rounded-xl justify-start text-left font-bold">
+                          <CalendarIcon className="mr-2 h-4 w-4 opacity-40" />
+                          {ptEndDate ? format(ptEndDate, "MMM dd, yyyy") : "End Date"}
+                        </Button>
+                      </PopoverTrigger>
+                      <PopoverContent className="w-auto p-0" align="start">
+                        <Calendar mode="single" selected={ptEndDate} onSelect={setPtEndDate} disabled={(date) => ptStartDate ? date < ptStartDate : false} initialFocus />
+                      </PopoverContent>
+                    </Popover>
+                  </div>
+                </div>
+                <div className="space-y-2">
+                  <Label className="text-[10px] uppercase font-black tracking-widest opacity-40">Package Price (INR)</Label>
+                  <div className="relative">
+                    <span className="absolute left-4 top-1/2 -translate-y-1/2 text-primary font-black">₹</span>
+                    <Input 
+                      type="number" 
+                      className="pl-8 h-12 bg-muted/50 border-border font-bold text-lg rounded-xl" 
+                      placeholder="0"
+                      value={ptAmount}
+                      onChange={(e) => setPtAmount(e.target.value)}
+                    />
+                  </div>
+                </div>
+                <div className="space-y-2">
+                  <Label className="text-[10px] uppercase font-black tracking-widest opacity-40">Package Description</Label>
+                  <Textarea 
+                    placeholder="e.g. 12 Session Pro Pack" 
+                    className="bg-muted/50 border-border min-h-[80px] rounded-xl" 
+                    value={ptDescription}
+                    onChange={(e) => setPtDescription(e.target.value)}
+                  />
+                </div>
               </div>
-            </div>
-            <div className="space-y-2">
-              <Label className="text-[10px] uppercase font-black tracking-widest opacity-40">Package Description</Label>
-              <Textarea 
-                placeholder="e.g. 12 Session Pro Pack" 
-                className="bg-muted/50 border-border min-h-[80px] rounded-xl" 
-                value={ptDescription}
-                onChange={(e) => setPtDescription(e.target.value)}
-              />
-            </div>
-          </div>
-          <DialogFooter className="flex gap-2">
-            <Button variant="ghost" onClick={() => setMemberForPT(null)} disabled={isAddingPT} className="flex-1 rounded-xl">Cancel</Button>
-            <Button onClick={handleAddPT} disabled={isAddingPT} className="flex-1 rounded-xl font-bold bg-accent hover:bg-accent/90">
-              {isAddingPT ? <Loader2 className="h-4 w-4 animate-spin" /> : 'Confirm PT Enrollment'}
-            </Button>
-          </DialogFooter>
+              <DialogFooter className="flex gap-2">
+                <Button variant="ghost" onClick={() => setMemberForPT(null)} disabled={isAddingPT} className="flex-1 rounded-xl">Cancel</Button>
+                <Button onClick={handleAddPT} disabled={isAddingPT} className="flex-1 rounded-xl font-bold bg-accent hover:bg-accent/90">
+                  {isAddingPT ? <Loader2 className="h-4 w-4 animate-spin" /> : 'Confirm PT Enrollment'}
+                </Button>
+              </DialogFooter>
+            </>
+          )}
         </DialogContent>
       </Dialog>
 
@@ -554,6 +576,7 @@ export default function MembersListPage() {
         </DialogContent>
       </Dialog>
 
+      {/* Admin Protected Dialog: Delete */}
       <Dialog open={!!memberToDelete} onOpenChange={(open) => !open && !isDeleting && setMemberToDelete(null)}>
         <DialogContent className="sm:max-w-md bg-popover border-border rounded-3xl p-8">
           <DialogHeader>

@@ -7,9 +7,9 @@ import {
   Loader2, 
   Calendar as CalendarIcon, 
   FileText,
-  Info,
   ShieldCheck,
-  ShieldX
+  ShieldX,
+  ShieldAlert
 } from 'lucide-react';
 import { 
   doc, 
@@ -25,7 +25,7 @@ import {
   getDocs, 
   updateDoc 
 } from 'firebase/firestore';
-import { useFirestore } from '@/firebase';
+import { useFirestore, useProfile } from '@/firebase';
 import { errorEmitter } from '@/firebase/error-emitter';
 import { FirestorePermissionError, type SecurityRuleContext } from '@/firebase/errors';
 import { cn } from '@/lib/utils';
@@ -64,6 +64,7 @@ function RegisterForm() {
   const router = useRouter();
   const searchParams = useSearchParams();
   const editId = searchParams.get('edit');
+  const { isAdmin, loading: profileLoading } = useProfile();
   
   const [isEditMode, setIsEditMode] = useState(false);
   const [phone, setPhone] = useState('');
@@ -133,6 +134,12 @@ function RegisterForm() {
     e.preventDefault();
     if (!db) return;
 
+    // Strict Restriction: Only Admins can modify existing member details
+    if (isEditMode && !isAdmin) {
+      toast({ variant: "destructive", title: "Action Denied", description: "Staff members cannot edit existing member details." });
+      return;
+    }
+
     if (!startDate || !endDate) {
       toast({ variant: "destructive", title: "Dates Required", description: "Please provide start and end dates." });
       return;
@@ -176,8 +183,8 @@ function RegisterForm() {
           description: description || `New Membership Registration: ${memberData.startDate} to ${memberData.endDate}`,
           createdAt: serverTimestamp()
         });
-      } else if (isEditMode) {
-        // Edit Mode: Update existing membership sale if it exists
+      } else if (isEditMode && isAdmin) {
+        // Edit Mode: Update existing membership sale if it exists (Admins only)
         const salesRef = collection(db, 'sales');
         const q = query(
           salesRef, 
@@ -233,6 +240,19 @@ function RegisterForm() {
     router.replace('/admin/register');
   };
 
+  if (isEditMode && !isAdmin && !profileLoading) {
+    return (
+      <div className="flex flex-col items-center justify-center py-20 gap-6 text-center max-w-md mx-auto">
+        <ShieldAlert className="h-20 w-20 text-destructive animate-pulse" />
+        <h1 className="text-3xl font-black uppercase italic tracking-tighter">Access Denied</h1>
+        <p className="text-muted-foreground leading-relaxed">
+          Staff members are restricted from editing existing member registry details. Please contact an Administrator to perform this operation.
+        </p>
+        <Button onClick={() => router.push('/admin/members')} variant="outline" className="rounded-xl px-10">Return to Directory</Button>
+      </div>
+    );
+  }
+
   return (
     <div className="flex flex-col gap-6 max-w-4xl mx-auto pb-20">
       <div className="flex flex-col md:flex-row justify-between items-start md:items-center gap-4">
@@ -257,7 +277,10 @@ function RegisterForm() {
       <form onSubmit={handleSubmit} className="space-y-6">
         <Card className="shadow-2xl border-none bg-card/40 backdrop-blur-xl rounded-3xl overflow-hidden">
           <CardHeader className="bg-white/[0.02] border-b border-white/5 p-8">
-             <CardTitle className="text-xl font-bold font-headline uppercase tracking-tight">Core Profile</CardTitle>
+             <div className="flex items-center justify-between">
+               <CardTitle className="text-xl font-bold font-headline uppercase tracking-tight">{isEditMode ? 'Modify Registry' : 'Core Profile'}</CardTitle>
+               {isEditMode && <Badge className="bg-primary/20 text-primary border-primary/30 uppercase text-[9px] font-black tracking-widest px-2">ADMIN EDIT MODE</Badge>}
+             </div>
              <CardDescription>Enter primary identifiers and package terms.</CardDescription>
           </CardHeader>
           <CardContent className="p-8 space-y-8">
