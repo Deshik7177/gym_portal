@@ -17,7 +17,9 @@ import {
   Phone,
   Link2,
   ShieldX,
-  CheckCircle
+  CheckCircle,
+  Search,
+  User
 } from 'lucide-react';
 import { collection, query, updateDoc, doc, setDoc, serverTimestamp, onSnapshot, getDoc } from 'firebase/firestore';
 import { useFirestore } from '@/firebase';
@@ -49,8 +51,9 @@ export default function SmartEntrancePage() {
   const [recentLogs, setRecentLogs] = useState<any[]>([]);
   const [isSyncing, setIsSyncing] = useState(false);
 
-  const [enrollPhone, setEnrollPhone] = useState('');
+  const [enrollSearch, setEnrollSearch] = useState('');
   const [memberToEnroll, setMemberToEnroll] = useState<any>(null);
+  const [isSearchingMember, setIsSearchingMember] = useState(false);
   const [isEnrolling, setIsEnrolling] = useState(false);
 
   const scannerRef = useRef<Html5Qrcode | null>(null);
@@ -144,7 +147,28 @@ export default function SmartEntrancePage() {
     }
   }, [db, today]);
 
+  const handleLookupMember = async () => {
+    if (!enrollSearch || !db) return;
+    setIsSearchingMember(true);
+    try {
+      const docRef = doc(db, 'members', enrollSearch);
+      const snap = await getDoc(docRef);
+      if (snap.exists()) {
+        setMemberToEnroll({ id: snap.id, ...snap.data() });
+      } else {
+        toast({ variant: "destructive", title: "Member not found", description: "Verify phone number." });
+      }
+    } catch (e) {
+      toast({ variant: "destructive", title: "Lookup failed" });
+    } finally {
+      setIsSearchingMember(false);
+    }
+  };
+
   const startScanner = async () => {
+    if (authMode === 'face') return; // FaceScanner handles itself
+    if (authMode === 'enroll') return;
+
     if (!scannerRef.current) scannerRef.current = new Html5Qrcode('qr-reader');
     try {
       setIsInitializing(true);
@@ -189,7 +213,14 @@ export default function SmartEntrancePage() {
               {isSyncing && <Badge variant="outline" className="h-5 text-[9px] animate-pulse">SYNCING CACHE</Badge>}
            </div>
         </div>
-        <Tabs value={authMode} onValueChange={(v) => { stopScanner(); setAuthMode(v as any); if (v === 'face') setIsCameraActive(true); }} className="bg-muted p-1 rounded-xl">
+        <Tabs value={authMode} onValueChange={(v) => { 
+          stopScanner(); 
+          setAuthMode(v as any); 
+          setMemberToEnroll(null);
+          setEnrollSearch('');
+          if (v === 'face') setIsCameraActive(true); 
+          else setIsCameraActive(false);
+        }} className="bg-muted p-1 rounded-xl">
             <TabsList className="bg-transparent gap-1">
                 <TabsTrigger value="qr" className="data-[state=active]:bg-primary font-black text-[10px] uppercase px-6">QR PASSPORT</TabsTrigger>
                 <TabsTrigger value="face" className="data-[state=active]:bg-primary font-black text-[10px] uppercase px-6">FACE ID</TabsTrigger>
@@ -199,9 +230,64 @@ export default function SmartEntrancePage() {
       </div>
 
       <div className="grid grid-cols-1 lg:grid-cols-12 gap-8">
-        <Card className="lg:col-span-8 overflow-hidden relative bg-black min-h-[600px] flex flex-col">
+        <Card className="lg:col-span-8 overflow-hidden relative bg-black min-h-[600px] flex flex-col border-none shadow-2xl rounded-[2rem]">
           <div className="relative flex-1 bg-black flex items-center justify-center overflow-hidden">
-            {authMode === 'qr' ? <div id="qr-reader" className="w-full h-full" /> : authMode === 'face' ? <FaceScanner members={cachedMembersRef.current} onMatch={(m) => triggerAccess(m, 'face')} isActive={authMode === 'face'} /> : <div className="w-full h-full flex items-center justify-center bg-background"><FaceEnrollment onComplete={async (e) => { setIsEnrolling(true); if (memberToEnroll) { await updateDoc(doc(db!, 'members', memberToEnroll.phone), { faceEmbedding: e }); toast({ title: "Enrolled" }); } setIsEnrolling(false); setAuthMode('face'); }} onCancel={() => setMemberToEnroll(null)} /></div>}
+            {authMode === 'qr' && <div id="qr-reader" className="w-full h-full" />}
+            
+            {authMode === 'face' && (
+              <FaceScanner members={cachedMembersRef.current} onMatch={(m) => triggerAccess(m, 'face')} isActive={authMode === 'face'} />
+            )}
+            
+            {authMode === 'enroll' && (
+              <div className="w-full h-full flex flex-col items-center justify-center bg-background/5 p-8">
+                {!memberToEnroll ? (
+                  <div className="max-w-md w-full space-y-6 animate-in fade-in zoom-in">
+                    <div className="flex flex-col items-center text-center gap-4">
+                      <div className="h-16 w-16 rounded-full bg-primary/10 flex items-center justify-center">
+                        <UserPlus className="h-8 w-8 text-primary" />
+                      </div>
+                      <h2 className="text-2xl font-black uppercase italic tracking-tighter">Biometric Registration</h2>
+                      <p className="text-muted-foreground text-sm">Enter the member's phone number to begin face enrollment.</p>
+                    </div>
+                    <div className="flex gap-2">
+                      <div className="relative flex-1">
+                        <Phone className="absolute left-3 top-1/2 -translate-y-1/2 h-4 w-4 text-muted-foreground" />
+                        <Input 
+                          placeholder="Member Phone..." 
+                          className="pl-10 h-14 bg-black/20 border-white/10 rounded-xl"
+                          value={enrollSearch}
+                          onChange={(e) => setEnrollSearch(e.target.value)}
+                          onKeyDown={(e) => e.key === 'Enter' && handleLookupMember()}
+                        />
+                      </div>
+                      <Button onClick={handleLookupMember} disabled={isSearchingMember} className="h-14 w-14 rounded-xl">
+                        {isSearchingMember ? <Loader2 className="h-5 w-5 animate-spin" /> : <Search className="h-5 w-5" />}
+                      </Button>
+                    </div>
+                  </div>
+                ) : (
+                  <FaceEnrollment 
+                    onComplete={async (e) => {
+                      setIsEnrolling(true);
+                      try {
+                        await updateDoc(doc(db!, 'members', memberToEnroll.phone), { 
+                          faceEmbedding: e,
+                          updatedAt: serverTimestamp()
+                        });
+                        toast({ title: "Face Enrolled Successfully", description: `Linked to ${memberToEnroll.fullName}` });
+                        setAuthMode('face');
+                      } catch (err) {
+                        toast({ variant: "destructive", title: "Enrollment Failed" });
+                      } finally {
+                        setIsEnrolling(false);
+                        setMemberToEnroll(null);
+                      }
+                    }} 
+                    onCancel={() => setMemberToEnroll(null)} 
+                  />
+                )}
+              </div>
+            )}
             
             {(scanResult === 'success' || scanResult === 'already_verified') && identifiedMember && (
               <div className="absolute inset-0 flex flex-col items-center justify-center z-[100] animate-in zoom-in bg-background/95 backdrop-blur-3xl text-center px-6">
@@ -221,30 +307,48 @@ export default function SmartEntrancePage() {
               </div>
             )}
           </div>
-          <CardContent className="p-8 border-t bg-card flex items-center justify-between">
-              <div className="flex items-center gap-4">
-                  <div className={cn("h-3 w-3 rounded-full", isCameraActive ? "bg-green-500 animate-pulse" : "bg-muted")} />
-                  <span className="font-mono text-[10px] text-muted-foreground uppercase tracking-widest">{isCameraActive ? 'ENGINE: LIVE' : 'ENGINE: STANDBY'}</span>
-              </div>
-              <Button size="lg" onClick={isCameraActive ? stopScanner : startScanner} className="font-black uppercase tracking-widest h-16 px-12 rounded-2xl">{isCameraActive ? 'STOP' : 'START'} SCANNER</Button>
-          </CardContent>
+          {authMode !== 'enroll' && (
+            <CardContent className="p-8 border-t bg-card flex items-center justify-between">
+                <div className="flex items-center gap-4">
+                    <div className={cn("h-3 w-3 rounded-full", isCameraActive ? "bg-green-500 animate-pulse" : "bg-muted")} />
+                    <span className="font-mono text-[10px] text-muted-foreground uppercase tracking-widest">{isCameraActive ? 'ENGINE: LIVE' : 'ENGINE: STANDBY'}</span>
+                </div>
+                {authMode === 'qr' && (
+                  <Button size="lg" onClick={isCameraActive ? stopScanner : startScanner} className="font-black uppercase tracking-widest h-16 px-12 rounded-2xl shadow-xl shadow-primary/20">
+                    {isCameraActive ? 'STOP' : 'START'} SCANNER
+                  </Button>
+                )}
+            </CardContent>
+          )}
         </Card>
         <div className="lg:col-span-4 flex flex-col gap-6">
-          <Card className="flex-1 overflow-auto bg-card rounded-3xl border-border">
+          <Card className="flex-1 overflow-auto bg-card rounded-3xl border-border shadow-xl">
             <div className="bg-muted/50 border-b py-6 px-8 flex items-center justify-between">
               <h2 className="text-[10px] uppercase tracking-[0.5em] font-black text-primary">LIVE TRAFFIC</h2>
+              <History className="h-4 w-4 opacity-20" />
             </div>
             <Table>
                 <TableBody>
                   {recentLogs.length > 0 ? recentLogs.map((log, i) => (
-                    <TableRow key={i} className="border-b border-border">
+                    <TableRow key={i} className="border-b border-border/50 hover:bg-muted/30 transition-colors">
                         <TableCell className="text-[10px] font-mono opacity-30 pl-8">{log.time}</TableCell>
                         <TableCell className="font-bold text-sm">{log.name}</TableCell>
-                        <TableCell className="text-right pr-8"><Badge variant="outline" className="text-[9px] font-black border-none text-primary">{log.method} OK</Badge></TableCell>
+                        <TableCell className="text-right pr-8"><Badge variant="outline" className="text-[9px] font-black border-none text-primary bg-primary/5 uppercase">{log.method} OK</Badge></TableCell>
                     </TableRow>
                   )) : <TableRow><TableCell colSpan={3} className="h-64 text-center italic opacity-20 text-xs uppercase font-black">IDLE</TableCell></TableRow>}
                 </TableBody>
             </Table>
+          </Card>
+          
+          <Card className="p-6 bg-primary/5 border-primary/10 rounded-3xl flex items-center gap-4">
+            <div className="h-12 w-12 rounded-2xl bg-primary/10 flex items-center justify-center">
+              <Cloud className="h-6 w-6 text-primary" />
+            </div>
+            <div className="flex-1">
+              <p className="text-[10px] font-black uppercase tracking-widest text-primary/60">Cloud Engine</p>
+              <p className="text-sm font-bold">Relay Sync Active</p>
+            </div>
+            <Badge className="bg-green-500/20 text-green-500 border-none h-6 text-[9px] font-black">STABLE</Badge>
           </Card>
         </div>
       </div>
