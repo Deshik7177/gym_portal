@@ -16,9 +16,10 @@ import {
   Filter,
   Calendar as CalendarIcon,
   X,
-  CheckCircle
+  CheckCircle,
+  Dumbbell
 } from 'lucide-react';
-import { collection, query, doc, deleteDoc, updateDoc, setDoc, serverTimestamp, where, orderBy, limit } from 'firebase/firestore';
+import { collection, query, doc, deleteDoc, updateDoc, setDoc, serverTimestamp, where, orderBy, limit, addDoc } from 'firebase/firestore';
 import { useFirestore, useCollection, useProfile } from '@/firebase';
 import Link from 'next/link';
 import { useRouter } from 'next/navigation';
@@ -73,8 +74,8 @@ import {
 import { Calendar } from "@/components/ui/calendar";
 import { useToast } from '@/hooks/use-toast';
 import { cn } from '@/lib/utils';
-import { errorEmitter } from '@/firebase/error-emitter';
-import { FirestorePermissionError } from '@/firebase/errors';
+import { Label } from '@/components/ui/label';
+import { Textarea } from '@/components/ui/textarea';
 
 export default function MembersListPage() {
   const db = useFirestore();
@@ -92,10 +93,15 @@ export default function MembersListPage() {
   const [memberQrToShow, setMemberQrToShow] = useState<any>(null);
   const [memberForHistory, setMemberForHistory] = useState<any>(null);
   const [memberToDelete, setMemberToDelete] = useState<any>(null);
+  const [memberForPT, setMemberForPT] = useState<any>(null);
+  
   const [isProcessingCheckIn, setIsProcessingCheckIn] = useState<string | null>(null);
   const [isDeleting, setIsDeleting] = useState(false);
+  const [isAddingPT, setIsAddingPT] = useState(false);
   
-  const qrRef = useRef<HTMLDivElement>(null);
+  const [ptAmount, setPtAmount] = useState('');
+  const [ptDescription, setPtDescription] = useState('');
+
   const today = useMemo(() => startOfDay(new Date()), []);
 
   const membersRef = useMemo(() => db ? query(collection(db, 'members')) : null, [db]);
@@ -159,16 +165,10 @@ export default function MembersListPage() {
     if (!db || isProcessingCheckIn) return;
 
     const expiryDate = member.endDate ? parseISO(member.endDate) : null;
-    const startDate = member.startDate ? parseISO(member.startDate) : null;
     const isExpired = expiryDate ? isAfter(today, expiryDate) : false;
-    const notStarted = startDate ? isAfter(startDate, today) : false;
 
-    if (isExpired || notStarted) {
-        toast({ 
-          variant: "destructive", 
-          title: "Access Denied", 
-          description: isExpired ? "Membership has expired." : "Access not yet active." 
-        });
+    if (isExpired) {
+        toast({ variant: "destructive", title: "Access Denied", description: "Membership has expired." });
         return;
     }
 
@@ -203,6 +203,43 @@ export default function MembersListPage() {
 
     toast({ title: "Attendance Recorded" });
     setIsProcessingCheckIn(null);
+  };
+
+  const handleAddPT = async () => {
+    if (!db || !memberForPT) return;
+    setIsAddingPT(true);
+
+    const amount = parseFloat(ptAmount) || 0;
+    const memberId = memberForPT.phone || memberForPT.id;
+
+    try {
+      // 1. Update Member Type and Description
+      await updateDoc(doc(db, 'members', memberId), {
+        type: 'personal',
+        description: memberForPT.description ? `${memberForPT.description} | PT: ${ptDescription}` : `PT: ${ptDescription}`,
+        updatedAt: serverTimestamp()
+      });
+
+      // 2. Add Sale to Ledger
+      await addDoc(collection(db, 'sales'), {
+        memberId: memberId,
+        memberName: memberForPT.fullName,
+        amount: amount,
+        date: format(new Date(), 'yyyy-MM-dd'),
+        category: 'personal training',
+        description: ptDescription || 'Personal Training Package Enrollment',
+        createdAt: serverTimestamp()
+      });
+
+      toast({ title: "PT Package Added", description: "Member profile updated and sale logged." });
+      setMemberForPT(null);
+      setPtAmount('');
+      setPtDescription('');
+    } catch (e) {
+      toast({ variant: "destructive", title: "Error", description: "Failed to add PT package." });
+    } finally {
+      setIsAddingPT(false);
+    }
   };
 
   const resetFilters = () => {
@@ -370,10 +407,14 @@ export default function MembersListPage() {
                         <DropdownMenuTrigger asChild>
                           <Button variant="ghost" size="icon" className="rounded-xl">{isProcessingCheckIn === member.phone ? <Loader2 className="h-4 w-4 animate-spin" /> : <MoreHorizontal className="h-4 w-4" />}</Button>
                         </DropdownMenuTrigger>
-                        <DropdownMenuContent align="end" className="w-56 bg-popover border-border rounded-xl">
+                        <DropdownMenuContent align="end" className="w-64 bg-popover border-border rounded-xl">
                           <DropdownMenuItem onSelect={() => handleManualCheckIn(member)} className={cn("p-3 gap-3", isExpired ? "opacity-50" : "text-green-500")} disabled={isExpired}>
                             <UserCheck className="h-4 w-4" /> Manual Check-In
                           </DropdownMenuItem>
+                          <DropdownMenuItem onSelect={() => setMemberForPT(member)} className="p-3 gap-3 text-accent font-bold">
+                            <Dumbbell className="h-4 w-4" /> Add PT Package
+                          </DropdownMenuItem>
+                          <DropdownMenuSeparator />
                           {(isAdmin || isStaff) && (
                             <DropdownMenuItem onSelect={() => router.push(`/admin/register?edit=${member.phone}`)} className="p-3 gap-3">
                               <Edit3 className="h-4 w-4 text-primary" /> Edit Profile
@@ -394,6 +435,46 @@ export default function MembersListPage() {
           </Table>
         </CardContent>
       </Card>
+
+      <Dialog open={!!memberForPT} onOpenChange={(open) => !open && !isAddingPT && setMemberForPT(null)}>
+        <DialogContent className="sm:max-w-md bg-popover border-border rounded-3xl p-8">
+          <DialogHeader>
+            <Dumbbell className="h-10 w-10 text-accent mb-4" />
+            <DialogTitle className="text-2xl font-black font-headline uppercase">Enroll in PT</DialogTitle>
+            <DialogDescription>Add a Personal Training package for <b>{memberForPT?.fullName}</b>. This will log a new sale and update their profile type.</DialogDescription>
+          </DialogHeader>
+          <div className="space-y-6 py-6">
+            <div className="space-y-2">
+              <Label className="text-[10px] uppercase font-black tracking-widest opacity-40">Package Price (INR)</Label>
+              <div className="relative">
+                <span className="absolute left-4 top-1/2 -translate-y-1/2 text-primary font-black">₹</span>
+                <Input 
+                  type="number" 
+                  className="pl-8 h-12 bg-muted/50 border-border font-bold text-lg rounded-xl" 
+                  placeholder="0"
+                  value={ptAmount}
+                  onChange={(e) => setPtAmount(e.target.value)}
+                />
+              </div>
+            </div>
+            <div className="space-y-2">
+              <Label className="text-[10px] uppercase font-black tracking-widest opacity-40">Package Description</Label>
+              <Textarea 
+                placeholder="e.g. 12 Session Pro Pack" 
+                className="bg-muted/50 border-border min-h-[80px] rounded-xl" 
+                value={ptDescription}
+                onChange={(e) => setPtDescription(e.target.value)}
+              />
+            </div>
+          </div>
+          <DialogFooter className="flex gap-2">
+            <Button variant="ghost" onClick={() => setMemberForPT(null)} disabled={isAddingPT} className="flex-1 rounded-xl">Cancel</Button>
+            <Button onClick={handleAddPT} disabled={isAddingPT} className="flex-1 rounded-xl font-bold bg-accent hover:bg-accent/90">
+              {isAddingPT ? <Loader2 className="h-4 w-4 animate-spin" /> : 'Confirm PT Enrollment'}
+            </Button>
+          </DialogFooter>
+        </DialogContent>
+      </Dialog>
 
       <Dialog open={!!memberForHistory} onOpenChange={(open) => !open && setMemberForHistory(null)}>
         <DialogContent className="sm:max-w-lg bg-popover border-border rounded-3xl p-6">
