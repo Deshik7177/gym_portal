@@ -209,8 +209,11 @@ export default function MembersListPage() {
   };
 
   const handleAddPT = async () => {
-    if (!db || !memberForPT || !isAdmin) {
-      if (!isAdmin) toast({ variant: "destructive", title: "Denied", description: "Only Administrators can add PT packages." });
+    if (!db || !memberForPT) return;
+    
+    // Check for Staff or Admin authorization
+    if (!isAdmin && !isStaff) {
+      toast({ variant: "destructive", title: "Denied", description: "You are not authorized to add PT packages." });
       return;
     }
     
@@ -290,11 +293,9 @@ export default function MembersListPage() {
           <h1 className="text-3xl font-bold font-headline uppercase tracking-tighter text-primary">Vault Directory</h1>
           <p className="text-muted-foreground text-xs font-bold tracking-widest uppercase opacity-60">System Registry</p>
         </div>
-        {isAdmin && (
-          <Button asChild className="h-12 px-8 rounded-xl font-bold">
-            <Link href="/admin/register"><Plus className="mr-2 h-4 w-4" /> Enroll New Member</Link>
-          </Button>
-        )}
+        <Button asChild className="h-12 px-8 rounded-xl font-bold">
+          <Link href="/admin/register"><Plus className="mr-2 h-4 w-4" /> Enroll New Member</Link>
+        </Button>
       </div>
 
       <div className="grid gap-4 md:grid-cols-3">
@@ -430,16 +431,18 @@ export default function MembersListPage() {
                             <UserCheck className="h-4 w-4" /> Manual Check-In
                           </DropdownMenuItem>
                           
+                          {(isAdmin || isStaff) && (
+                            <DropdownMenuItem onSelect={() => setMemberForPT(member)} className="p-3 gap-3 text-accent font-bold">
+                              <Dumbbell className="h-4 w-4" /> Add PT Package
+                            </DropdownMenuItem>
+                          )}
+
+                          <DropdownMenuSeparator />
+                          
                           {isAdmin && (
-                            <>
-                              <DropdownMenuItem onSelect={() => setMemberForPT(member)} className="p-3 gap-3 text-accent font-bold">
-                                <Dumbbell className="h-4 w-4" /> Add PT Package
-                              </DropdownMenuItem>
-                              <DropdownMenuSeparator />
-                              <DropdownMenuItem onSelect={() => router.push(`/admin/register?edit=${member.phone}`)} className="p-3 gap-3">
-                                <Edit3 className="h-4 w-4 text-primary" /> Edit Profile
-                              </DropdownMenuItem>
-                            </>
+                            <DropdownMenuItem onSelect={() => router.push(`/admin/register?edit=${member.phone}`)} className="p-3 gap-3">
+                              <Edit3 className="h-4 w-4 text-primary" /> Edit Profile
+                            </DropdownMenuItem>
                           )}
                           
                           <DropdownMenuItem onSelect={() => setMemberForHistory(member)} className="p-3 gap-3"><History className="h-4 w-4 text-accent" /> View History</DropdownMenuItem>
@@ -459,14 +462,14 @@ export default function MembersListPage() {
         </CardContent>
       </Card>
 
-      {/* Admin Protected Dialog: PT Enrollment */}
+      {/* PT Enrollment Dialog - Staff & Admin Accessible */}
       <Dialog open={!!memberForPT} onOpenChange={(open) => !open && !isAddingPT && setMemberForPT(null)}>
         <DialogContent className="sm:max-w-md bg-popover border-border rounded-3xl p-8">
-          {!isAdmin ? (
+          {(!isAdmin && !isStaff) ? (
             <div className="flex flex-col items-center justify-center py-10 text-center gap-4">
               <ShieldAlert className="h-16 w-16 text-destructive" />
-              <h2 className="text-xl font-black uppercase">Administrator Access Required</h2>
-              <p className="text-muted-foreground text-sm">Staff members are not permitted to modify financial packages.</p>
+              <h2 className="text-xl font-black uppercase">Authorization Required</h2>
+              <p className="text-muted-foreground text-sm">Please login with authorized staff credentials to modify packages.</p>
               <Button variant="outline" onClick={() => setMemberForPT(null)} className="rounded-xl w-full">Close</Button>
             </div>
           ) : (

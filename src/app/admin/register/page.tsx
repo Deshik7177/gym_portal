@@ -64,7 +64,7 @@ function RegisterForm() {
   const router = useRouter();
   const searchParams = useSearchParams();
   const editId = searchParams.get('edit');
-  const { isAdmin, loading: profileLoading } = useProfile();
+  const { isAdmin, isStaff, loading: profileLoading } = useProfile();
   
   const [isEditMode, setIsEditMode] = useState(false);
   const [phone, setPhone] = useState('');
@@ -136,7 +136,7 @@ function RegisterForm() {
 
     // Strict Restriction: Only Admins can modify existing member details
     if (isEditMode && !isAdmin) {
-      toast({ variant: "destructive", title: "Action Denied", description: "Staff members cannot edit existing member details." });
+      toast({ variant: "destructive", title: "Action Denied", description: "Staff members cannot edit existing member details. Only new registrations are allowed." });
       return;
     }
 
