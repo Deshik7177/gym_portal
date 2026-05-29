@@ -15,6 +15,11 @@ export function useCollection<T = DocumentData>(query: Query<T> | null) {
   const [error, setError] = useState<FirestoreError | null>(null);
 
   useEffect(() => {
+    // Crucial: Clear data and set loading when query changes to avoid showing stale data from previous query
+    setData(null);
+    setLoading(true);
+    setError(null);
+
     if (!query) {
       setLoading(false);
       return;

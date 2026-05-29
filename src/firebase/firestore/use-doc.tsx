@@ -15,6 +15,11 @@ export function useDoc<T = DocumentData>(docRef: DocumentReference<T> | null) {
   const [error, setError] = useState<FirestoreError | null>(null);
 
   useEffect(() => {
+    // Crucial: Clear data and set loading when docRef changes
+    setData(null);
+    setLoading(true);
+    setError(null);
+
     if (!docRef) {
       setLoading(false);
       return;
