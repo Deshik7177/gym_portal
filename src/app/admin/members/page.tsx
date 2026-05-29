@@ -101,6 +101,8 @@ export default function MembersListPage() {
   
   const [ptAmount, setPtAmount] = useState('');
   const [ptDescription, setPtDescription] = useState('');
+  const [ptStartDate, setPtStartDate] = useState<Date | undefined>(new Date());
+  const [ptEndDate, setPtEndDate] = useState<Date | undefined>(undefined);
 
   const today = useMemo(() => startOfDay(new Date()), []);
 
@@ -207,16 +209,25 @@ export default function MembersListPage() {
 
   const handleAddPT = async () => {
     if (!db || !memberForPT) return;
+    if (!ptStartDate || !ptEndDate) {
+      toast({ variant: "destructive", title: "Dates Required", description: "Please select start and end dates for the PT session." });
+      return;
+    }
+
     setIsAddingPT(true);
 
     const amount = parseFloat(ptAmount) || 0;
     const memberId = memberForPT.phone || memberForPT.id;
+    const formattedStart = format(ptStartDate, 'yyyy-MM-dd');
+    const formattedEnd = format(ptEndDate, 'yyyy-MM-dd');
 
     try {
-      // 1. Update Member Type and Description
+      // 1. Update Member Type and Description and Dates
       await updateDoc(doc(db, 'members', memberId), {
         type: 'personal',
-        description: memberForPT.description ? `${memberForPT.description} | PT: ${ptDescription}` : `PT: ${ptDescription}`,
+        startDate: formattedStart,
+        endDate: formattedEnd,
+        description: memberForPT.description ? `${memberForPT.description} | PT Package (${formattedStart} to ${formattedEnd})` : `PT Package (${formattedStart} to ${formattedEnd}): ${ptDescription}`,
         updatedAt: serverTimestamp()
       });
 
@@ -227,7 +238,7 @@ export default function MembersListPage() {
         amount: amount,
         date: format(new Date(), 'yyyy-MM-dd'),
         category: 'personal training',
-        description: ptDescription || 'Personal Training Package Enrollment',
+        description: ptDescription || `Personal Training Package: ${formattedStart} to ${formattedEnd}`,
         createdAt: serverTimestamp()
       });
 
@@ -235,6 +246,8 @@ export default function MembersListPage() {
       setMemberForPT(null);
       setPtAmount('');
       setPtDescription('');
+      setPtStartDate(new Date());
+      setPtEndDate(undefined);
     } catch (e) {
       toast({ variant: "destructive", title: "Error", description: "Failed to add PT package." });
     } finally {
@@ -441,9 +454,39 @@ export default function MembersListPage() {
           <DialogHeader>
             <Dumbbell className="h-10 w-10 text-accent mb-4" />
             <DialogTitle className="text-2xl font-black font-headline uppercase">Enroll in PT</DialogTitle>
-            <DialogDescription>Add a Personal Training package for <b>{memberForPT?.fullName}</b>. This will log a new sale and update their profile type.</DialogDescription>
+            <DialogDescription>Add a Personal Training package for <b>{memberForPT?.fullName}</b>. This will log a new sale and update their profile dates.</DialogDescription>
           </DialogHeader>
           <div className="space-y-6 py-6">
+            <div className="grid grid-cols-2 gap-4">
+              <div className="space-y-2">
+                <Label className="text-[10px] uppercase font-black tracking-widest opacity-40">PT Start Date</Label>
+                <Popover>
+                  <PopoverTrigger asChild>
+                    <Button variant="outline" className="w-full h-12 bg-muted/50 border-border rounded-xl justify-start text-left font-bold">
+                      <CalendarIcon className="mr-2 h-4 w-4 opacity-40" />
+                      {ptStartDate ? format(ptStartDate, "MMM dd, yyyy") : "Start Date"}
+                    </Button>
+                  </PopoverTrigger>
+                  <PopoverContent className="w-auto p-0" align="start">
+                    <Calendar mode="single" selected={ptStartDate} onSelect={setPtStartDate} initialFocus />
+                  </PopoverContent>
+                </Popover>
+              </div>
+              <div className="space-y-2">
+                <Label className="text-[10px] uppercase font-black tracking-widest opacity-40">PT End Date</Label>
+                <Popover>
+                  <PopoverTrigger asChild>
+                    <Button variant="outline" className="w-full h-12 bg-muted/50 border-border rounded-xl justify-start text-left font-bold">
+                      <CalendarIcon className="mr-2 h-4 w-4 opacity-40" />
+                      {ptEndDate ? format(ptEndDate, "MMM dd, yyyy") : "End Date"}
+                    </Button>
+                  </PopoverTrigger>
+                  <PopoverContent className="w-auto p-0" align="start">
+                    <Calendar mode="single" selected={ptEndDate} onSelect={setPtEndDate} disabled={(date) => ptStartDate ? date < ptStartDate : false} initialFocus />
+                  </PopoverContent>
+                </Popover>
+              </div>
+            </div>
             <div className="space-y-2">
               <Label className="text-[10px] uppercase font-black tracking-widest opacity-40">Package Price (INR)</Label>
               <div className="relative">
