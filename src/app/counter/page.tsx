@@ -79,7 +79,11 @@ export default function CounterPage() {
         const notStarted = startDate ? isAfter(startDate, today) : false;
         const isValid = !isExpired && !notStarted;
 
-        setVerifiedMember({ ...data, id: docSnap.id, isExpired, notStarted, isValid });
+        // Check if already authenticated today
+        const lastCheckIn = data.lastCheckIn?.seconds ? new Date(data.lastCheckIn.seconds * 1000) : null;
+        const authenticated = lastCheckIn ? isToday(lastCheckIn) : false;
+
+        setVerifiedMember({ ...data, id: docSnap.id, isExpired, notStarted, isValid, authenticated });
         
         if (!isValid) {
           toast({ 
@@ -87,6 +91,8 @@ export default function CounterPage() {
             title: "Access Denied", 
             description: isExpired ? "Subscription is expired." : "Access not yet active." 
           });
+        } else if (authenticated) {
+          toast({ title: "Already Verified", description: "This member already checked in today." });
         } else {
           toast({ title: "Member Found", description: "Account active." });
         }
@@ -256,7 +262,12 @@ export default function CounterPage() {
                              <Button variant="outline" onClick={resetSearch} className="h-14">Clear</Button>
                           </div>
                         ) : (
-                          <Button variant="outline" onClick={resetSearch} className="w-full h-12">Next Search</Button>
+                          <div className="flex flex-col gap-3">
+                            <div className="bg-green-500/10 border border-green-500/20 p-3 rounded-xl text-center">
+                              <p className="text-green-500 text-xs font-black uppercase tracking-widest">Attendance Recorded for Today</p>
+                            </div>
+                            <Button variant="outline" onClick={resetSearch} className="w-full h-12">Next Search</Button>
+                          </div>
                         )}
                       </div>
                     ) : (

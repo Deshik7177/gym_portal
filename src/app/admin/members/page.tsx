@@ -214,6 +214,7 @@ export default function MembersListPage() {
       }));
     });
 
+    // DETERMINISTIC ID PREVENTS DUPLICATE DAILY LOGS
     setDoc(doc(db, 'attendance', attendanceDocId), {
       memberId: memberId,
       memberName: member.fullName,

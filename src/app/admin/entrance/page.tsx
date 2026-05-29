@@ -17,7 +17,8 @@ import {
   UserPlus,
   Phone,
   Link2,
-  ShieldX
+  ShieldX,
+  CheckCircle
 } from 'lucide-react';
 import { collection, query, updateDoc, doc, setDoc, serverTimestamp, onSnapshot, getDoc } from 'firebase/firestore';
 import { useFirestore } from '@/firebase';
@@ -45,7 +46,7 @@ export default function SmartEntrancePage() {
   const [isCameraActive, setIsCameraActive] = useState(false);
   const [isInitializing, setIsInitializing] = useState(false);
   const [identifiedMember, setIdentifiedMember] = useState<any>(null);
-  const [scanResult, setScanResult] = useState<'success' | 'failure' | 'expired' | 'not_started' | 'not_found' | null>(null);
+  const [scanResult, setScanResult] = useState<'success' | 'failure' | 'expired' | 'not_started' | 'not_found' | 'already_verified' | null>(null);
   const [recentLogs, setRecentLogs] = useState<any[]>([]);
   const [isSyncing, setIsSyncing] = useState(false);
 
@@ -116,9 +117,13 @@ export default function SmartEntrancePage() {
         return;
     }
 
+    // Check if already checked in today for better UI feedback
+    const lastCheckIn = member.lastCheckIn?.seconds ? new Date(member.lastCheckIn.seconds * 1000) : null;
+    const alreadyVerified = lastCheckIn ? isToday(lastCheckIn) : false;
+
     isProcessingRef.current = true;
     setIdentifiedMember(member);
-    setScanResult('success');
+    setScanResult(alreadyVerified ? 'already_verified' : 'success');
     
     if ('vibrate' in navigator) {
       navigator.vibrate(100);
@@ -149,6 +154,7 @@ export default function SmartEntrancePage() {
           memberId: memberId,
           method: method
         }),
+        // USE DETERMINISTIC ID TO PREVENT DUPLICATE ROWS
         setDoc(doc(db, 'attendance', attendanceDocId), {
           memberId: memberId,
           memberName: member.fullName,
@@ -338,14 +344,18 @@ export default function SmartEntrancePage() {
               </div>
             )}
 
-            {scanResult === 'success' && identifiedMember && (
+            {(scanResult === 'success' || scanResult === 'already_verified') && identifiedMember && (
               <div className="absolute inset-0 flex flex-col items-center justify-center z-[100] animate-in zoom-in duration-300 bg-background/95 backdrop-blur-3xl text-center px-6">
-                <CheckCircle2 className="h-48 w-48 text-primary mb-8" />
-                <h2 className="text-7xl font-black font-headline text-foreground mb-2 tracking-tighter italic uppercase">Welcome</h2>
+                {scanResult === 'already_verified' ? <CheckCircle className="h-48 w-48 text-primary mb-8 opacity-60" /> : <CheckCircle2 className="h-48 w-48 text-primary mb-8" />}
+                <h2 className="text-7xl font-black font-headline text-foreground mb-2 tracking-tighter italic uppercase">
+                  {scanResult === 'already_verified' ? 'Identified' : 'Welcome'}
+                </h2>
                 <p className="text-3xl text-primary font-black uppercase tracking-tight mb-4">{identifiedMember.fullName}</p>
                 <div className="flex items-center gap-2 text-green-500 animate-pulse mt-2">
                     <Link2 className="h-4 w-4" />
-                    <span className="text-[10px] font-black uppercase tracking-widest">Secure Command Dispatched</span>
+                    <span className="text-[10px] font-black uppercase tracking-widest">
+                      {scanResult === 'already_verified' ? 'Already Verified Today' : 'Secure Command Dispatched'}
+                    </span>
                 </div>
               </div>
             )}
