@@ -1,3 +1,4 @@
+
 'use client';
 
 import { useState, useEffect, useMemo } from 'react';
@@ -14,7 +15,7 @@ import {
   UserX,
   ShieldX
 } from 'lucide-react';
-import { isToday, parseISO, isAfter, startOfDay } from 'date-fns';
+import { format, isToday, parseISO, isAfter, startOfDay } from 'date-fns';
 
 import { Badge } from '@/components/ui/badge';
 import { Button } from '@/components/ui/button';
@@ -112,16 +113,12 @@ export default function CounterPage() {
     }
 
     const memberId = verifiedMember.id;
+    const todayStr = format(new Date(), 'yyyy-MM-dd');
+    const attendanceDocId = `${memberId}_${todayStr}`;
     const docRef = doc(db, 'members', memberId);
     const timestamp = serverTimestamp();
     const expiresAt = Date.now() + 5000;
     
-    const lastCheckInDate = verifiedMember.lastCheckIn?.seconds 
-      ? new Date(verifiedMember.lastCheckIn.seconds * 1000) 
-      : null;
-
-    const alreadyLoggedToday = lastCheckInDate && isToday(lastCheckInDate);
-
     // FIXED PATH GATE COMMAND
     setDoc(doc(db, 'gateControl', 'latest'), {
       command: 'OPEN',
@@ -148,21 +145,19 @@ export default function CounterPage() {
       }));
     });
 
-    // ATTENDANCE LOG (ONLY ONCE PER DAY)
-    if (!alreadyLoggedToday) {
-      addDoc(collection(db, 'attendance'), {
-        memberId: memberId,
-        memberName: verifiedMember.fullName,
-        timestamp: timestamp,
-        method: 'manual',
-        score: 1.0
-      }).catch(err => {
-        errorEmitter.emit('permission-error', new FirestorePermissionError({
-          path: 'attendance',
-          operation: 'create'
-        }));
-      });
-    }
+    // ATTENDANCE LOG (DETERMINISTIC ID TO PREVENT DUPLICATES)
+    setDoc(doc(db, 'attendance', attendanceDocId), {
+      memberId: memberId,
+      memberName: verifiedMember.fullName,
+      timestamp: timestamp,
+      method: 'manual',
+      score: 1.0
+    }, { merge: true }).catch(err => {
+      errorEmitter.emit('permission-error', new FirestorePermissionError({
+        path: `attendance/${attendanceDocId}`,
+        operation: 'write'
+      }));
+    });
     
     setVerifiedMember(prev => ({ ...prev, authenticated: true }));
   };

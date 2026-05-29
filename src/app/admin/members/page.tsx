@@ -1,3 +1,4 @@
+
 'use client';
 
 import { useState, useMemo, useRef } from 'react';
@@ -17,7 +18,7 @@ import {
   Calendar as CalendarIcon,
   X
 } from 'lucide-react';
-import { collection, query, doc, deleteDoc, updateDoc, setDoc, serverTimestamp, addDoc, where, orderBy, limit } from 'firebase/firestore';
+import { collection, query, doc, deleteDoc, updateDoc, setDoc, serverTimestamp, where, orderBy, limit } from 'firebase/firestore';
 import { useFirestore, useCollection, useProfile } from '@/firebase';
 import Link from 'next/link';
 import { useRouter } from 'next/navigation';
@@ -184,15 +185,11 @@ export default function MembersListPage() {
 
     setIsProcessingCheckIn(member.phone);
     const memberId = member.phone || member.id;
+    const todayStr = format(new Date(), 'yyyy-MM-dd');
+    const attendanceDocId = `${memberId}_${todayStr}`;
     const timestamp = serverTimestamp();
     const expiresAt = Date.now() + 5000;
     
-    const lastCheckInDate = member.lastCheckIn?.seconds 
-      ? new Date(member.lastCheckIn.seconds * 1000) 
-      : null;
-
-    const alreadyLoggedToday = lastCheckInDate && isToday(lastCheckInDate);
-
     setDoc(doc(db, 'gateControl', 'latest'), {
       command: 'OPEN',
       status: 'pending',
@@ -217,22 +214,20 @@ export default function MembersListPage() {
       }));
     });
 
-    if (!alreadyLoggedToday) {
-      addDoc(collection(db, 'attendance'), {
-        memberId: memberId,
-        memberName: member.fullName,
-        timestamp: timestamp,
-        method: 'manual',
-        latency: 0
-      }).catch(err => {
-        errorEmitter.emit('permission-error', new FirestorePermissionError({
-          path: 'attendance',
-          operation: 'create'
-        }));
-      });
-    }
+    setDoc(doc(db, 'attendance', attendanceDocId), {
+      memberId: memberId,
+      memberName: member.fullName,
+      timestamp: timestamp,
+      method: 'manual',
+      latency: 0
+    }, { merge: true }).catch(err => {
+      errorEmitter.emit('permission-error', new FirestorePermissionError({
+        path: `attendance/${attendanceDocId}`,
+        operation: 'write'
+      }));
+    });
 
-    toast({ title: alreadyLoggedToday ? "Welcome Back!" : "Attendance Recorded" });
+    toast({ title: "Attendance Recorded" });
     setIsProcessingCheckIn(null);
   };
 

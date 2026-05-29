@@ -1,3 +1,4 @@
+
 'use client';
 
 import { useState, useRef, useEffect, useCallback, useMemo } from 'react';
@@ -18,12 +19,12 @@ import {
   Link2,
   ShieldX
 } from 'lucide-react';
-import { collection, query, updateDoc, doc, setDoc, serverTimestamp, onSnapshot, addDoc, getDoc } from 'firebase/firestore';
+import { collection, query, updateDoc, doc, setDoc, serverTimestamp, onSnapshot, getDoc } from 'firebase/firestore';
 import { useFirestore } from '@/firebase';
 import { Html5Qrcode, Html5QrcodeSupportedFormats } from 'html5-qrcode';
 import { cn } from '@/lib/utils';
 import { validateQrPayload } from '@/lib/qr-logic';
-import { isToday, parseISO, isAfter, startOfDay } from 'date-fns';
+import { format, isToday, parseISO, isAfter, startOfDay } from 'date-fns';
 
 import { Button } from '@/components/ui/button';
 import { Card, CardContent, CardHeader, CardTitle, CardDescription } from '@/components/ui/card';
@@ -44,7 +45,7 @@ export default function SmartEntrancePage() {
   const [isCameraActive, setIsCameraActive] = useState(false);
   const [isInitializing, setIsInitializing] = useState(false);
   const [identifiedMember, setIdentifiedMember] = useState<any>(null);
-  const [scanResult, setScanResult] = useState<'success' | 'failure' | 'expired' | 'not_started' | null>(null);
+  const [scanResult, setScanResult] = useState<'success' | 'failure' | 'expired' | 'not_started' | 'not_found' | null>(null);
   const [recentLogs, setRecentLogs] = useState<any[]>([]);
   const [isSyncing, setIsSyncing] = useState(false);
 
@@ -124,7 +125,10 @@ export default function SmartEntrancePage() {
     }
 
     const memberId = member.phone || member.id;
-    
+    const todayStr = format(new Date(), 'yyyy-MM-dd');
+    const attendanceDocId = `${memberId}_${todayStr}`;
+    const expiresAt = Date.now() + 5000;
+
     setRecentLogs(prev => [{
       name: member.fullName,
       time: new Date().toLocaleTimeString(),
@@ -132,13 +136,6 @@ export default function SmartEntrancePage() {
     }, ...prev].slice(0, 10));
 
     try {
-      const lastCheckInDate = member.lastCheckIn?.seconds 
-        ? new Date(member.lastCheckIn.seconds * 1000) 
-        : null;
-
-      const alreadyLoggedToday = lastCheckInDate && isToday(lastCheckInDate);
-      const expiresAt = Date.now() + 5000;
-
       const tasks: Promise<any>[] = [
         updateDoc(doc(db, 'members', memberId), {
           lastCheckIn: serverTimestamp(),
@@ -151,18 +148,15 @@ export default function SmartEntrancePage() {
           expiresAt: expiresAt,
           memberId: memberId,
           method: method
-        })
-      ];
-
-      if (!alreadyLoggedToday) {
-        tasks.push(addDoc(collection(db, 'attendance'), {
+        }),
+        setDoc(doc(db, 'attendance', attendanceDocId), {
           memberId: memberId,
           memberName: member.fullName,
           timestamp: serverTimestamp(),
           method: method,
           latency: 0
-        }));
-      }
+        }, { merge: true })
+      ];
 
       await Promise.all(tasks);
     } catch (err) {
@@ -202,7 +196,7 @@ export default function SmartEntrancePage() {
               triggerAccess(member, 'qr');
             } else {
               isProcessingRef.current = true;
-              setScanResult('failure');
+              setScanResult('not_found');
             }
           }
         },
@@ -356,12 +350,12 @@ export default function SmartEntrancePage() {
               </div>
             )}
 
-            {(scanResult === 'failure' || scanResult === 'expired' || scanResult === 'not_started') && (
+            {(scanResult === 'failure' || scanResult === 'expired' || scanResult === 'not_started' || scanResult === 'not_found') && (
               <div className="absolute inset-0 flex flex-col items-center justify-center z-[100] animate-in zoom-in duration-300 bg-destructive/95 backdrop-blur-3xl text-center px-6">
                 <ShieldX className="h-48 w-48 text-destructive-foreground mb-8" />
                 <h2 className="text-7xl font-black font-headline text-destructive-foreground mb-2 tracking-tighter italic uppercase">Denied</h2>
                 <p className="text-3xl text-destructive-foreground font-black uppercase tracking-widest">
-                    {scanResult === 'expired' ? 'Subscription Expired' : scanResult === 'not_started' ? 'Access Not Yet Active' : 'Access Restricted'}
+                    {scanResult === 'expired' ? 'Subscription Expired' : scanResult === 'not_started' ? 'Access Not Yet Active' : scanResult === 'not_found' ? 'Member Not Found' : 'Access Restricted'}
                 </p>
                 {identifiedMember && <p className="text-xl text-destructive-foreground/60 font-bold mt-2">{identifiedMember.fullName}</p>}
               </div>
