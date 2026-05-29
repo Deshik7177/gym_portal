@@ -209,12 +209,8 @@ export default function ReceptionDashboard() {
                   recentMembers.map((member: any) => (
                     <div key={member.phone} className="flex items-center justify-between p-3 rounded-lg border bg-muted/20">
                       <div className="flex items-center gap-3">
-                        <div className="h-10 w-10 rounded-full bg-primary/10 flex items-center justify-center overflow-hidden">
-                          {member.photoData ? (
-                            <img src={member.photoData} className="w-full h-full object-cover" />
-                          ) : (
-                            <UserCircle className="h-6 w-6 text-primary" />
-                          )}
+                        <div className="h-10 w-10 rounded-full bg-primary/10 flex items-center justify-center border border-primary/20">
+                          <UserCircle className="h-6 w-6 text-primary" />
                         </div>
                         <div>
                           <p className="text-sm font-bold text-foreground">{member.fullName}</p>

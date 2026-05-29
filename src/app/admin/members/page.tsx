@@ -1,7 +1,6 @@
-
 'use client';
 
-import { useState, useMemo, useRef } from 'react';
+import { useState, useMemo } from 'react';
 import { 
   Search, 
   User, 
@@ -230,14 +229,12 @@ export default function MembersListPage() {
     const formattedEnd = format(ptEndDate, 'yyyy-MM-dd');
 
     try {
-      // Update member type and add PT session details to description
       await updateDoc(doc(db, 'members', memberId), {
         type: 'personal',
         description: memberForPT.description ? `${memberForPT.description} | PT Package (${formattedStart} to ${formattedEnd})` : `PT Package (${formattedStart} to ${formattedEnd}): ${ptDescription}`,
         updatedAt: serverTimestamp()
       });
 
-      // Log the sale
       await addDoc(collection(db, 'sales'), {
         memberId: memberId,
         memberName: memberForPT.fullName,
@@ -399,8 +396,8 @@ export default function MembersListPage() {
                   <TableRow key={member.phone} className="border-white/5 hover:bg-white/[0.02]">
                     <TableCell className="pl-8 py-4">
                       <div className="flex items-center gap-4">
-                        <div className="h-10 w-10 rounded-full bg-primary/10 flex items-center justify-center overflow-hidden">
-                          {member.photoData ? <img src={member.photoData} className="w-full h-full object-cover" /> : <User className="h-5 w-5 text-primary" />}
+                        <div className="h-10 w-10 rounded-full bg-primary/10 flex items-center justify-center border border-primary/20">
+                          <User className="h-5 w-5 text-primary" />
                         </div>
                         <div className="flex flex-col">
                           <span className="font-bold text-sm flex items-center gap-2">

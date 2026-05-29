@@ -1,8 +1,7 @@
-
 'use client';
 
 import { useState, useEffect, useMemo } from 'react';
-import { doc, getDoc, serverTimestamp, updateDoc, collection, addDoc, setDoc } from 'firebase/firestore';
+import { doc, getDoc, serverTimestamp, updateDoc, collection, setDoc } from 'firebase/firestore';
 import { useFirestore } from '@/firebase';
 import { 
   Search, 
@@ -13,7 +12,8 @@ import {
   History,
   WifiOff,
   UserX,
-  ShieldX
+  ShieldX,
+  User
 } from 'lucide-react';
 import { format, isToday, parseISO, isAfter, startOfDay } from 'date-fns';
 
@@ -79,7 +79,6 @@ export default function CounterPage() {
         const notStarted = startDate ? isAfter(startDate, today) : false;
         const isValid = !isExpired && !notStarted;
 
-        // Check if already authenticated today
         const lastCheckIn = data.lastCheckIn?.seconds ? new Date(data.lastCheckIn.seconds * 1000) : null;
         const authenticated = lastCheckIn ? isToday(lastCheckIn) : false;
 
@@ -125,7 +124,6 @@ export default function CounterPage() {
     const timestamp = serverTimestamp();
     const expiresAt = Date.now() + 5000;
     
-    // FIXED PATH GATE COMMAND
     setDoc(doc(db, 'gateControl', 'latest'), {
       command: 'OPEN',
       status: 'pending',
@@ -140,7 +138,6 @@ export default function CounterPage() {
       }));
     });
 
-    // PROFILE UPDATE
     updateDoc(docRef, { 
       lastCheckIn: timestamp,
       updatedAt: timestamp
@@ -151,7 +148,6 @@ export default function CounterPage() {
       }));
     });
 
-    // ATTENDANCE LOG (DETERMINISTIC ID TO PREVENT DUPLICATES)
     setDoc(doc(db, 'attendance', attendanceDocId), {
       memberId: memberId,
       memberName: verifiedMember.fullName,
@@ -205,15 +201,13 @@ export default function CounterPage() {
 
                     {verifiedMember ? (
                       <div className="space-y-6 animate-in fade-in slide-in-from-top-4 duration-300">
-                        <div className="relative aspect-[4/5] bg-muted rounded-xl overflow-hidden border-2 border-primary/20 shadow-inner">
-                           {verifiedMember.photoData ? (
-                              <img src={verifiedMember.photoData} alt="Profile" className="w-full h-full object-cover" />
-                           ) : (
-                              <div className="flex flex-col items-center justify-center h-full text-muted-foreground opacity-20">
-                                 <UserX className="h-20 w-20" />
-                                 <p className="font-bold">NO PHOTO</p>
+                        <div className="relative aspect-[4/5] bg-muted/20 rounded-xl overflow-hidden border-2 border-primary/20 flex items-center justify-center">
+                           <div className="flex flex-col items-center justify-center text-primary/40 text-center gap-4">
+                              <div className="h-32 w-32 rounded-full bg-primary/10 flex items-center justify-center border-4 border-primary/20">
+                                <User className="h-16 w-16" />
                               </div>
-                           )}
+                              <p className="font-black text-xs uppercase tracking-widest">Biometric Profile Linked</p>
+                           </div>
                            
                            {verifiedMember.authenticated && (
                              <div className="absolute inset-0 bg-green-500/20 backdrop-blur-[2px] flex flex-col items-center justify-center animate-in zoom-in duration-500">
