@@ -1,4 +1,3 @@
-
 'use client';
 
 import { useState, useMemo } from 'react';
@@ -130,7 +129,7 @@ export default function SalesReportPage() {
 
     const headers = ["Date", "Member Name", "Category", "Amount", "Description"];
     const rows = filteredSales.map(s => [
-      s.date || '',
+      s.date ? format(parseISO(s.date), 'dd MMM yyyy') : '',
       `"${s.memberName || ''}"`,
       s.category || '',
       s.amount || 0,
