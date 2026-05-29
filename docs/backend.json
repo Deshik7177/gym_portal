@@ -3,7 +3,7 @@
   "entities": {
     "Member": {
       "title": "Member",
-      "description": "A gym member profile with a permanent QR ID.",
+      "description": "A gym member profile with a permanent QR ID and biometric data.",
       "type": "object",
       "properties": {
         "fullName": { "type": "string" },
@@ -18,18 +18,20 @@
         "photoData": { "type": "string" },
         "faceEmbedding": { "type": "array", "items": { "type": "number" } },
         "lastCheckIn": { "type": "string", "format": "date-time" },
-        "createdAt": { "type": "string", "format": "date-time" }
+        "createdAt": { "type": "string", "format": "date-time" },
+        "updatedAt": { "type": "string", "format": "date-time" }
       },
       "required": ["fullName", "phone", "status", "price"]
     },
     "User": {
       "title": "User",
-      "description": "A staff or admin user profile.",
+      "description": "A staff or admin user profile with RBAC settings.",
       "type": "object",
       "properties": {
         "email": { "type": "string" },
         "role": { "type": "string", "enum": ["admin", "staff"] },
-        "name": { "type": "string" }
+        "name": { "type": "string" },
+        "updatedAt": { "type": "string", "format": "date-time" }
       }
     },
     "GateControl": {
@@ -54,12 +56,13 @@
         "memberName": { "type": "string" },
         "timestamp": { "type": "string", "format": "date-time" },
         "method": { "type": "string", "enum": ["qr", "manual", "face"] },
-        "latency": { "type": "number", "description": "Scan speed in ms" }
+        "latency": { "type": "number", "description": "Scan speed in ms" },
+        "score": { "type": "number" }
       }
     },
     "Sale": {
       "title": "Sale",
-      "description": "A transaction record.",
+      "description": "A transaction record for financial auditing.",
       "type": "object",
       "properties": {
         "memberId": { "type": "string" },
@@ -67,7 +70,9 @@
         "amount": { "type": "number" },
         "date": { "type": "string", "format": "date" },
         "category": { "type": "string", "enum": ["membership", "personal training", "other"] },
-        "description": { "type": "string" }
+        "description": { "type": "string" },
+        "createdAt": { "type": "string", "format": "date-time" },
+        "updatedAt": { "type": "string", "format": "date-time" }
       }
     }
   },

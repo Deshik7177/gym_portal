@@ -1,3 +1,4 @@
+
 'use client';
 
 import { useState, useEffect, Suspense, useMemo } from 'react';
@@ -20,8 +21,6 @@ import {
   addDoc, 
   query, 
   where, 
-  orderBy, 
-  limit, 
   getDocs, 
   updateDoc 
 } from 'firebase/firestore';
@@ -135,9 +134,8 @@ function RegisterForm() {
     e.preventDefault();
     if (!db) return;
 
-    // Strict Restriction: Only Admins can modify existing member details
     if (isEditMode && !isAdmin) {
-      toast({ variant: "destructive", title: "Action Denied", description: "Staff members cannot edit existing member details. Only new registrations are allowed." });
+      toast({ variant: "destructive", title: "Action Denied", description: "Staff members cannot edit existing member details." });
       return;
     }
 
@@ -169,12 +167,9 @@ function RegisterForm() {
     const docRef = doc(db, 'members', phone);
     
     try {
-      // 1. Update/Create Member
       await setDoc(docRef, memberData, { merge: true });
 
-      // 2. Sync Ledger
       if (!isEditMode && amountValue > 0) {
-        // New Registration: Create fresh sale
         await addDoc(collection(db, 'sales'), {
           memberId: phone,
           memberName: fullName,
@@ -185,19 +180,23 @@ function RegisterForm() {
           createdAt: serverTimestamp()
         });
       } else if (isEditMode && isAdmin) {
-        // Edit Mode: Update existing membership sale if it exists (Admins only)
+        // OPTIMIZED: Fetch without ordering to avoid index requirement
         const salesRef = collection(db, 'sales');
         const q = query(
           salesRef, 
           where('memberId', '==', phone), 
-          where('category', '==', 'membership'),
-          orderBy('createdAt', 'desc'),
-          limit(1)
+          where('category', '==', 'membership')
         );
         const saleSnap = await getDocs(q);
         if (!saleSnap.empty) {
-          const saleId = saleSnap.docs[0].id;
-          await updateDoc(doc(db, 'sales', saleId), {
+          // Find latest in memory
+          const latestSaleDoc = saleSnap.docs.sort((a, b) => {
+             const timeA = a.data().createdAt?.seconds || 0;
+             const timeB = b.data().createdAt?.seconds || 0;
+             return timeB - timeA;
+          })[0];
+
+          await updateDoc(doc(db, 'sales', latestSaleDoc.id), {
             amount: amountValue,
             memberName: fullName,
             updatedAt: serverTimestamp()
@@ -207,7 +206,7 @@ function RegisterForm() {
 
       toast({ 
         title: "Database Synced", 
-        description: isEditMode ? "Profile and ledger updated successfully." : "Member registered and sale logged in ledger." 
+        description: isEditMode ? "Profile and ledger updated." : "Member registered successfully." 
       });
       
       if (isEditMode) {
@@ -246,9 +245,7 @@ function RegisterForm() {
       <div className="flex flex-col items-center justify-center py-20 gap-6 text-center max-w-md mx-auto">
         <ShieldAlert className="h-20 w-20 text-destructive animate-pulse" />
         <h1 className="text-3xl font-black uppercase italic tracking-tighter">Access Denied</h1>
-        <p className="text-muted-foreground leading-relaxed">
-          Staff members are restricted from editing existing member registry details. Please contact an Administrator to perform this operation.
-        </p>
+        <p className="text-muted-foreground">Only Administrators can modify existing member registry details.</p>
         <Button onClick={() => router.push('/admin/members')} variant="outline" className="rounded-xl px-10">Return to Directory</Button>
       </div>
     );
