@@ -11,7 +11,20 @@ import {
   ShieldCheck,
   ShieldX
 } from 'lucide-react';
-import { doc, setDoc, getDoc, serverTimestamp, collection, addDoc } from 'firebase/firestore';
+import { 
+  doc, 
+  setDoc, 
+  getDoc, 
+  serverTimestamp, 
+  collection, 
+  addDoc, 
+  query, 
+  where, 
+  orderBy, 
+  limit, 
+  getDocs, 
+  updateDoc 
+} from 'firebase/firestore';
 import { useFirestore } from '@/firebase';
 import { errorEmitter } from '@/firebase/error-emitter';
 import { FirestorePermissionError, type SecurityRuleContext } from '@/firebase/errors';
@@ -127,12 +140,13 @@ function RegisterForm() {
 
     setLoading(true);
 
+    const amountValue = parseFloat(price) || 0;
     const memberData: any = {
       fullName,
       phone,
       status: subscriptionType,
       type: 'group',
-      price: parseFloat(price) || 0,
+      price: amountValue,
       description: description || '',
       startDate: format(startDate, 'yyyy-MM-dd'),
       endDate: format(endDate, 'yyyy-MM-dd'),
@@ -147,23 +161,45 @@ function RegisterForm() {
     const docRef = doc(db, 'members', phone);
     
     try {
+      // 1. Update/Create Member
       await setDoc(docRef, memberData, { merge: true });
 
-      if (!isEditMode && parseFloat(price) > 0) {
+      // 2. Sync Ledger
+      if (!isEditMode && amountValue > 0) {
+        // New Registration: Create fresh sale
         await addDoc(collection(db, 'sales'), {
           memberId: phone,
           memberName: fullName,
-          amount: parseFloat(price),
+          amount: amountValue,
           date: new Date().toISOString().split('T')[0],
           category: 'membership',
           description: description || `New Membership Registration: ${memberData.startDate} to ${memberData.endDate}`,
           createdAt: serverTimestamp()
         });
+      } else if (isEditMode) {
+        // Edit Mode: Update existing membership sale if it exists
+        const salesRef = collection(db, 'sales');
+        const q = query(
+          salesRef, 
+          where('memberId', '==', phone), 
+          where('category', '==', 'membership'),
+          orderBy('createdAt', 'desc'),
+          limit(1)
+        );
+        const saleSnap = await getDocs(q);
+        if (!saleSnap.empty) {
+          const saleId = saleSnap.docs[0].id;
+          await updateDoc(doc(db, 'sales', saleId), {
+            amount: amountValue,
+            memberName: fullName,
+            updatedAt: serverTimestamp()
+          });
+        }
       }
 
       toast({ 
         title: "Database Synced", 
-        description: isEditMode ? "Profile updated successfully." : "Member registered and sale logged in ledger." 
+        description: isEditMode ? "Profile and ledger updated successfully." : "Member registered and sale logged in ledger." 
       });
       
       if (isEditMode) {
@@ -172,6 +208,7 @@ function RegisterForm() {
         resetForm();
       }
     } catch (err: any) {
+      console.error(err);
       const permissionError = new FirestorePermissionError({
         path: docRef.path,
         operation: 'write',
