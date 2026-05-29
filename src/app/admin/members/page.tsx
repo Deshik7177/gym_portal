@@ -1,3 +1,4 @@
+
 'use client';
 
 import { useState, useMemo, useRef } from 'react';
@@ -211,7 +212,6 @@ export default function MembersListPage() {
   const handleAddPT = async () => {
     if (!db || !memberForPT) return;
     
-    // Check for Staff or Admin authorization
     if (!isAdmin && !isStaff) {
       toast({ variant: "destructive", title: "Denied", description: "You are not authorized to add PT packages." });
       return;
@@ -394,6 +394,7 @@ export default function MembersListPage() {
               {filteredMembers.length > 0 ? filteredMembers.map((member) => {
                 const expiryDate = member.endDate ? parseISO(member.endDate) : null;
                 const isExpired = expiryDate ? isAfter(today, expiryDate) : false;
+                const isPT = member.type === 'personal';
                 return (
                   <TableRow key={member.phone} className="border-white/5 hover:bg-white/[0.02]">
                     <TableCell className="pl-8 py-4">
@@ -402,7 +403,10 @@ export default function MembersListPage() {
                           {member.photoData ? <img src={member.photoData} className="w-full h-full object-cover" /> : <User className="h-5 w-5 text-primary" />}
                         </div>
                         <div className="flex flex-col">
-                          <span className="font-bold text-sm">{member.fullName}</span>
+                          <span className="font-bold text-sm flex items-center gap-2">
+                            {member.fullName}
+                            {isPT && <Dumbbell className="h-3 w-3 text-accent" />}
+                          </span>
                           <span className="text-[9px] font-black uppercase opacity-30">{member.status} TERM</span>
                         </div>
                       </div>
@@ -412,7 +416,12 @@ export default function MembersListPage() {
                         <Badge variant={!isExpired ? 'default' : 'destructive'} className={cn("text-[8px] font-black uppercase", !isExpired ? "bg-green-500/20 text-green-500" : "bg-destructive/20 text-destructive")}>
                           {isExpired ? 'EXPIRED' : 'ACTIVE'}
                         </Badge>
-                        <Badge variant="outline" className="bg-primary/10 text-primary text-[8px] font-black uppercase border-none">{member.type}</Badge>
+                        <Badge variant="outline" className={cn(
+                          "text-[8px] font-black uppercase border-none",
+                          isPT ? "bg-accent/10 text-accent" : "bg-primary/10 text-primary"
+                        )}>
+                          {isPT ? 'PERSONAL TRAINING' : 'GROUP'}
+                        </Badge>
                       </div>
                     </TableCell>
                     <TableCell>

@@ -10,7 +10,8 @@ import {
   FileText,
   ShieldCheck,
   ShieldX,
-  ShieldAlert
+  ShieldAlert,
+  Dumbbell
 } from 'lucide-react';
 import { 
   doc, 
@@ -71,6 +72,7 @@ function RegisterForm() {
   const [fullName, setFullName] = useState('');
   const [searchQuery, setSearchQuery] = useState('');
   const [subscriptionType, setSubscriptionType] = useState<'active' | 'non-active'>('active');
+  const [memberType, setMemberType] = useState<'group' | 'personal'>('group');
   const [price, setPrice] = useState('');
   const [description, setDescription] = useState('');
   
@@ -93,6 +95,7 @@ function RegisterForm() {
           setPhone(data.phone || '');
           setFullName(data.fullName || '');
           setSubscriptionType(data.status || 'active');
+          setMemberType(data.type || 'group');
           setPrice(data.price?.toString() || '');
           setDescription(data.description || '');
           setStartDate(data.startDate ? new Date(data.startDate) : undefined);
@@ -114,6 +117,7 @@ function RegisterForm() {
         setPhone(data.phone);
         setFullName(data.fullName);
         setSubscriptionType(data.status);
+        setMemberType(data.type || 'group');
         setPrice(data.price?.toString() || '');
         setDescription(data.description || '');
         setStartDate(data.startDate ? new Date(data.startDate) : undefined);
@@ -151,7 +155,7 @@ function RegisterForm() {
       fullName,
       phone,
       status: subscriptionType,
-      type: 'group',
+      type: memberType,
       price: amountValue,
       description: description || '',
       startDate: format(startDate, 'yyyy-MM-dd'),
@@ -175,21 +179,18 @@ function RegisterForm() {
           memberName: fullName,
           amount: amountValue,
           date: new Date().toISOString().split('T')[0],
-          category: 'membership',
-          description: description || `New Membership Registration: ${memberData.startDate} to ${memberData.endDate}`,
+          category: memberType === 'personal' ? 'personal training' : 'membership',
+          description: description || `New ${memberType === 'personal' ? 'PT' : 'Membership'} Registration: ${memberData.startDate} to ${memberData.endDate}`,
           createdAt: serverTimestamp()
         });
       } else if (isEditMode && isAdmin) {
-        // OPTIMIZED: Fetch without ordering to avoid index requirement
         const salesRef = collection(db, 'sales');
         const q = query(
           salesRef, 
-          where('memberId', '==', phone), 
-          where('category', '==', 'membership')
+          where('memberId', '==', phone)
         );
         const saleSnap = await getDocs(q);
         if (!saleSnap.empty) {
-          // Find latest in memory
           const latestSaleDoc = saleSnap.docs.sort((a, b) => {
              const timeA = a.data().createdAt?.seconds || 0;
              const timeB = b.data().createdAt?.seconds || 0;
@@ -237,6 +238,7 @@ function RegisterForm() {
     setStartDate(today);
     setEndDate(undefined);
     setSubscriptionType('active');
+    setMemberType('group');
     router.replace('/admin/register');
   };
 
@@ -308,7 +310,23 @@ function RegisterForm() {
 
             <div className="grid grid-cols-1 md:grid-cols-2 gap-6">
               <div className="space-y-4">
-                <Label className="text-[10px] uppercase font-black tracking-[0.2em] opacity-40">Duration Logic (Label Only)</Label>
+                <Label className="text-[10px] uppercase font-black tracking-[0.2em] opacity-40">Plan Category</Label>
+                <Select value={memberType} onValueChange={(val: any) => setMemberType(val)}>
+                  <SelectTrigger className="h-12 bg-black/20 border-white/10 rounded-xl">
+                    <div className="flex items-center gap-3">
+                      {memberType === 'personal' ? <Dumbbell className="h-4 w-4 text-accent" /> : <ShieldCheck className="h-4 w-4 text-primary" />}
+                      <SelectValue placeholder="Select Plan" />
+                    </div>
+                  </SelectTrigger>
+                  <SelectContent>
+                    <SelectItem value="group">Standard Group</SelectItem>
+                    <SelectItem value="personal">Personal Training (PT)</SelectItem>
+                  </SelectContent>
+                </Select>
+              </div>
+
+              <div className="space-y-2">
+                <Label className="text-[10px] uppercase font-black tracking-[0.2em] opacity-40">Duration Logic</Label>
                 <Select value={subscriptionType} onValueChange={(val: any) => setSubscriptionType(val)}>
                   <SelectTrigger className="h-12 bg-black/20 border-white/10 rounded-xl">
                     <div className="flex items-center gap-3">
@@ -321,21 +339,6 @@ function RegisterForm() {
                     <SelectItem value="non-active">Non-Active Term</SelectItem>
                   </SelectContent>
                 </Select>
-              </div>
-
-              <div className="space-y-2">
-                <Label className="text-[10px] uppercase font-black tracking-[0.2em] opacity-40">Package Price (INR)</Label>
-                <div className="relative">
-                  <span className="absolute left-4 top-1/2 -translate-y-1/2 text-primary font-black">₹</span>
-                  <Input 
-                    type="number" 
-                    className="pl-8 h-12 text-xl font-black bg-black/20 border-white/10 rounded-xl" 
-                    value={price} 
-                    onChange={(e) => setPrice(e.target.value)} 
-                    required 
-                    placeholder="0" 
-                  />
-                </div>
               </div>
             </div>
 
@@ -393,6 +396,21 @@ function RegisterForm() {
                       </PopoverContent>
                     </Popover>
                   </div>
+              </div>
+            </div>
+
+            <div className="space-y-2">
+              <Label className="text-[10px] uppercase font-black tracking-[0.2em] opacity-40">Package Price (INR)</Label>
+              <div className="relative">
+                <span className="absolute left-4 top-1/2 -translate-y-1/2 text-primary font-black">₹</span>
+                <Input 
+                  type="number" 
+                  className="pl-8 h-12 text-xl font-black bg-black/20 border-white/10 rounded-xl" 
+                  value={price} 
+                  onChange={(e) => setPrice(e.target.value)} 
+                  required 
+                  placeholder="0" 
+                />
               </div>
             </div>
 
